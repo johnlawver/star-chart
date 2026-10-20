@@ -106,8 +106,8 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
     },
 
     /**
-     * A grown-up approves a handed-in ticket: it becomes Approved (final) and its stars, or the grown-up's
-     * override, are added to the child's record. Undefined if there's no such handed-in ticket in this chart.
+     * A grown-up approves an open or handed-in ticket (a hand-in isn't required): it becomes Approved (final), and its
+     * stars, or the grown-up's override, are added to the child's record. Undefined if there's no such ticket here.
      */
     async approve(
       chartId: string,
@@ -124,7 +124,7 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
           }))
           .where("chart_id", "=", chartId)
           .where("id", "=", ticketId)
-          .where("state", "=", "handed-in")
+          .where("state", "in", ["open", "handed-in"])
           .returning(["id", "state", "child_id", "awarded_stars"])
           .executeTakeFirst();
         if (!ticket) return undefined;

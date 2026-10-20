@@ -65,3 +65,16 @@ describe("dismissing a ticket", () => {
     closeAll();
   });
 });
+
+describe("approving without a hand-in", () => {
+  test("a grown-up can approve an open ticket that was never scanned", async () => {
+    const { chart, ticketId, balance, closeAll } = await novaWithAPrintedChore(2);
+
+    const approved = await chart.owner.post(`/api/tickets/${ticketId}/approve`, {});
+
+    expect(approved.status).toBe(200);
+    expect(approved.body.ticket).toMatchObject({ id: ticketId, state: "approved", stars: 2 });
+    expect(await balance()).toBe(2);
+    closeAll();
+  });
+});
