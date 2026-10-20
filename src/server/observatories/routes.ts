@@ -79,7 +79,7 @@ export async function observatoryRoutes(
     },
   );
 
-  // Printers and scanners connect out to the server here and keep the connection open (ADR 0003).
+  // Screens, printers and scanners connect out to the server here and keep the connection open (ADR 0003).
   // Their first message must be a hello carrying their credential; browsers can't send headers on a WebSocket.
   app.get("/api/parts/live", { websocket: true }, (socket) => {
     const timeout = setTimeout(() => socket.close(notPairedCloseCode, "no hello"), helloTimeoutMs);
@@ -90,11 +90,15 @@ export async function observatoryRoutes(
         hello?.type === "hello" && typeof hello.deviceToken === "string"
           ? await observatories.deviceFor(hello.deviceToken)
           : undefined;
-      if (!device || device.kind === "screen") {
-        socket.close(notPairedCloseCode, "not a paired part");
+      if (!device) {
+        socket.close(notPairedCloseCode, "not a paired device");
         return;
       }
       liveParts.add(device, socket);
+      socket.on("message", (later) => {
+        const message = parseMessage(later);
+        if (message) void liveParts.received(device, message);
+      });
       socket.send(JSON.stringify({ type: "welcome", kind: device.kind }));
     });
   });

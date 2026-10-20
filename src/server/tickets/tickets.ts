@@ -13,7 +13,21 @@ export interface PrintJob {
   code: string;
 }
 
-/** The tickets module: printing tickets and (later) their whole lifecycle. */
+/** What happened when a ticket's code was scanned. */
+export type ScanResult =
+  | { result: "handed-in"; childNickname: string; title: string }
+  | { result: "not-recognised" };
+
+export interface TicketSummary {
+  id: string;
+  childId: string;
+  childNickname: string;
+  title: string;
+  stars: number;
+  state: TicketState;
+}
+
+/** The tickets module: printing tickets and their whole lifecycle. */
 export function createTickets(db: Database, clock: Clock) {
   return {
     /**
@@ -72,6 +86,41 @@ export function createTickets(db: Database, clock: Clock) {
           },
         };
       });
+    },
+
+    /** A child scanned a ticket's code at one of this chart's observatories. */
+    async handIn(chartId: string, code: string): Promise<ScanResult> {
+      const ticket = await db
+        .updateTable("tickets")
+        .set({ state: "handed-in" })
+        .from("children")
+        .whereRef("children.id", "=", "tickets.child_id")
+        .where("tickets.chart_id", "=", chartId)
+        .where("tickets.code", "=", code)
+        .where("tickets.state", "=", "open")
+        .returning(["children.nickname", "tickets.title"])
+        .executeTakeFirst();
+      if (!ticket) return { result: "not-recognised" };
+      return { result: "handed-in", childNickname: ticket.nickname, title: ticket.title };
+    },
+
+    /** The chart's tickets in a given state, oldest first, for grown-ups to work through. */
+    async list(chartId: string, state: TicketState): Promise<TicketSummary[]> {
+      return db
+        .selectFrom("tickets")
+        .innerJoin("children", "children.id", "tickets.child_id")
+        .select([
+          "tickets.id",
+          "tickets.child_id as childId",
+          "children.nickname as childNickname",
+          "tickets.title",
+          "tickets.stars",
+          "tickets.state",
+        ])
+        .where("tickets.chart_id", "=", chartId)
+        .where("tickets.state", "=", state)
+        .orderBy("tickets.created_at")
+        .execute();
     },
   };
 }
