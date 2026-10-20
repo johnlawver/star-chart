@@ -1,5 +1,7 @@
 import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
+import QRCode from "qrcode";
+import { stored } from "../shared/api.js";
 import { Icon, IconPicker } from "../shared/icons.js";
 import { ConstellationList, type Constellation } from "../shared/constellation.js";
 
@@ -20,8 +22,34 @@ async function api(method: string, url: string, body?: unknown) {
   return { ok: response.ok, data };
 }
 
+// Opened on an observatory (after a grown-up's PIN) rather than on a phone or computer.
+const onObservatory = new URLSearchParams(location.search).get("on") === "observatory";
+const observatoryTokenKey = "star-chart.observatory.deviceToken";
+const idleLockMs = 90_000;
+
+/** Signs out and goes back to the children's view of the observatory. */
+async function lockObservatory() {
+  await api("POST", "/api/sign-out");
+  location.href = "/observatory.html";
+}
+
 function ControlCenter() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
+
+  // On the observatory, the Control Center locks itself after a short while untouched.
+  useEffect(() => {
+    if (!onObservatory) return;
+    let timer = setTimeout(lockObservatory, idleLockMs);
+    const touched = () => {
+      clearTimeout(timer);
+      timer = setTimeout(lockObservatory, idleLockMs);
+    };
+    for (const event of ["pointerdown", "keydown"]) window.addEventListener(event, touched);
+    return () => {
+      clearTimeout(timer);
+      for (const event of ["pointerdown", "keydown"]) window.removeEventListener(event, touched);
+    };
+  }, []);
 
   const refresh = async () => {
     const result = await api("GET", "/api/me");
@@ -33,17 +61,29 @@ function ControlCenter() {
   }, []);
 
   if (me === undefined) return <p>Loading…</p>;
-  if (me === null) return <SignedOut onSignedIn={refresh} />;
+  if (me === null) {
+    if (onObservatory) {
+      location.href = "/observatory.html";
+      return null;
+    }
+    return <SignedOut onSignedIn={refresh} />;
+  }
   return (
     <main>
       <h1>{me.chart.name}</h1>
       <p>
         Signed in as {me.grownUp.email} ({me.grownUp.role}). Time zone: {me.chart.timeZone}.
       </p>
-      <button onClick={async () => (await api("POST", "/api/sign-out"), refresh())}>Sign out</button>
+      {onObservatory ? (
+        <button onClick={lockObservatory}>Lock</button>
+      ) : (
+        <button onClick={async () => (await api("POST", "/api/sign-out"), refresh())}>Sign out</button>
+      )}
+      {onObservatory && <ObservatoryTools />}
       <WaitingSection />
       <StarsSection />
       <ChildrenSection />
+      <PinSection />
       <ChoresSection />
       {me.grownUp.role === "owner" && <ObservatoriesSection />}
     </main>
@@ -495,6 +535,78 @@ function ChildStars({ child }: { child: Child }) {
     </div>
   );
 }
+
+function PinSection() {
+  const [message, setMessage] = useState<string | undefined>();
+
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const { pin } = Object.fromEntries(new FormData(form));
+    const result = await api("PUT", "/api/me/pin", { pin });
+    setMessage(result.ok ? "PIN saved. Use it on the observatory." : "A PIN is 4 to 8 digits.");
+    form.reset();
+  };
+
+  return (
+    <section>
+      <h2>My PIN</h2>
+      <p>Your PIN opens this Control Center on the observatory.</p>
+      <form onSubmit={save}>
+        <label>
+          New PIN <input name="pin" type="password" inputMode="numeric" pattern="[0-9]{4,8}" required autoComplete="off" />
+        </label>{" "}
+        <button type="submit">Save</button>
+      </form>
+      {message && <p role="status">{message}</p>}
+    </section>
+  );
+}
+
+/** Things a grown-up can only do standing at the observatory: set up their phone, and pair parts. */
+function ObservatoryTools() {
+  const [phoneQr, setPhoneQr] = useState<string | undefined>();
+  const [pairingCode, setPairingCode] = useState<string | undefined>();
+
+  const showPhoneQr = async () => {
+    const result = await api("POST", "/api/phone-setup");
+    if (!result.ok) return;
+    // The code goes after "#", so it never reaches a server or its logs.
+    const link = `${location.origin}/phone-setup.html#code=${encodeURIComponent(result.data.code)}`;
+    setPhoneQr(await QRCode.toDataURL(link, { margin: 1, width: 256 }));
+  };
+
+  const showPairingCode = async () => {
+    const deviceToken = stored.get(observatoryTokenKey);
+    const result = await fetch("/api/observatory/pairing-codes", {
+      method: "POST",
+      headers: { authorization: `Bearer ${deviceToken}` },
+    });
+    if (result.ok) setPairingCode((await result.json()).code);
+  };
+
+  return (
+    <section>
+      <button onClick={showPhoneQr}>Set up my phone</button>{" "}
+      <button onClick={showPairingCode}>Pair a printer or scanner</button>
+      {phoneQr && (
+        <p>
+          Scan this with your phone's camera. It works once, for 5 minutes.
+          <br />
+          <img src={phoneQr} alt="QR code for setting up your phone" width={256} height={256} />
+        </p>
+      )}
+      {pairingCode && (
+        <p>
+          Pairing code: <strong>{pairingCode}</strong> (works once, for 10 minutes)
+        </p>
+      )}
+    </section>
+  );
+}
+
+// Lets the Control Center be installed on a phone's home screen.
+if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw.js");
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

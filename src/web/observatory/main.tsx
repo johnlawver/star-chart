@@ -79,7 +79,7 @@ function Unpaired({ onPaired }: { onPaired: (token: string) => void }) {
 function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnpaired: () => void }) {
   const [children, setChildren] = useState<Child[]>([]);
   const [chosen, setChosen] = useState<Child | undefined>();
-  const [pairingCode, setPairingCode] = useState<string | undefined>();
+  const [unlocking, setUnlocking] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | undefined>();
   const [scanResult, setScanResult] = useState<string | undefined>();
   const [parts, setParts] = useState<{ printer: string; scanner: string } | undefined>();
@@ -120,6 +120,7 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
     })();
   }, [deviceToken]);
 
+  if (unlocking) return <Unlock deviceToken={deviceToken} onCancel={() => setUnlocking(false)} />;
   if (scanMessage) {
     return (
       <main>
@@ -144,10 +145,6 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
     );
   }
 
-  const showPairingCode = async () => {
-    const result = await api("POST", "/api/observatory/pairing-codes", undefined, deviceToken);
-    if (result.ok) setPairingCode(result.data.code);
-  };
 
   return (
     <main>
@@ -160,12 +157,72 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
         </button>
       ))}
       <footer>
-        <button onClick={showPairingCode}>Pair a printer or scanner</button>
-        {pairingCode && (
-          <p>
-            Pairing code: <strong>{pairingCode}</strong> (works once, for 10 minutes)
-          </p>
-        )}
+        <button onClick={() => setUnlocking(true)}>Grown-ups</button>
+      </footer>
+    </main>
+  );
+}
+
+/** A grown-up taps themselves and enters their PIN to open the Control Center here. */
+function Unlock({ deviceToken, onCancel }: { deviceToken: string; onCancel: () => void }) {
+  const [grownUps, setGrownUps] = useState<{ id: string; name: string }[] | undefined>();
+  const [chosen, setChosen] = useState<{ id: string; name: string } | undefined>();
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState<string | undefined>();
+
+  useEffect(() => {
+    void (async () => {
+      const result = await api("GET", "/api/observatory/grown-ups", undefined, deviceToken);
+      if (result.ok) setGrownUps(result.data.grownUps);
+    })();
+  }, [deviceToken]);
+
+  const submit = async () => {
+    if (!chosen) return;
+    const result = await api("POST", "/api/observatory/unlock", { grownUpId: chosen.id, pin }, deviceToken);
+    if (result.ok) {
+      location.href = "/?on=observatory";
+      return;
+    }
+    setPin("");
+    setError(result.data?.error ?? "That didn't work.");
+  };
+
+  if (!chosen) {
+    return (
+      <main>
+        <h1>Which grown-up are you?</h1>
+        {grownUps?.length === 0 && <p>No grown-up has set a PIN yet. Set one in the Control Center on your phone.</p>}
+        {grownUps?.map((grownUp) => (
+          <button key={grownUp.id} onClick={() => setChosen(grownUp)}>
+            {grownUp.name}
+          </button>
+        ))}
+        <footer>
+          <button onClick={onCancel}>Back</button>
+        </footer>
+      </main>
+    );
+  }
+
+  return (
+    <main>
+      <h1>Hi {chosen.name}, enter your PIN</h1>
+      <p aria-live="polite">{"•".repeat(pin.length) || " "}</p>
+      <div>
+        {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((digit) => (
+          <button key={digit} onClick={() => pin.length < 8 && setPin(pin + digit)}>
+            {digit}
+          </button>
+        ))}
+        <button onClick={() => setPin(pin.slice(0, -1))}>⌫</button>
+        <button onClick={submit} disabled={pin.length < 4}>
+          OK
+        </button>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      <footer>
+        <button onClick={onCancel}>Back</button>
       </footer>
     </main>
   );

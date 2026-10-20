@@ -14,6 +14,7 @@ export default defineConfig({
         observatory: "src/web/observatory.html",
         "fake-printer": "src/web/fake-printer.html",
         "fake-scanner": "src/web/fake-scanner.html",
+        "phone-setup": "src/web/phone-setup.html",
       },
     },
   },
