@@ -80,6 +80,7 @@ function ControlCenter() {
         <button onClick={async () => (await api("POST", "/api/sign-out"), refresh())}>Sign out</button>
       )}
       {onObservatory && <ObservatoryTools />}
+      {!onObservatory && <NotificationsSwitch />}
       <WaitingSection />
       <StarsSection />
       <ChildrenSection />
@@ -657,6 +658,65 @@ function ChildStars({ child }: { child: Child }) {
       {error && <p role="alert">{error}</p>}
       {showHistory && constellation && <ConstellationList constellation={constellation} />}
     </div>
+  );
+}
+
+/** The browser wants the public key as bytes. */
+function keyBytes(base64Url: string): Uint8Array<ArrayBuffer> {
+  const base64 = (base64Url + "=".repeat((4 - (base64Url.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+}
+
+/** Turns push notifications on or off for this device. */
+function NotificationsSwitch() {
+  const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  const [on, setOn] = useState<boolean | undefined>();
+  const [message, setMessage] = useState<string | undefined>();
+
+  useEffect(() => {
+    if (!supported) return;
+    void navigator.serviceWorker.ready.then(async (registration) => {
+      setOn((await registration.pushManager.getSubscription()) !== null);
+    });
+  }, []);
+
+  if (!supported) {
+    return <p>To get notifications on an iPhone, add Star Chart to your home screen first (Share → Add to Home Screen), then open it from there.</p>;
+  }
+
+  const turnOn = async () => {
+    if ((await Notification.requestPermission()) !== "granted") {
+      setMessage("Notifications are blocked for Star Chart in this browser's settings.");
+      return;
+    }
+    const registration = await navigator.serviceWorker.ready;
+    const { publicKey } = (await api("GET", "/api/push/public-key")).data;
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: keyBytes(publicKey),
+    });
+    const result = await api("POST", "/api/push/subscriptions", subscription.toJSON());
+    setOn(result.ok);
+    setMessage(result.ok ? "You'll get a notification when a ticket needs you." : "Couldn't turn notifications on.");
+  };
+
+  const turnOff = async () => {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (subscription) {
+      await api("DELETE", "/api/push/subscriptions", { endpoint: subscription.endpoint });
+      await subscription.unsubscribe();
+    }
+    setOn(false);
+    setMessage(undefined);
+  };
+
+  return (
+    <p>
+      Notifications on this device:{" "}
+      {on === undefined ? "…" : on ? <button onClick={turnOff}>On (turn off)</button> : <button onClick={turnOn}>Off (turn on)</button>}
+      {message && <span role="status"> {message}</span>}
+    </p>
   );
 }
 

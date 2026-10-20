@@ -19,6 +19,8 @@ You need Node 24+, Docker, the Doppler CLI and Tailscale.
    | `APP_URL` | `https://mini.example.ts.net` | The address people use, for links in emails |
    | `SMTP_URL` | `smtp://127.0.0.1:1025` | Where email goes; in development, Mailpit catches it |
    | `EMAIL_FROM` | `Star Chart <stars@star-chart.local>` | Who emails come from |
+   | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | from `npx web-push generate-vapid-keys` | Signs push notifications |
+   | `VAPID_SUBJECT` | `mailto:you@example.com` | Who push services contact if something's wrong |
    | `PORT` | `4310` | Optional; defaults to 4310 |
 3. Run `npm run dev`. It rebuilds the web pages and restarts the server on changes, on `http://127.0.0.1:4310`. Use tmux on a remote dev server so it survives an SSH disconnect.
 4. For trusted HTTPS on your laptop, phone and observatory, put Tailscale in front of it once:

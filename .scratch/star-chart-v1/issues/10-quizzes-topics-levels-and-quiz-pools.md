@@ -19,3 +19,4 @@
 ## Notes from earlier tickets
 
 - Reprint requests (ticket 16) already exist and reprint a ticket exactly as stored on the ticket row (code, title, icon, stars). A quiz's printed content (its questions) must be stored on, or reachable from, the ticket, and included in the print job built for a reprint (`createReprints().approve` in `src/server/tickets/reprints.ts`), with a test that a reprinted quiz has the same questions.
+- Push notifications (ticket 17) exist: `createNotifications().toChart(chartId, message)` sends to every subscribed grown-up in a chart. The pool-low and recycled-quiz alerts from ticket 17's criteria should be sent through it, with tests reading the fake push outbox.
