@@ -37,6 +37,20 @@ export async function observatoryRoutes(
     return { observatories: await observatories.list(signedIn.chart.id) };
   });
 
+  app.delete<{ Params: { observatoryId: string } }>("/api/observatories/:observatoryId", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    if (signedIn.grownUp.role !== "owner") {
+      return reply.code(403).send({ error: "only the chart's owner can unpair an observatory" });
+    }
+    const { observatoryId } = request.params;
+    if (!(await observatories.unpair(signedIn.chart.id, observatoryId))) {
+      return reply.code(404).send({ error: "no such observatory" });
+    }
+    liveParts.disconnectObservatory(observatoryId);
+    return reply.code(204).send();
+  });
+
   app.post("/api/observatory/pairing-codes", async (request, reply) => {
     const screen = await requireDevice(observatories, "screen", request, reply);
     if (!screen) return reply;

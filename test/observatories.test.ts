@@ -92,7 +92,7 @@ describe("live connections", () => {
     screen.useDeviceToken((await screen.post("/api/observatories")).body.deviceToken);
     const { code } = (await screen.post("/api/observatory/pairing-codes")).body;
     const { deviceToken } = (await newClient().post("/api/parts", { code, kind: "printer" })).body;
-    return { owner, deviceToken: deviceToken as string };
+    return { owner, screen, deviceToken: deviceToken as string };
   }
 
   test("a paired printer connects out to the server and is welcomed", async () => {
@@ -111,5 +111,22 @@ describe("live connections", () => {
     impostor.send({ type: "hello", deviceToken: "made-up" });
 
     expect(await impostor.closed).toEqual({ code: 4401 });
+  });
+
+  test("unpairing an observatory disconnects its parts and revokes every credential it had", async () => {
+    const { owner, screen, deviceToken } = await pairedPrinter();
+    const printer = await openLiveConnection();
+    printer.send({ type: "hello", deviceToken });
+    await printer.nextMessage();
+    const [observatory] = (await owner.client.get("/api/observatories")).body.observatories;
+
+    const unpaired = await owner.client.delete(`/api/observatories/${observatory.id}`);
+
+    expect(unpaired.status).toBe(204);
+    expect(await printer.closed).toEqual({ code: 4401 });
+    expect((await screen.get("/api/observatory/children")).status).toBe(401);
+    const reconnecting = await openLiveConnection();
+    reconnecting.send({ type: "hello", deviceToken });
+    expect(await reconnecting.closed).toEqual({ code: 4401 });
   });
 });

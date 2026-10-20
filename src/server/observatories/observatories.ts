@@ -1,5 +1,6 @@
 import type { Clock } from "../clock.js";
 import type { Database, DeviceKind } from "../database.js";
+import { isId } from "../ids.js";
 import { hashToken, newPairingCode, newToken } from "../tokens.js";
 
 const pairingCodeLifetimeMs = 10 * 60 * 1000;
@@ -80,6 +81,20 @@ export function createObservatories(db: Database, clock: Clock) {
         observatories.set(row.id, observatory);
       }
       return [...observatories.values()];
+    },
+
+    /**
+     * Removes an observatory from its chart. Its devices and pairing codes go with it, so every credential
+     * it had stops working. Returns false if there's no such observatory in this chart.
+     */
+    async unpair(chartId: string, observatoryId: string): Promise<boolean> {
+      if (!isId(observatoryId)) return false;
+      const result = await db
+        .deleteFrom("observatories")
+        .where("chart_id", "=", chartId)
+        .where("id", "=", observatoryId)
+        .executeTakeFirst();
+      return result.numDeletedRows > 0n;
     },
 
     /** The device a credential belongs to, or undefined if it isn't a valid credential. */
