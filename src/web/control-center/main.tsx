@@ -39,7 +39,94 @@ function ControlCenter() {
         Signed in as {me.grownUp.email} ({me.grownUp.role}). Time zone: {me.chart.timeZone}.
       </p>
       <button onClick={async () => (await api("POST", "/api/sign-out"), refresh())}>Sign out</button>
+      <ChildrenSection />
     </main>
+  );
+}
+
+interface Child {
+  id: string;
+  nickname: string;
+  displayStyle: "pictures" | "words";
+}
+
+function ChildrenSection() {
+  const [children, setChildren] = useState<Child[]>([]);
+  const [error, setError] = useState<string | undefined>();
+
+  const load = async () => {
+    const result = await api("GET", "/api/children");
+    if (result.ok) setChildren(result.data.children);
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const run = async (request: Promise<{ ok: boolean; data: any }>) => {
+    const result = await request;
+    setError(result.ok ? undefined : (result.data?.error ?? "Something went wrong."));
+    await load();
+  };
+
+  const add = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const { nickname, displayStyle } = Object.fromEntries(new FormData(form));
+    await run(api("POST", "/api/children", { nickname, displayStyle }));
+    form.reset();
+  };
+
+  return (
+    <section>
+      <h2>Children</h2>
+      {children.length === 0 && <p>No children yet.</p>}
+      <ul>
+        {children.map((child) => (
+          <li key={child.id}>
+            <strong>{child.nickname}</strong> sees{" "}
+            <select
+              value={child.displayStyle}
+              onChange={(e) => run(api("PATCH", `/api/children/${child.id}`, { displayStyle: e.target.value }))}
+            >
+              <option value="pictures">pictures</option>
+              <option value="words">words</option>
+            </select>{" "}
+            <button
+              onClick={() => {
+                const nickname = window.prompt("New nickname", child.nickname);
+                if (nickname) void run(api("PATCH", `/api/children/${child.id}`, { nickname }));
+              }}
+            >
+              Rename
+            </button>{" "}
+            <button
+              onClick={() => {
+                if (window.confirm(`Remove ${child.nickname}? This can't be undone.`)) {
+                  void run(api("DELETE", `/api/children/${child.id}`));
+                }
+              }}
+            >
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={add}>
+        <label>
+          Nickname <input name="nickname" maxLength={40} required />
+        </label>{" "}
+        <label>
+          Sees{" "}
+          <select name="displayStyle" defaultValue="words">
+            <option value="pictures">pictures</option>
+            <option value="words">words</option>
+          </select>
+        </label>{" "}
+        <button type="submit">Add child</button>
+      </form>
+      {error && <p role="alert">{error}</p>}
+    </section>
   );
 }
 
