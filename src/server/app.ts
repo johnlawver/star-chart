@@ -1,9 +1,14 @@
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
+import fastifyStatic from "@fastify/static";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { Clock } from "./clock.js";
 import type { Database } from "./database.js";
 import { createPeople } from "./people/people.js";
 import { peopleRoutes } from "./people/routes.js";
+
+const webRoot = fileURLToPath(new URL("../../dist/web", import.meta.url));
 
 export interface AppConfig {
   /** When false, nobody can create a new chart (keeps a home server closed to strangers). */
@@ -20,5 +25,7 @@ export async function buildApp({ db, clock, config }: AppDependencies) {
   const app = Fastify();
   await app.register(cookie);
   await peopleRoutes(app, createPeople(db, clock), config);
+  // The built web front ends (`vite build`), if present. Tests drive the API directly and don't need them.
+  if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot });
   return app;
 }
