@@ -284,3 +284,16 @@ describe("forgotten passwords", () => {
     expect(signUp.status).toBe(400);
   });
 });
+
+describe("keeping charts apart", () => {
+  test("an owner of another chart can't change roles in ours, or see our grown-ups", async () => {
+    const { partnerId } = await ownerAndPartner();
+    const school = await signUpOwner(harness.newClient(), "Room 12");
+
+    const changed = await school.client.patch(`/api/grown-ups/${partnerId}`, { role: "admin" });
+    const theirList = (await school.client.get("/api/grown-ups")).body.grownUps;
+
+    expect(changed.status).toBe(404);
+    expect(theirList.map((grownUp: { id: string }) => grownUp.id)).not.toContain(partnerId);
+  });
+});
