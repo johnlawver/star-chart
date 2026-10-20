@@ -16,13 +16,13 @@ You need Node 24+, Docker, the Doppler CLI and Tailscale.
    | --- | --- | --- |
    | `DATABASE_URL` | `postgres://star_chart:star_chart_local@localhost:54329/star_chart` | The development database |
    | `ALLOW_NEW_CHARTS` | `true` | Whether new charts can be created (off unless set to `true`) |
-   | `PORT` | `3000` | Optional; defaults to 3000 |
-3. Run `npm run dev`. It rebuilds the web pages and restarts the server on changes, on `http://127.0.0.1:3000`. Use tmux on a remote dev server so it survives an SSH disconnect.
+   | `PORT` | `4310` | Optional; defaults to 4310 |
+3. Run `npm run dev`. It rebuilds the web pages and restarts the server on changes, on `http://127.0.0.1:4310`. Use tmux on a remote dev server so it survives an SSH disconnect.
 4. For trusted HTTPS on your laptop, phone and observatory, put Tailscale in front of it once:
    ```
-   tailscale serve --bg http://127.0.0.1:3000
+   tailscale serve --bg http://127.0.0.1:4310
    ```
-   Then open `https://<this machine>.<your tailnet>.ts.net`. This is only reachable on your tailnet. From a desktop browser you can also use `ssh -L 3000:127.0.0.1:3000 <server>` and open `http://localhost:3000`.
+   Then open `https://<this machine>.<your tailnet>.ts.net`. This is only reachable on your tailnet. From a desktop browser you can also use `ssh -L 4310:127.0.0.1:4310 <server>` and open `http://localhost:4310`.
 
 ## Tests
 

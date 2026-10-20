@@ -15,7 +15,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     databaseUrl,
     // Listen on the loopback address only; Tailscale (`tailscale serve`) provides HTTPS in front of it.
     host: env.HOST ?? "127.0.0.1",
-    port: Number(env.PORT ?? 3000),
+    port: Number(env.PORT ?? 4310),
     app: {
       allowNewCharts: env.ALLOW_NEW_CHARTS === "true",
     },
