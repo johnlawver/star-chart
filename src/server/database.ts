@@ -26,6 +26,18 @@ export interface Tables {
     display_style: DisplayStyle;
     created_at: Date;
   };
+  observatories: {
+    id: Generated<string>;
+    chart_id: string;
+    created_at: Date;
+  };
+  devices: {
+    id: Generated<string>;
+    observatory_id: string;
+    kind: DeviceKind;
+    token_hash: string;
+    created_at: Date;
+  };
   sessions: {
     token_hash: string;
     grown_up_id: string;
@@ -35,6 +47,7 @@ export interface Tables {
 
 export type Role = "owner" | "admin" | "grown-up";
 export type DisplayStyle = "pictures" | "words";
+export type DeviceKind = "screen" | "printer" | "scanner";
 
 export type Database = Kysely<Tables>;
 

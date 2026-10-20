@@ -1,8 +1,8 @@
-import { createHash, randomBytes } from "node:crypto";
 import { hash, verify } from "@node-rs/argon2";
 import { sql } from "kysely";
 import type { Clock } from "../clock.js";
 import type { Database, Role } from "../database.js";
+import { hashToken, newToken } from "../tokens.js";
 
 /** The charts-and-people module: charts, grown-ups and their sessions. */
 export interface SignedInGrownUp {
@@ -90,7 +90,7 @@ export function createPeople(db: Database, clock: Clock) {
 export type People = ReturnType<typeof createPeople>;
 
 async function startSession(db: Database, grownUpId: string, now: Date): Promise<string> {
-  const token = randomBytes(32).toString("base64url");
+  const token = newToken();
   await db.insertInto("sessions").values({ token_hash: hashToken(token), grown_up_id: grownUpId, created_at: now }).execute();
   return token;
 }
@@ -113,7 +113,3 @@ function isUniqueViolation(error: unknown, constraint: string): boolean {
   );
 }
 
-// Only a hash of each session token is stored, so a leaked database can't be used to sign in.
-function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("base64url");
-}

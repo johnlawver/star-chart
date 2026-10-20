@@ -9,6 +9,8 @@ import { createPeople } from "./people/people.js";
 import { peopleRoutes } from "./people/routes.js";
 import { createChildren } from "./people/children.js";
 import { childrenRoutes } from "./people/children-routes.js";
+import { createObservatories } from "./observatories/observatories.js";
+import { observatoryRoutes } from "./observatories/routes.js";
 
 const webRoot = fileURLToPath(new URL("../../dist/web", import.meta.url));
 
@@ -29,7 +31,9 @@ export async function buildApp({ db, clock, config }: AppDependencies) {
   await app.register(cookie);
   const people = createPeople(db, clock);
   await peopleRoutes(app, people, config);
-  await childrenRoutes(app, people, createChildren(db, clock));
+  const children = createChildren(db, clock);
+  await childrenRoutes(app, people, children);
+  await observatoryRoutes(app, people, children, createObservatories(db, clock));
   // The built web front ends (`vite build`), if present. Tests drive the API directly and don't need them.
   if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot });
   return app;

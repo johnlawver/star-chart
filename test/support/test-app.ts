@@ -16,6 +16,7 @@ export interface ApiResponse {
  */
 export class ApiClient {
   private cookies = new Map<string, string>();
+  private deviceToken: string | undefined;
 
   constructor(private readonly app: Awaited<ReturnType<typeof buildApp>>) {}
 
@@ -24,7 +25,7 @@ export class ApiClient {
       method,
       url,
       ...(payload === undefined ? {} : { payload }),
-      headers: this.cookieHeader(),
+      headers: { ...this.cookieHeader(), ...this.deviceHeader() },
     });
     for (const cookie of response.cookies) {
       if (cookie.value === "" || (cookie.maxAge !== undefined && cookie.maxAge <= 0)) this.cookies.delete(cookie.name);
@@ -37,6 +38,15 @@ export class ApiClient {
   post = (url: string, payload?: Body) => this.request("POST", url, payload);
   patch = (url: string, payload?: Body) => this.request("PATCH", url, payload);
   delete = (url: string) => this.request("DELETE", url);
+
+  /** From now on, act as a paired device: send its credential the way a device would. */
+  useDeviceToken(token: string): void {
+    this.deviceToken = token;
+  }
+
+  private deviceHeader(): Record<string, string> {
+    return this.deviceToken ? { authorization: `Bearer ${this.deviceToken}` } : {};
+  }
 
   private cookieHeader(): Record<string, string> {
     if (this.cookies.size === 0) return {};
