@@ -61,3 +61,38 @@ describe("redemptions", () => {
     printer.close();
   });
 });
+
+describe("the constellation", () => {
+  test("it shows every star earned and spent, newest first, and the balance is earned minus spent", async () => {
+    const { chart, nova, earn, redeem, printer } = await novaWithStars();
+    await earn("Feed the cat", 2);
+    await earn("Tidy your room", 3);
+    await redeem(4, "Ice cream");
+
+    const constellation = (await chart.owner.get(`/api/children/${nova}/constellation`)).body;
+
+    expect(constellation).toEqual({
+      earned: 5,
+      spent: 4,
+      balance: 1,
+      entries: [
+        { kind: "spent", amount: 4, what: "Ice cream", at: expect.any(String) },
+        { kind: "earned", amount: 3, what: "Tidy your room", at: expect.any(String) },
+        { kind: "earned", amount: 2, what: "Feed the cat", at: expect.any(String) },
+      ],
+    });
+    printer.close();
+  });
+
+  test("the observatory shows a child their own constellation", async () => {
+    const { chart, nova, earn, redeem, printer } = await novaWithStars();
+    await earn("Feed the cat", 2);
+    await redeem(1, "Sticker");
+
+    const constellation = (await chart.screen.get(`/api/observatory/children/${nova}/constellation`)).body;
+
+    expect(constellation).toMatchObject({ earned: 2, spent: 1, balance: 1 });
+    expect(constellation.entries.map((entry: { what: string }) => entry.what)).toEqual(["Sticker", "Feed the cat"]);
+    printer.close();
+  });
+});

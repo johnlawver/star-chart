@@ -105,6 +105,7 @@ export interface Tables {
     note: string | null;
     recorded_by_grown_up_id: string | null;
     created_at: Date;
+    seq: Generated<string>;
   };
   sessions: {
     token_hash: string;

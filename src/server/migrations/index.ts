@@ -13,6 +13,7 @@ import * as ticketHistoryOrder from "./0011-ticket-history-order.js";
 import * as choreFrequency from "./0012-chore-frequency.js";
 import * as icons from "./0013-icons.js";
 import * as redemptions from "./0014-redemptions.js";
+import * as starMovementOrder from "./0015-star-movement-order.js";
 
 // Every schema change is a migration, listed here in order. Never edit one that has shipped; add a new one.
 export const migrations: Record<string, Migration> = {
@@ -30,4 +31,5 @@ export const migrations: Record<string, Migration> = {
   "0012-chore-frequency": choreFrequency,
   "0013-icons": icons,
   "0014-redemptions": redemptions,
+  "0015-star-movement-order": starMovementOrder,
 };

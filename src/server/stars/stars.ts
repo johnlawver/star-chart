@@ -55,6 +55,38 @@ export function createStars(db: Database, clock: Clock) {
       });
     },
 
+    /**
+     * A child's constellation: every star earned (with the task it was for) and spent (with what it was spent on),
+     * newest first, with totals. Undefined if there's no such child in this chart.
+     */
+    async constellation(chartId: string, childId: string) {
+      if (!isId(childId)) return undefined;
+      const child = await db
+        .selectFrom("children")
+        .select("id")
+        .where("chart_id", "=", chartId)
+        .where("id", "=", childId)
+        .executeTakeFirst();
+      if (!child) return undefined;
+      const movements = await db
+        .selectFrom("star_movements")
+        .leftJoin("tickets", "tickets.id", "star_movements.ticket_id")
+        .select(["star_movements.amount", "star_movements.note", "tickets.title", "star_movements.created_at"])
+        .where("star_movements.chart_id", "=", chartId)
+        .where("star_movements.child_id", "=", childId)
+        .orderBy("star_movements.seq", "desc")
+        .execute();
+      const entries = movements.map((movement) => ({
+        kind: movement.amount < 0 ? ("spent" as const) : ("earned" as const),
+        amount: Math.abs(movement.amount),
+        what: movement.amount < 0 ? (movement.note ?? "") : (movement.title ?? "A task"),
+        at: movement.created_at.toISOString(),
+      }));
+      const earned = entries.filter((e) => e.kind === "earned").reduce((sum, e) => sum + e.amount, 0);
+      const spent = entries.filter((e) => e.kind === "spent").reduce((sum, e) => sum + e.amount, 0);
+      return { earned, spent, balance: earned - spent, entries };
+    },
+
     /** A child's balance: everything earned minus everything spent, always computed from the record. */
     async balance(chartId: string, childId: string): Promise<number> {
       const { total } = await db

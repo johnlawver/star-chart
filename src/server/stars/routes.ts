@@ -22,6 +22,25 @@ export async function starRoutes(
     return { child: { ...child, balance: await stars.balance(screen.chartId, child.id) } };
   });
 
+  app.get<{ Params: { childId: string } }>("/api/children/:childId/constellation", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    const constellation = await stars.constellation(signedIn.chart.id, request.params.childId);
+    if (!constellation) return reply.code(404).send({ error: "no such child" });
+    return constellation;
+  });
+
+  app.get<{ Params: { childId: string } }>(
+    "/api/observatory/children/:childId/constellation",
+    async (request, reply) => {
+      const screen = await requireDevice(observatories, "screen", request, reply);
+      if (!screen) return reply;
+      const constellation = await stars.constellation(screen.chartId, request.params.childId);
+      if (!constellation) return reply.code(404).send({ error: "no such child" });
+      return constellation;
+    },
+  );
+
   app.post<{ Params: { childId: string }; Body: { amount: number; note: string } }>(
     "/api/children/:childId/redemptions",
     {
