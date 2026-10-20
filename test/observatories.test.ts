@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { signUpOwner } from "./support/sign-up.js";
 import { startTestApp } from "./support/test-app.js";
 
-const { newClient } = await startTestApp();
+const { newClient, clock } = await startTestApp();
 
 describe("pairing an observatory", () => {
   test("the owner signs in on a fresh observatory to pair it, and it then shows the chart's children", async () => {
@@ -61,5 +61,25 @@ describe("pairing parts", () => {
     expect(observatories).toEqual([
       { id: observatoryId, parts: [{ kind: "printer" }, { kind: "screen" }] },
     ]);
+  });
+
+  test("a pairing code works only once", async () => {
+    const { screen } = await pairedObservatory();
+    const { code } = (await screen.post("/api/observatory/pairing-codes")).body;
+    await newClient().post("/api/parts", { code, kind: "printer" });
+
+    const secondUse = await newClient().post("/api/parts", { code, kind: "scanner" });
+
+    expect(secondUse.status).toBe(404);
+  });
+
+  test("a pairing code stops working after 10 minutes", async () => {
+    const { screen } = await pairedObservatory();
+    const { code } = (await screen.post("/api/observatory/pairing-codes")).body;
+
+    clock.advanceBy(10 * 60 * 1000 + 1);
+    const tooLate = await newClient().post("/api/parts", { code, kind: "printer" });
+
+    expect(tooLate.status).toBe(404);
   });
 });
