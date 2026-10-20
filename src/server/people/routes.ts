@@ -1,13 +1,15 @@
 import type { FastifyInstance } from "fastify";
+import type { AppConfig } from "../app.js";
 import type { People } from "./people.js";
 
 const sessionCookie = "star_chart_session";
 const cookieOptions = { path: "/", httpOnly: true, secure: true, sameSite: "lax" } as const;
 
-export async function peopleRoutes(app: FastifyInstance, people: People) {
+export async function peopleRoutes(app: FastifyInstance, people: People, config: AppConfig) {
   app.post<{ Body: { email: string; password: string; chartName: string; timeZone: string } }>(
     "/api/sign-up",
     async (request, reply) => {
+      if (!config.allowNewCharts) return reply.code(403).send({ error: "new charts can't be created on this server" });
       const token = await people.signUp(request.body);
       reply.setCookie(sessionCookie, token, cookieOptions);
       return reply.code(201).send({});

@@ -16,9 +16,9 @@ export interface AppDependencies {
   config: AppConfig;
 }
 
-export async function buildApp({ db, clock }: AppDependencies) {
+export async function buildApp({ db, clock, config }: AppDependencies) {
   const app = Fastify();
   await app.register(cookie);
-  await peopleRoutes(app, createPeople(db, clock));
+  await peopleRoutes(app, createPeople(db, clock), config);
   return app;
 }
