@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { api, stored } from "../shared/api.js";
 import { useLiveConnection } from "../shared/live.js";
 import { Icon } from "../shared/icons.js";
+import { ConstellationList, type Constellation } from "../shared/constellation.js";
 
 // The observatory screen. Deliberately plain until its design phase (see Project conventions in CLAUDE.md).
 
@@ -195,6 +196,7 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
   const [category, setCategory] = useState<MenuCategory | undefined>();
   const [message, setMessage] = useState<string | undefined>();
   const [balance, setBalance] = useState<number | undefined>();
+  const [constellation, setConstellation] = useState<Constellation | undefined>();
   // Children who can't read yet see big icons instead of words (their display style).
   const pictures = child.displayStyle === "pictures";
 
@@ -226,10 +228,29 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
 
   if (message) return <main><h1>{message}</h1></main>;
 
+  const showConstellation = async () => {
+    const result = await api("GET", `/api/observatory/children/${child.id}/constellation`, undefined, deviceToken);
+    if (result.ok) setConstellation(result.data);
+  };
+
+  if (constellation) {
+    return (
+      <main>
+        <h1>{child.nickname}'s stars</h1>
+        <ConstellationList constellation={constellation} />
+        <button onClick={() => setConstellation(undefined)}>Back</button>
+      </main>
+    );
+  }
+
   return (
     <main>
       <h1>Hi, {child.nickname}!</h1>
-      {balance !== undefined && <p>You have {balance} ★</p>}
+      {balance !== undefined && (
+        <p>
+          You have {balance} ★ <button onClick={showConstellation}>My stars</button>
+        </p>
+      )}
       {menu === undefined && <p>Loading…</p>}
       {menu?.length === 0 && <p>Nothing to do right now.</p>}
       {!category &&

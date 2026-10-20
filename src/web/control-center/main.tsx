@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { Icon, IconPicker } from "../shared/icons.js";
+import { ConstellationList, type Constellation } from "../shared/constellation.js";
 
 // The Control Center, deliberately plain for now: sign up, sign in, and see your chart.
 
@@ -41,6 +42,7 @@ function ControlCenter() {
       </p>
       <button onClick={async () => (await api("POST", "/api/sign-out"), refresh())}>Sign out</button>
       <WaitingSection />
+      <StarsSection />
       <ChildrenSection />
       <ChoresSection />
       {me.grownUp.role === "owner" && <ObservatoriesSection />}
@@ -421,6 +423,76 @@ function WaitingSection() {
       <ul>{open.map((ticket) => row(ticket, false))}</ul>
       {error && <p role="alert">{error}</p>}
     </section>
+  );
+}
+
+function StarsSection() {
+  const [children, setChildren] = useState<Child[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      const result = await api("GET", "/api/children");
+      if (result.ok) setChildren(result.data.children);
+    })();
+  }, []);
+
+  return (
+    <section>
+      <h2>Stars</h2>
+      {children.map((child) => (
+        <ChildStars key={child.id} child={child} />
+      ))}
+    </section>
+  );
+}
+
+function ChildStars({ child }: { child: Child }) {
+  const [constellation, setConstellation] = useState<Constellation | undefined>();
+  const [showHistory, setShowHistory] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+
+  const load = async () => {
+    const result = await api("GET", `/api/children/${child.id}/constellation`);
+    if (result.ok) setConstellation(result.data);
+  };
+
+  useEffect(() => {
+    void load();
+  }, [child.id]);
+
+  const spend = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const result = await api("POST", `/api/children/${child.id}/redemptions`, {
+      amount: Number(data.get("amount")),
+      note: data.get("note"),
+    });
+    setError(result.ok ? undefined : result.data?.error);
+    if (result.ok) form.reset();
+    await load();
+  };
+
+  return (
+    <div>
+      <h3>
+        {child.nickname}: {constellation?.balance ?? "…"} ★
+      </h3>
+      <form onSubmit={spend}>
+        <label>
+          Spend <input name="amount" type="number" min={1} max={constellation?.balance ?? 0} required style={{ width: "4em" }} /> ★
+        </label>{" "}
+        <label>
+          on <input name="note" placeholder="Ice cream" maxLength={100} required />
+        </label>{" "}
+        <button type="submit">Record</button>{" "}
+        <button type="button" onClick={() => setShowHistory(!showHistory)}>
+          {showHistory ? "Hide" : "Show"} constellation
+        </button>
+      </form>
+      {error && <p role="alert">{error}</p>}
+      {showHistory && constellation && <ConstellationList constellation={constellation} />}
+    </div>
   );
 }
 
