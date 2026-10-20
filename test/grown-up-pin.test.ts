@@ -57,3 +57,31 @@ describe("unlocking the Control Center on the observatory", () => {
     expect(statuses).toEqual([400, 400, 400, 400]);
   });
 });
+
+describe("guessing PINs", () => {
+  test("after 5 wrong PINs the observatory refuses every PIN, even the right one, for 5 minutes", async () => {
+    clock.set(new Date("2026-10-20T15:00:00Z"));
+    const { chart, unlock } = await ownerWithPin("2468");
+    for (const guess of ["0000", "1111", "2222", "3333", "4444"]) await unlock(guess);
+
+    const rightButLocked = await unlock("2468");
+    clock.advanceBy(5 * 60 * 1000);
+    const afterFiveMinutes = await unlock("2468");
+
+    expect(rightButLocked.status).toBe(429);
+    expect(afterFiveMinutes.status).toBe(200);
+    expect((await chart.screen.get("/api/me")).status).toBe(200);
+  });
+
+  test("a right PIN before the limit clears the count of wrong ones", async () => {
+    clock.set(new Date("2026-10-20T16:00:00Z"));
+    const { unlock } = await ownerWithPin("2468");
+    for (const guess of ["0000", "1111", "2222", "3333"]) await unlock(guess);
+    await unlock("2468");
+
+    for (const guess of ["0000", "1111", "2222", "3333"]) await unlock(guess);
+    const stillAllowed = await unlock("2468");
+
+    expect(stillAllowed.status).toBe(200);
+  });
+});

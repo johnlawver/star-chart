@@ -97,13 +97,20 @@ export async function observatoryRoutes(
     async (request, reply) => {
       const screen = await requireDevice(observatories, "screen", request, reply);
       if (!screen) return reply;
+      if (await observatories.isPinLocked(screen.observatoryId)) {
+        return reply.code(429).send({ error: "Too many wrong PINs. Try again in a few minutes." });
+      }
       const token = await people.unlockWithPin({
         chartId: screen.chartId,
         grownUpId: request.body.grownUpId,
         pin: request.body.pin,
         lifetimeMs: unlockedSessionMs,
       });
-      if (!token) return reply.code(401).send({ error: "That PIN isn't right." });
+      if (!token) {
+        await observatories.wrongPin(screen.observatoryId);
+        return reply.code(401).send({ error: "That PIN isn't right." });
+      }
+      await observatories.rightPin(screen.observatoryId);
       reply.setCookie(sessionCookie, token, sessionCookieOptions);
       return {};
     },

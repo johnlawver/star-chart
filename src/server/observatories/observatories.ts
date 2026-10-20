@@ -4,6 +4,8 @@ import { isId } from "../ids.js";
 import { hashToken, newPairingCode, newToken } from "../tokens.js";
 
 const pairingCodeLifetimeMs = 10 * 60 * 1000;
+const wrongPinsBeforeLockout = 5;
+const pinLockoutMs = 5 * 60 * 1000;
 
 /** A paired device, as identified by its credential. */
 export interface PairedDevice {
@@ -81,6 +83,44 @@ export function createObservatories(db: Database, clock: Clock) {
         observatories.set(row.id, observatory);
       }
       return [...observatories.values()];
+    },
+
+    /** Whether this observatory is refusing PINs for now, after too many wrong ones. */
+    async isPinLocked(observatoryId: string): Promise<boolean> {
+      const observatory = await db
+        .selectFrom("observatories")
+        .select("pin_locked_until")
+        .where("id", "=", observatoryId)
+        .executeTakeFirstOrThrow();
+      return observatory.pin_locked_until !== null && observatory.pin_locked_until > clock.now();
+    },
+
+    /** Counts a wrong PIN; the one that reaches the limit locks the observatory for a while and starts the count again. */
+    async wrongPin(observatoryId: string): Promise<void> {
+      const now = clock.now();
+      await db
+        .updateTable("observatories")
+        .set((eb) => ({
+          failed_pin_attempts: eb
+            .case()
+            .when("failed_pin_attempts", ">=", wrongPinsBeforeLockout - 1)
+            .then(0)
+            .else(eb("failed_pin_attempts", "+", 1))
+            .end(),
+          pin_locked_until: eb
+            .case()
+            .when("failed_pin_attempts", ">=", wrongPinsBeforeLockout - 1)
+            .then(new Date(now.getTime() + pinLockoutMs))
+            .else(eb.ref("pin_locked_until"))
+            .end(),
+        }))
+        .where("id", "=", observatoryId)
+        .execute();
+    },
+
+    /** A right PIN wipes the count of wrong ones. */
+    async rightPin(observatoryId: string): Promise<void> {
+      await db.updateTable("observatories").set({ failed_pin_attempts: 0 }).where("id", "=", observatoryId).execute();
     },
 
     /** The devices paired to one observatory. */

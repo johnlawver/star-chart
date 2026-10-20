@@ -30,6 +30,8 @@ export interface Tables {
   observatories: {
     id: Generated<string>;
     chart_id: string;
+    failed_pin_attempts: Generated<number>;
+    pin_locked_until: Date | null;
     created_at: Date;
   };
   devices: {
