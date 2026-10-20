@@ -3,10 +3,11 @@ import { buildApp, type AppConfig } from "../../src/server/app.js";
 import { createTestDatabase } from "./database.js";
 import { FakeClock } from "./fake-clock.js";
 import { FakeMailer } from "./fake-mailer.js";
+import { FakePushSender } from "./fake-push.js";
 import { LiveConnection } from "./live-connection.js";
 import WebSocket from "ws";
 
-type Body = Record<string, unknown>;
+type Body = object;
 
 export interface ApiResponse {
   status: number;
@@ -65,14 +66,21 @@ export class ApiClient {
   }
 }
 
-const defaultConfig: AppConfig = { allowNewCharts: true, appUrl: "https://star-chart.test" };
+const defaultConfig: AppConfig = {
+  allowNewCharts: true,
+  appUrl: "https://star-chart.test",
+  vapidPublicKey: "test-vapid-public-key",
+  // Scheduled jobs only run when a test says so (runScheduledJobs), so time-based tests stay exact.
+  scheduledJobsEveryMs: null,
+};
 
 /** Starts the real server in-process against the test database, with a controllable clock. */
 export async function startTestApp(config: Partial<AppConfig> = {}) {
   const db = createTestDatabase();
   const clock = new FakeClock(new Date("2026-10-20T08:00:00Z"));
   const mailer = new FakeMailer();
-  const app = await buildApp({ db, clock, mailer, config: { ...defaultConfig, ...config } });
+  const push = new FakePushSender();
+  const app = await buildApp({ db, clock, mailer, push, config: { ...defaultConfig, ...config } });
   // HTTP requests are injected in-process, but live connections are real network connections (ADR 0003),
   // so connecting, closing and dropping behave exactly as they do for real devices.
   await app.listen({ host: "127.0.0.1", port: 0 });
@@ -86,6 +94,9 @@ export async function startTestApp(config: Partial<AppConfig> = {}) {
   return {
     clock,
     mailer,
+    push,
+    /** Runs the server's scheduled jobs (grouped notifications, daily summaries) as if their time had come. */
+    runScheduledJobs: () => app.runScheduledJobs(),
     newClient: () => new ApiClient(app),
     /** Opens a device's live connection to the server, the way a screen, printer or scanner would. */
     openLiveConnection: async () => {

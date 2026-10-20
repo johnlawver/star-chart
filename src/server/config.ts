@@ -2,6 +2,7 @@ import type { AppConfig } from "./app.js";
 
 export interface ServerConfig {
   databaseUrl: string;
+  vapid: { publicKey: string; privateKey: string; subject: string };
   smtpUrl: string;
   emailFrom: string;
   host: string;
@@ -18,6 +19,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   };
   return {
     databaseUrl: required("DATABASE_URL"),
+    vapid: {
+      publicKey: required("VAPID_PUBLIC_KEY"),
+      privateKey: required("VAPID_PRIVATE_KEY"),
+      subject: required("VAPID_SUBJECT"),
+    },
     smtpUrl: required("SMTP_URL"),
     emailFrom: required("EMAIL_FROM"),
     // Listen on the loopback address only; Tailscale (`tailscale serve`) provides HTTPS in front of it.
@@ -26,6 +32,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     app: {
       allowNewCharts: env.ALLOW_NEW_CHARTS === "true",
       appUrl: required("APP_URL").replace(/\/$/, ""),
+      vapidPublicKey: required("VAPID_PUBLIC_KEY"),
     },
   };
 }

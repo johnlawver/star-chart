@@ -7,6 +7,7 @@ import type { People } from "../people/people.js";
 import type { TicketState } from "../database.js";
 import type { FastifyReply } from "fastify";
 import type { Decision, Tickets } from "./tickets.js";
+import type { Notifications } from "../notifications/notifications.js";
 
 /** Replies with a grown-up decision's outcome: the ticket, or why it was refused. */
 function sendDecision<T>(reply: FastifyReply, decision: Decision<T>) {
@@ -25,6 +26,7 @@ export async function ticketRoutes(
   observatories: Observatories,
   liveParts: LiveParts,
   tickets: Tickets,
+  notifications: Notifications,
 ) {
   // A scanner read a ticket's code: hand it in, and tell the observatory's screen (and the scanner) what happened.
   liveParts.on("scan", async (device, message) => {
@@ -33,6 +35,7 @@ export async function ticketRoutes(
     const result = { type: "scan-result", ...outcome };
     liveParts.sendTo(device.observatoryId, "screen", result);
     liveParts.sendTo(device.observatoryId, "scanner", result);
+    if (outcome.result === "handed-in") await notifications.handedIn(device.chartId, outcome);
   });
 
   app.get<{ Querystring: { state: TicketState } }>(

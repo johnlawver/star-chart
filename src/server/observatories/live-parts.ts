@@ -14,6 +14,7 @@ export class LiveParts {
   private readonly connections = new Map<WebSocket, PairedDevice>();
   private readonly handlers = new Map<string, MessageHandler>();
   private readonly answeredLastPing = new WeakSet<WebSocket>();
+  private readonly inFlight = new Set<Promise<void>>();
   private readonly heartbeat: ReturnType<typeof setInterval>;
 
   /**
@@ -41,10 +42,11 @@ export class LiveParts {
     socket.once("close", () => this.connections.delete(socket));
   }
 
-  /** Stops the heartbeat and drops every connection, when the server shuts down. */
-  stop(): void {
+  /** Stops the heartbeat, drops every connection, and waits for messages already being handled, when the server shuts down. */
+  async stop(): Promise<void> {
     clearInterval(this.heartbeat);
     for (const socket of this.connections.keys()) socket.terminate();
+    await Promise.allSettled([...this.inFlight]);
   }
 
   /** Registers what to do when a connected device sends a message of a given type, such as a scanner's "scan". */
@@ -55,7 +57,11 @@ export class LiveParts {
   /** Called with every message a connected device sends after its hello. Unknown messages are ignored. */
   async received(device: PairedDevice, message: Record<string, unknown>): Promise<void> {
     const handler = typeof message.type === "string" ? this.handlers.get(message.type) : undefined;
-    await handler?.(device, message);
+    if (!handler) return;
+    // Kept track of, so shutting down can wait for messages already being handled.
+    const handling = Promise.resolve(handler(device, message)).finally(() => this.inFlight.delete(handling));
+    this.inFlight.add(handling);
+    await handling;
   }
 
   /** Whether a device is holding a live connection right now. */

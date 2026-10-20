@@ -5,6 +5,7 @@ import { buildApp } from "../../src/server/app.js";
 import { createTestDatabase } from "../support/database.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { FakeMailer } from "../support/fake-mailer.js";
+import { FakePushSender } from "../support/fake-push.js";
 import { uniqueEmail } from "../support/test-app.js";
 
 // The one browser smoke test: the real observatory page, in a real (headless) browser, against the real server.
@@ -16,7 +17,8 @@ const app = await buildApp({
   db,
   clock: new FakeClock(new Date()),
   mailer: new FakeMailer(),
-  config: { allowNewCharts: true, appUrl: "https://star-chart.test" },
+  push: new FakePushSender(),
+  config: { allowNewCharts: true, appUrl: "https://star-chart.test", vapidPublicKey: "test", scheduledJobsEveryMs: null },
 });
 let base = "";
 let browser: Browser;

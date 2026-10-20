@@ -5,6 +5,7 @@ import type { Observatories } from "../observatories/observatories.js";
 import { requireGrownUp } from "../people/authenticate.js";
 import type { People } from "../people/people.js";
 import type { Reprints } from "./reprints.js";
+import type { Notifications } from "../notifications/notifications.js";
 
 const idField = { type: "string", maxLength: 36 } as const;
 
@@ -14,6 +15,7 @@ export async function reprintRoutes(
   observatories: Observatories,
   liveParts: LiveParts,
   reprints: Reprints,
+  notifications: Notifications,
 ) {
   // A child taps "I lost it" on a category where they hold an open ticket.
   app.post<{ Params: { childId: string }; Body: { categoryId: string } }>(

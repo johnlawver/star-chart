@@ -7,6 +7,9 @@ import { fileURLToPath } from "node:url";
 import type { Clock } from "./clock.js";
 import type { Database } from "./database.js";
 import type { Mailer } from "./email.js";
+import type { PushSender } from "./push.js";
+import { createNotifications } from "./notifications/notifications.js";
+import { notificationRoutes } from "./notifications/routes.js";
 import { createPeople } from "./people/people.js";
 import { peopleRoutes } from "./people/routes.js";
 import { createChildren } from "./people/children.js";
@@ -33,16 +36,30 @@ export interface AppConfig {
   heartbeatMs?: number;
   /** The address people use to reach Star Chart, for links in emails, such as https://mini.example.ts.net */
   appUrl: string;
+  /** The public half of our VAPID key pair, which browsers need to subscribe to push notifications. */
+  vapidPublicKey: string;
+  /** How long after one hand-in notification others are held back and grouped. Defaults to a minute. */
+  handInGroupingMs?: number;
+  /** How often scheduled jobs run. Defaults to 30 seconds; null means only when asked (tests). */
+  scheduledJobsEveryMs?: number | null;
+}
+
+declare module "fastify" {
+  interface FastifyInstance {
+    /** Runs every scheduled job once, now. */
+    runScheduledJobs(): Promise<void>;
+  }
 }
 
 export interface AppDependencies {
   db: Database;
   clock: Clock;
   mailer: Mailer;
+  push: PushSender;
   config: AppConfig;
 }
 
-export async function buildApp({ db, clock, mailer, config }: AppDependencies) {
+export async function buildApp({ db, clock, mailer, push, config }: AppDependencies) {
   // Unexpected fields in a request are refused, not silently dropped (we never store more than we asked for).
   const app = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
   await app.register(cookie);
@@ -52,15 +69,39 @@ export async function buildApp({ db, clock, mailer, config }: AppDependencies) {
   const children = createChildren(db, clock);
   await childrenRoutes(app, people, children);
   const observatories = createObservatories(db, clock);
+  const notifications = createNotifications(db, clock, push, {
+    appUrl: config.appUrl,
+    handInGroupingMs: config.handInGroupingMs ?? 60_000,
+  });
+  await notificationRoutes(app, people, notifications, config.vapidPublicKey);
+
+  // Jobs that run on their own, every so often: whatever is due, they do.
+  const scheduledJobs: (() => Promise<void>)[] = [];
+  app.decorate("runScheduledJobs", async () => {
+    for (const job of scheduledJobs) {
+      try {
+        await job();
+      } catch (error) {
+        app.log.error({ error }, "a scheduled job failed");
+      }
+    }
+  });
+  const jobsEveryMs = config.scheduledJobsEveryMs === undefined ? 30_000 : config.scheduledJobsEveryMs;
+  if (jobsEveryMs !== null) {
+    const timer = setInterval(() => void app.runScheduledJobs(), jobsEveryMs);
+    timer.unref();
+    app.addHook("onClose", async () => clearInterval(timer));
+  }
+
   const liveParts = new LiveParts(config.heartbeatMs ?? 15_000);
-  app.addHook("onClose", async () => liveParts.stop());
+  app.addHook("onClose", async () => await liveParts.stop());
   await observatoryRoutes(app, people, children, observatories, liveParts);
   await catalogRoutes(app, people, observatories, createCatalog(db, clock));
   const stars = createStars(db, clock);
-  await ticketRoutes(app, people, observatories, liveParts, createTickets(db, clock, stars));
+  await ticketRoutes(app, people, observatories, liveParts, createTickets(db, clock, stars), notifications);
   await starRoutes(app, people, observatories, children, stars);
   await iconRoutes(app);
-  await reprintRoutes(app, people, observatories, liveParts, createReprints(db, clock));
+  await reprintRoutes(app, people, observatories, liveParts, createReprints(db, clock), notifications);
   // The built web front ends (`vite build`), if present. Tests drive the API directly and don't need them.
   if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot });
   return app;

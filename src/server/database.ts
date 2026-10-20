@@ -109,6 +109,19 @@ export interface Tables {
     created_at: Date;
     decided_at: Date | null;
   };
+  push_subscriptions: {
+    id: Generated<string>;
+    grown_up_id: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    created_at: Date;
+  };
+  hand_in_notices: {
+    chart_id: string;
+    last_sent_at: Date;
+    held_back: Generated<number>;
+  };
   star_movements: {
     id: Generated<string>;
     chart_id: string;
