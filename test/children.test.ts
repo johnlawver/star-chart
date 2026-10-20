@@ -18,4 +18,16 @@ describe("children", () => {
       { id: expect.any(String), nickname: "Nova", displayStyle: "words" },
     ]);
   });
+
+  test("a grown-up can rename a child and switch their display style", async () => {
+    const grownUp = await signUpAsOwner(newClient());
+    const { child } = (await grownUp.post("/api/children", { nickname: "Pip", displayStyle: "pictures" })).body;
+
+    const changed = await grownUp.patch(`/api/children/${child.id}`, { nickname: "Pipsqueak", displayStyle: "words" });
+
+    expect(changed.status).toBe(200);
+    expect((await grownUp.get("/api/children")).body.children).toEqual([
+      { id: child.id, nickname: "Pipsqueak", displayStyle: "words" },
+    ]);
+  });
 });

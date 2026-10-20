@@ -35,6 +35,8 @@ export class ApiClient {
 
   get = (url: string) => this.request("GET", url);
   post = (url: string, payload?: Body) => this.request("POST", url, payload);
+  patch = (url: string, payload?: Body) => this.request("PATCH", url, payload);
+  delete = (url: string) => this.request("DELETE", url);
 
   private cookieHeader(): Record<string, string> {
     if (this.cookies.size === 0) return {};

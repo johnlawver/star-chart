@@ -31,6 +31,24 @@ export function createChildren(db: Database, clock: Clock) {
         .returning(["id", "nickname", "display_style as displayStyle"])
         .executeTakeFirstOrThrow();
     },
+
+    /** Changes a child's nickname or display style. Undefined if there's no such child in this chart. */
+    async change(
+      chartId: string,
+      childId: string,
+      changes: { nickname?: string; displayStyle?: DisplayStyle },
+    ): Promise<Child | undefined> {
+      return db
+        .updateTable("children")
+        .set({
+          ...(changes.nickname === undefined ? {} : { nickname: changes.nickname }),
+          ...(changes.displayStyle === undefined ? {} : { display_style: changes.displayStyle }),
+        })
+        .where("chart_id", "=", chartId)
+        .where("id", "=", childId)
+        .returning(["id", "nickname", "display_style as displayStyle"])
+        .executeTakeFirst();
+    },
   };
 }
 
