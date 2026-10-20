@@ -79,17 +79,21 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
   const [chosen, setChosen] = useState<Child | undefined>();
   const [pairingCode, setPairingCode] = useState<string | undefined>();
   const [scanMessage, setScanMessage] = useState<string | undefined>();
+  const [scanResult, setScanResult] = useState<string | undefined>();
 
   // The screen listens on its own live connection for what happened when a ticket is scanned here.
   useLiveConnection(
     deviceToken,
     (message) => {
       if (message.type !== "scan-result") return;
-      setScanMessage(
-        message.result === "handed-in"
-          ? `Great job, ${message.childNickname}! "${message.title}" is waiting for a grown-up.`
-          : "Hmm, I don't know that ticket. Ask a grown-up.",
-      );
+      const messages: Record<string, string> = {
+        "handed-in": `Great job, ${message.childNickname}! "${message.title}" is waiting for a grown-up.`,
+        "waiting-for-grown-up": `"${message.title}" is already waiting for a grown-up to check it.`,
+        "already-done": `"${message.title}" is already done! ⭐`,
+        "not-recognised": "Hmm, I don't know that ticket. Ask a grown-up.",
+      };
+      setScanMessage(messages[message.result] ?? messages["not-recognised"]);
+      setScanResult(message.result);
       setTimeout(() => setScanMessage(undefined), 4000);
     },
     onUnpaired,
@@ -103,7 +107,14 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
     })();
   }, [deviceToken]);
 
-  if (scanMessage) return <main><h1 role="status">{scanMessage}</h1></main>;
+  if (scanMessage) {
+    return (
+      <main>
+        {scanResult === "already-done" && <SpinningStar />}
+        <h1 role="status">{scanMessage}</h1>
+      </main>
+    );
+  }
   if (chosen) return <ChildView child={chosen} deviceToken={deviceToken} onDone={() => setChosen(undefined)} />;
 
   const showPairingCode = async () => {
@@ -129,6 +140,18 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
         )}
       </footer>
     </main>
+  );
+}
+
+/** A little "already done!" animation. Plain for now; the observatory's design phase will replace it. */
+function SpinningStar() {
+  return (
+    <>
+      <style>{"@keyframes star-spin { from { transform: rotate(0deg) scale(1) } to { transform: rotate(360deg) scale(1.4) } }"}</style>
+      <div aria-hidden style={{ fontSize: 96, display: "inline-block", animation: "star-spin 1s ease-in-out infinite alternate" }}>
+        ⭐
+      </div>
+    </>
   );
 }
 

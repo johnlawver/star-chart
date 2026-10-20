@@ -326,11 +326,17 @@ interface WaitingTicket {
 }
 
 function WaitingSection() {
-  const [tickets, setTickets] = useState<WaitingTicket[]>([]);
+  const [waiting, setWaiting] = useState<WaitingTicket[]>([]);
+  const [open, setOpen] = useState<WaitingTicket[]>([]);
+  const [error, setError] = useState<string | undefined>();
 
   const load = async () => {
-    const result = await api("GET", "/api/tickets?state=handed-in");
-    if (result.ok) setTickets(result.data.tickets);
+    const [handedIn, stillOpen] = await Promise.all([
+      api("GET", "/api/tickets?state=handed-in"),
+      api("GET", "/api/tickets?state=open"),
+    ]);
+    if (handedIn.ok) setWaiting(handedIn.data.tickets);
+    if (stillOpen.ok) setOpen(stillOpen.data.tickets);
   };
 
   useEffect(() => {
@@ -339,28 +345,56 @@ function WaitingSection() {
     return () => clearInterval(refresh);
   }, []);
 
-  const approve = async (event: FormEvent<HTMLFormElement>, ticket: WaitingTicket) => {
-    event.preventDefault();
-    const stars = Number(new FormData(event.currentTarget).get("stars"));
-    await api("POST", `/api/tickets/${ticket.id}/approve`, stars === ticket.stars ? {} : { stars });
+  const act = async (request: Promise<{ ok: boolean; data: any }>) => {
+    const result = await request;
+    setError(result.ok ? undefined : result.data?.error);
     await load();
   };
+
+  const approve = (event: FormEvent<HTMLFormElement>, ticket: WaitingTicket) => {
+    event.preventDefault();
+    const stars = Number(new FormData(event.currentTarget).get("stars"));
+    return act(api("POST", `/api/tickets/${ticket.id}/approve`, stars === ticket.stars ? {} : { stars }));
+  };
+
+  const reject = (ticket: WaitingTicket) => {
+    const note = window.prompt(`Why isn't "${ticket.title}" done yet? (optional)`);
+    if (note === null) return;
+    return act(api("POST", `/api/tickets/${ticket.id}/reject`, note.trim() ? { note } : {}));
+  };
+
+  const dismiss = (ticket: WaitingTicket) => {
+    if (!window.confirm(`Dismiss ${ticket.childNickname}'s "${ticket.title}" ticket? No stars will be given.`)) return;
+    return act(api("POST", `/api/tickets/${ticket.id}/dismiss`, {}));
+  };
+
+  const row = (ticket: WaitingTicket, handedIn: boolean) => (
+    <li key={ticket.id}>
+      <form onSubmit={(event) => approve(event, ticket)}>
+        <strong>{ticket.childNickname}</strong>: {ticket.title}{" "}
+        <input name="stars" type="number" min={0} max={100} defaultValue={ticket.stars} style={{ width: "4em" }} /> ★{" "}
+        <button type="submit">Approve</button>{" "}
+        {handedIn && (
+          <button type="button" onClick={() => reject(ticket)}>
+            Not yet
+          </button>
+        )}{" "}
+        <button type="button" onClick={() => dismiss(ticket)}>
+          Dismiss
+        </button>
+      </form>
+    </li>
+  );
 
   return (
     <section>
       <h2>Waiting for you</h2>
-      {tickets.length === 0 && <p>Nothing to check right now.</p>}
-      <ul>
-        {tickets.map((ticket) => (
-          <li key={ticket.id}>
-            <form onSubmit={(event) => approve(event, ticket)}>
-              <strong>{ticket.childNickname}</strong>: {ticket.title}{" "}
-              <input name="stars" type="number" min={0} max={100} defaultValue={ticket.stars} style={{ width: "4em" }} /> ★{" "}
-              <button type="submit">Approve</button>
-            </form>
-          </li>
-        ))}
-      </ul>
+      {waiting.length === 0 && <p>Nothing to check right now.</p>}
+      <ul>{waiting.map((ticket) => row(ticket, true))}</ul>
+      <h3>Still open</h3>
+      {open.length === 0 && <p>No open tickets.</p>}
+      <ul>{open.map((ticket) => row(ticket, false))}</ul>
+      {error && <p role="alert">{error}</p>}
     </section>
   );
 }
