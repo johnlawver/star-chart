@@ -108,9 +108,10 @@ export function createCatalog(db: Database, clock: Clock) {
         .where("chart_id", "=", chartId)
         .orderBy("name")
         .execute();
+      const context = { now: clock.now(), timeZone: await timeZoneOf(db, chartId) };
       const menu: MenuCategory[] = [];
       for (const category of categories) {
-        const choices = await taskKind(category.kind).choicesFor(db, category.id, childId);
+        const choices = await taskKind(category.kind).choicesFor(db, context, category.id, childId);
         if (choices.length > 0) menu.push({ ...category, choices });
       }
       return menu;
@@ -119,3 +120,9 @@ export function createCatalog(db: Database, clock: Clock) {
 }
 
 export type Catalog = ReturnType<typeof createCatalog>;
+
+/** A chart's time zone, which decides where its days and weeks begin. */
+export async function timeZoneOf(db: Database, chartId: string): Promise<string> {
+  const chart = await db.selectFrom("charts").select("time_zone").where("id", "=", chartId).executeTakeFirstOrThrow();
+  return chart.time_zone;
+}

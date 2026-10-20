@@ -10,6 +10,7 @@ import * as ticketNotes from "./0008-ticket-notes.js";
 import * as oneOpenTicketPerCategory from "./0009-one-open-ticket-per-category.js";
 import * as ticketHistory from "./0010-ticket-history.js";
 import * as ticketHistoryOrder from "./0011-ticket-history-order.js";
+import * as choreFrequency from "./0012-chore-frequency.js";
 
 // Every schema change is a migration, listed here in order. Never edit one that has shipped; add a new one.
 export const migrations: Record<string, Migration> = {
@@ -24,4 +25,5 @@ export const migrations: Record<string, Migration> = {
   "0009-one-open-ticket-per-category": oneOpenTicketPerCategory,
   "0010-ticket-history": ticketHistory,
   "0011-ticket-history-order": ticketHistoryOrder,
+  "0012-chore-frequency": choreFrequency,
 };

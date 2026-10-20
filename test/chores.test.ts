@@ -25,7 +25,7 @@ describe("chores at the observatory", () => {
         id: category.id,
         name: "Chores",
         kind: "chore",
-        choices: [{ id: expect.any(String), name: "Feed the cat", stars: 2 }],
+        choices: [{ id: expect.any(String), name: "Feed the cat", stars: 2, done: false }],
       },
     ]);
     expect(pipsMenu).toEqual([]);
@@ -108,6 +108,7 @@ describe("chore codes (ADR 0001)", () => {
     };
 
     const novasFirst = await print(nova);
+    harness.clock.advanceBy(24 * 60 * 60 * 1000); // the next day, when the bed can be made again
     const novasSecond = await print(nova);
     const pips = await print(pip);
 

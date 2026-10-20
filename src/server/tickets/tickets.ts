@@ -1,3 +1,4 @@
+import { timeZoneOf } from "../catalog/catalog.js";
 import { taskKind } from "../catalog/task-kinds.js";
 import type { Clock } from "../clock.js";
 import type { Database, DisplayStyle, TicketState } from "../database.js";
@@ -114,6 +115,7 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
     ): Promise<
       | { ticket: { id: string; state: TicketState }; job: PrintJob }
       | { refused: "already-holding"; category: string }
+      | { refused: "done-for-now"; title: string }
       | { refused: "printer-offline" }
       | undefined
     > {
@@ -140,8 +142,10 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
           .where("state", "in", ["open", "handed-in"])
           .executeTakeFirst();
         if (alreadyHolding) return { refused: "already-holding" as const, category: category.name };
-        const issued = await taskKind(category.kind).issue(trx, input.categoryId, input.childId, input.choiceId);
+        const context = { now: clock.now(), timeZone: await timeZoneOf(trx, input.chartId) };
+        const issued = await taskKind(category.kind).issue(trx, context, input.categoryId, input.childId, input.choiceId);
         if (!issued) return undefined;
+        if (issued === "done") return { refused: "done-for-now" as const, title: "" };
         const ticket = await trx
           .insertInto("tickets")
           .values({

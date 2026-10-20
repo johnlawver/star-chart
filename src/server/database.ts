@@ -55,6 +55,8 @@ export interface Tables {
     category_id: string;
     name: string;
     stars: number;
+    frequency_times: Generated<number>;
+    frequency_per: Generated<"day" | "week">;
     created_at: Date;
   };
   chore_assignments: {
