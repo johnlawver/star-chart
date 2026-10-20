@@ -46,6 +46,23 @@ describe("creating a chart", () => {
   });
 });
 
+describe("keeping charts apart", () => {
+  test("grown-ups in different charts each see only their own chart", async () => {
+    const details = { password: "correct horse battery staple", timeZone: "America/Chicago" };
+    const homeParent = newClient();
+    const teacher = newClient();
+    await homeParent.post("/api/sign-up", { email: uniqueEmail("parent"), chartName: "Our House", ...details });
+    await teacher.post("/api/sign-up", { email: uniqueEmail("teacher"), chartName: "Room 12", ...details });
+
+    const homeChart = (await homeParent.get("/api/me")).body.chart;
+    const classChart = (await teacher.get("/api/me")).body.chart;
+
+    expect(homeChart.name).toBe("Our House");
+    expect(classChart.name).toBe("Room 12");
+    expect(homeChart.id).not.toBe(classChart.id);
+  });
+});
+
 describe("signing in and out", () => {
   async function signUpNewOwner() {
     const email = uniqueEmail("parent");
