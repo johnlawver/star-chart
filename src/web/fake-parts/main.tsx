@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import QRCode from "qrcode";
 import { api, stored } from "../shared/api.js";
+import { useLiveConnection } from "../shared/live.js";
 
 // A stand-in for a real printer or scanner. It pairs and connects to the server exactly as real hardware will
 // (ADR 0003): a pairing code, then a live connection opened outward, starting with a hello carrying its credential.
@@ -9,9 +10,6 @@ import { api, stored } from "../shared/api.js";
 type Kind = "printer" | "scanner";
 const kind = document.body.dataset.kind as Kind;
 const tokenKey = `star-chart.fake-${kind}.deviceToken`;
-const notPairedCloseCode = 4401;
-
-type Status = "connecting" | "connected" | "disconnected";
 
 /** A print job, exactly as the server sends it to any printer. */
 interface PrintJob {
@@ -61,44 +59,38 @@ function Pair({ onPaired }: { onPaired: (token: string) => void }) {
 }
 
 function Connected({ deviceToken, onUnpaired }: { deviceToken: string; onUnpaired: () => void }) {
-  const [status, setStatus] = useState<Status>("connecting");
   const [printed, setPrinted] = useState<PrintJob[]>([]);
+  const [lastScan, setLastScan] = useState<string | undefined>();
+  const { status, send } = useLiveConnection(
+    deviceToken,
+    (message) => {
+      if (message.type === "print" && kind === "printer") setPrinted((jobs) => [message.ticket, ...jobs]);
+      if (message.type === "scan-result" && kind === "scanner") setLastScan(message.result);
+    },
+    onUnpaired,
+  );
 
-  useEffect(() => {
-    let socket: WebSocket | undefined;
-    let retry: ReturnType<typeof setTimeout> | undefined;
-    let stopped = false;
-
-    const connect = () => {
-      setStatus("connecting");
-      const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-      socket = new WebSocket(`${protocol}//${location.host}/api/parts/live`);
-      socket.onopen = () => socket?.send(JSON.stringify({ type: "hello", deviceToken }));
-      socket.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        if (message.type === "welcome") setStatus("connected");
-        if (message.type === "print" && kind === "printer") setPrinted((jobs) => [message.ticket, ...jobs]);
-      };
-      socket.onclose = (event) => {
-        if (stopped) return;
-        if (event.code === notPairedCloseCode) return onUnpaired();
-        setStatus("disconnected");
-        retry = setTimeout(connect, 3000);
-      };
-    };
-    connect();
-
-    return () => {
-      stopped = true;
-      clearTimeout(retry);
-      socket?.close();
-    };
-  }, [deviceToken]);
+  const scan = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const { code } = Object.fromEntries(new FormData(form));
+    send({ type: "scan", code: String(code).trim() });
+    form.reset();
+  };
 
   return (
     <>
       <p>Status: {status}</p>
       <button onClick={onUnpaired}>Forget pairing</button>
+      {kind === "scanner" && (
+        <form onSubmit={scan}>
+          <label>
+            Ticket code <input name="code" autoComplete="off" autoCapitalize="characters" required autoFocus />
+          </label>
+          <button type="submit">Scan</button>
+          {lastScan && <p>Last scan: {lastScan}</p>}
+        </form>
+      )}
       {kind === "printer" && (
         <section>
           <h2>Printed tickets</h2>

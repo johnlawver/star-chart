@@ -39,6 +39,7 @@ function ControlCenter() {
         Signed in as {me.grownUp.email} ({me.grownUp.role}). Time zone: {me.chart.timeZone}.
       </p>
       <button onClick={async () => (await api("POST", "/api/sign-out"), refresh())}>Sign out</button>
+      <WaitingSection />
       <ChildrenSection />
       <ChoresSection />
       {me.grownUp.role === "owner" && <ObservatoriesSection />}
@@ -313,6 +314,53 @@ function ChoresSection() {
         <button type="submit">Add category</button>
       </form>
       {error && <p role="alert">{error}</p>}
+    </section>
+  );
+}
+
+interface WaitingTicket {
+  id: string;
+  childNickname: string;
+  title: string;
+  stars: number;
+}
+
+function WaitingSection() {
+  const [tickets, setTickets] = useState<WaitingTicket[]>([]);
+
+  const load = async () => {
+    const result = await api("GET", "/api/tickets?state=handed-in");
+    if (result.ok) setTickets(result.data.tickets);
+  };
+
+  useEffect(() => {
+    void load();
+    const refresh = setInterval(load, 10_000);
+    return () => clearInterval(refresh);
+  }, []);
+
+  const approve = async (event: FormEvent<HTMLFormElement>, ticket: WaitingTicket) => {
+    event.preventDefault();
+    const stars = Number(new FormData(event.currentTarget).get("stars"));
+    await api("POST", `/api/tickets/${ticket.id}/approve`, stars === ticket.stars ? {} : { stars });
+    await load();
+  };
+
+  return (
+    <section>
+      <h2>Waiting for you</h2>
+      {tickets.length === 0 && <p>Nothing to check right now.</p>}
+      <ul>
+        {tickets.map((ticket) => (
+          <li key={ticket.id}>
+            <form onSubmit={(event) => approve(event, ticket)}>
+              <strong>{ticket.childNickname}</strong>: {ticket.title}{" "}
+              <input name="stars" type="number" min={0} max={100} defaultValue={ticket.stars} style={{ width: "4em" }} /> ★{" "}
+              <button type="submit">Approve</button>
+            </form>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

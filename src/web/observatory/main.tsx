@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { api, stored } from "../shared/api.js";
+import { useLiveConnection } from "../shared/live.js";
 
 // The observatory screen. Deliberately plain until its design phase (see Project conventions in CLAUDE.md).
 
@@ -77,6 +78,22 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
   const [children, setChildren] = useState<Child[]>([]);
   const [chosen, setChosen] = useState<Child | undefined>();
   const [pairingCode, setPairingCode] = useState<string | undefined>();
+  const [scanMessage, setScanMessage] = useState<string | undefined>();
+
+  // The screen listens on its own live connection for what happened when a ticket is scanned here.
+  useLiveConnection(
+    deviceToken,
+    (message) => {
+      if (message.type !== "scan-result") return;
+      setScanMessage(
+        message.result === "handed-in"
+          ? `Great job, ${message.childNickname}! "${message.title}" is waiting for a grown-up.`
+          : "Hmm, I don't know that ticket. Ask a grown-up.",
+      );
+      setTimeout(() => setScanMessage(undefined), 4000);
+    },
+    onUnpaired,
+  );
 
   useEffect(() => {
     void (async () => {
@@ -86,6 +103,7 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
     })();
   }, [deviceToken]);
 
+  if (scanMessage) return <main><h1 role="status">{scanMessage}</h1></main>;
   if (chosen) return <ChildView child={chosen} deviceToken={deviceToken} onDone={() => setChosen(undefined)} />;
 
   const showPairingCode = async () => {
@@ -125,6 +143,14 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
   const [menu, setMenu] = useState<MenuCategory[] | undefined>();
   const [category, setCategory] = useState<MenuCategory | undefined>();
   const [message, setMessage] = useState<string | undefined>();
+  const [balance, setBalance] = useState<number | undefined>();
+
+  useEffect(() => {
+    void (async () => {
+      const result = await api("GET", `/api/observatory/children/${child.id}`, undefined, deviceToken);
+      if (result.ok) setBalance(result.data.child.balance);
+    })();
+  }, [child.id]);
 
   useEffect(() => {
     void (async () => {
@@ -150,6 +176,7 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
   return (
     <main>
       <h1>Hi, {child.nickname}!</h1>
+      {balance !== undefined && <p>You have {balance} ★</p>}
       {menu === undefined && <p>Loading…</p>}
       {menu?.length === 0 && <p>Nothing to do right now.</p>}
       {!category &&
