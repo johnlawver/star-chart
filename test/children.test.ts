@@ -30,4 +30,16 @@ describe("children", () => {
       { id: child.id, nickname: "Pipsqueak", displayStyle: "words" },
     ]);
   });
+
+  test("a grown-up can remove a child", async () => {
+    const grownUp = await signUpAsOwner(newClient());
+    const { child } = (await grownUp.post("/api/children", { nickname: "Nova", displayStyle: "words" })).body;
+    await grownUp.post("/api/children", { nickname: "Pip", displayStyle: "pictures" });
+
+    const removed = await grownUp.delete(`/api/children/${child.id}`);
+
+    expect(removed.status).toBe(204);
+    const nicknames = (await grownUp.get("/api/children")).body.children.map((c: { nickname: string }) => c.nickname);
+    expect(nicknames).toEqual(["Pip"]);
+  });
 });

@@ -49,6 +49,19 @@ export function createChildren(db: Database, clock: Clock) {
         .returning(["id", "nickname", "display_style as displayStyle"])
         .executeTakeFirst();
     },
+
+    /**
+     * Removes a child and, through the database's cascading deletes, everything that belongs to them.
+     * Returns false if there's no such child in this chart.
+     */
+    async remove(chartId: string, childId: string): Promise<boolean> {
+      const result = await db
+        .deleteFrom("children")
+        .where("chart_id", "=", chartId)
+        .where("id", "=", childId)
+        .executeTakeFirst();
+      return result.numDeletedRows > 0n;
+    },
   };
 }
 

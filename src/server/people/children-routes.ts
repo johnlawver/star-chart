@@ -28,4 +28,13 @@ export async function childrenRoutes(app: FastifyInstance, people: People, child
       return { child };
     },
   );
+
+  app.delete<{ Params: { childId: string } }>("/api/children/:childId", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    if (!(await children.remove(signedIn.chart.id, request.params.childId))) {
+      return reply.code(404).send({ error: "no such child" });
+    }
+    return reply.code(204).send();
+  });
 }
