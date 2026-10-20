@@ -43,6 +43,24 @@ export interface Tables {
     observatory_id: string;
     expires_at: Date;
   };
+  task_categories: {
+    id: Generated<string>;
+    chart_id: string;
+    name: string;
+    kind: TaskKindName;
+    created_at: Date;
+  };
+  chores: {
+    id: Generated<string>;
+    category_id: string;
+    name: string;
+    stars: number;
+    created_at: Date;
+  };
+  chore_assignments: {
+    chore_id: string;
+    child_id: string;
+  };
   sessions: {
     token_hash: string;
     grown_up_id: string;
@@ -53,6 +71,7 @@ export interface Tables {
 export type Role = "owner" | "admin" | "grown-up";
 export type DisplayStyle = "pictures" | "words";
 export type DeviceKind = "screen" | "printer" | "scanner";
+export type TaskKindName = "chore" | "quiz";
 
 export type Database = Kysely<Tables>;
 

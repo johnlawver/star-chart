@@ -1,0 +1,94 @@
+import type { Clock } from "../clock.js";
+import type { Database, TaskKindName } from "../database.js";
+import { isId } from "../ids.js";
+import { taskKind, type Choice } from "./task-kinds.js";
+
+export interface MenuCategory {
+  id: string;
+  name: string;
+  kind: TaskKindName;
+  choices: Choice[];
+}
+
+/** The catalog module: task categories, chores, and what each child can choose. All scoped to one chart. */
+export function createCatalog(db: Database, clock: Clock) {
+  return {
+    async addCategory(chartId: string, input: { name: string; kind: TaskKindName }) {
+      return db
+        .insertInto("task_categories")
+        .values({ chart_id: chartId, name: input.name.trim(), kind: input.kind, created_at: clock.now() })
+        .returning(["id", "name", "kind"])
+        .executeTakeFirstOrThrow();
+    },
+
+    /**
+     * Adds a chore to a chore category, assigned to some of the chart's children.
+     * Refused if the category or any child isn't in this chart, or the category isn't for chores.
+     */
+    async addChore(
+      chartId: string,
+      input: { categoryId: string; name: string; stars: number; childIds: string[] },
+    ): Promise<{ id: string; name: string; stars: number } | { refused: string }> {
+      if (!isId(input.categoryId) || !input.childIds.every(isId)) return { refused: "unknown category or child" };
+      return db.transaction().execute(async (trx) => {
+        const category = await trx
+          .selectFrom("task_categories")
+          .select("kind")
+          .where("chart_id", "=", chartId)
+          .where("id", "=", input.categoryId)
+          .executeTakeFirst();
+        if (!category) return { refused: "unknown category or child" };
+        if (category.kind !== "chore") return { refused: "that category isn't for chores" };
+        const childIds = [...new Set(input.childIds)];
+        const children =
+          childIds.length === 0
+            ? []
+            : await trx
+                .selectFrom("children")
+                .select("id")
+                .where("chart_id", "=", chartId)
+                .where("id", "in", childIds)
+                .execute();
+        if (children.length !== childIds.length) return { refused: "unknown category or child" };
+        const chore = await trx
+          .insertInto("chores")
+          .values({ category_id: input.categoryId, name: input.name.trim(), stars: input.stars, created_at: clock.now() })
+          .returning(["id", "name", "stars"])
+          .executeTakeFirstOrThrow();
+        if (childIds.length > 0) {
+          await trx
+            .insertInto("chore_assignments")
+            .values(childIds.map((childId) => ({ chore_id: chore.id, child_id: childId })))
+            .execute();
+        }
+        return chore;
+      });
+    },
+
+    /** The categories a child sees at the observatory: only those with something they can choose. */
+    async menuFor(chartId: string, childId: string): Promise<MenuCategory[] | undefined> {
+      if (!isId(childId)) return undefined;
+      const child = await db
+        .selectFrom("children")
+        .select("id")
+        .where("chart_id", "=", chartId)
+        .where("id", "=", childId)
+        .executeTakeFirst();
+      if (!child) return undefined;
+      const categories = await db
+        .selectFrom("task_categories")
+        .select(["id", "name", "kind"])
+        .where("chart_id", "=", chartId)
+        .orderBy("name")
+        .execute();
+      const menu: MenuCategory[] = [];
+      for (const category of categories) {
+        const choices = await taskKind(category.kind).choicesFor(db, category.id, childId);
+        if (choices.length > 0) menu.push({ ...category, choices });
+      }
+      return menu;
+    },
+  };
+}
+
+export type Catalog = ReturnType<typeof createCatalog>;
