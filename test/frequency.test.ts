@@ -47,4 +47,19 @@ describe("chore frequency", () => {
     expect(again.body.error).toMatch(/already done/i);
     printer.close();
   });
+
+  test("the day starts again at midnight in the chart's time zone, not the server's", async () => {
+    clock.set(new Date("2026-10-20T23:00:00Z")); // 6pm in Chicago
+    const { doIt, isDone, printer } = await novaWithChore();
+    await doIt();
+
+    clock.set(new Date("2026-10-21T01:00:00Z")); // past midnight UTC, but still 8pm in Chicago
+    const stillDoneThatEvening = await isDone();
+    clock.set(new Date("2026-10-21T05:01:00Z")); // 12:01am in Chicago
+    const availableAfterLocalMidnight = !(await isDone());
+
+    expect(stillDoneThatEvening).toBe(true);
+    expect(availableAfterLocalMidnight).toBe(true);
+    printer.close();
+  });
 });
