@@ -1,0 +1,3 @@
+# Multi-tenant from day one
+
+Star Chart starts out serving a single household, but we may later offer it as software as a service to other households and to schools or classes. So every piece of data belongs to a **Chart** (one household or one classroom), and one server hosts many charts from the start. Each grown-up login and each child belongs to exactly one chart. Someone who is both a parent and a teacher signs up twice, with different emails. Adding that grouping to a single-household system later would mean changing every table and every query, while building it in now costs little. Public sign-up and wider hosting are deliberately left until later.
