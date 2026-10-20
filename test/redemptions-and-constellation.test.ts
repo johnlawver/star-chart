@@ -96,3 +96,37 @@ describe("the constellation", () => {
     printer.close();
   });
 });
+
+describe("keeping charts apart", () => {
+  test("another chart can't spend our child's stars or see their constellation", async () => {
+    const { nova, earn, balance, printer } = await novaWithStars();
+    await earn("Feed the cat", 5);
+    const school = await chartWithObservatory(harness, "Room 12");
+
+    const spent = await school.owner.post(`/api/children/${nova}/redemptions`, { amount: 5, note: "Sneaky" });
+    const theirView = await school.owner.get(`/api/children/${nova}/constellation`);
+    const theirScreen = await school.screen.get(`/api/observatory/children/${nova}/constellation`);
+
+    expect([spent.status, theirView.status, theirScreen.status]).toEqual([404, 404, 404]);
+    expect(await balance()).toBe(5);
+    printer.close();
+  });
+});
+
+describe("approving at the same moment (ticket 06)", () => {
+  test("a ticket approved by several grown-ups at once awards its stars only once", async () => {
+    const chart = await chartWithObservatory(harness);
+    const nova = await chart.addChild("Nova");
+    const chore = await chart.addChore("Feed the cat", 2, [nova]);
+    const printer = await chart.connectPrinter();
+    const { ticketId } = await chart.print(nova, chore, printer);
+
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => chart.owner.post(`/api/tickets/${ticketId}/approve`, {})),
+    );
+
+    expect(results.filter((result) => result.status === 200)).toHaveLength(1);
+    expect((await chart.screen.get(`/api/observatory/children/${nova}`)).body.child.balance).toBe(2);
+    printer.close();
+  });
+});
