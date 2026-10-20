@@ -185,7 +185,7 @@ function SignedOut({ onSignedIn }: { onSignedIn: () => void }) {
 
 interface ObservatorySummary {
   id: string;
-  parts: { kind: "screen" | "printer" | "scanner" }[];
+  parts: { kind: "screen" | "printer" | "scanner"; online: boolean }[];
 }
 
 function ObservatoriesSection() {
@@ -211,7 +211,8 @@ function ObservatoriesSection() {
       <ul>
         {observatories.map((observatory, index) => (
           <li key={observatory.id}>
-            Observatory {index + 1}: {observatory.parts.map((part) => part.kind).join(", ")}{" "}
+            Observatory {index + 1}:{" "}
+            {observatory.parts.map((part) => `${part.online ? "🟢" : "⚪"} ${part.kind}`).join(", ")}{" "}
             <button
               onClick={async () => {
                 if (window.confirm("Unpair this observatory? Its screen, printer and scanner will all need pairing again.")) {

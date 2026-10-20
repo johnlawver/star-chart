@@ -80,6 +80,17 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
   const [pairingCode, setPairingCode] = useState<string | undefined>();
   const [scanMessage, setScanMessage] = useState<string | undefined>();
   const [scanResult, setScanResult] = useState<string | undefined>();
+  const [parts, setParts] = useState<{ printer: string; scanner: string } | undefined>();
+
+  useEffect(() => {
+    const check = async () => {
+      const result = await api("GET", "/api/observatory/parts", undefined, deviceToken);
+      if (result.ok) setParts(result.data);
+    };
+    void check();
+    const every = setInterval(check, 10_000);
+    return () => clearInterval(every);
+  }, [deviceToken]);
 
   // The screen listens on its own live connection for what happened when a ticket is scanned here.
   useLiveConnection(
@@ -115,7 +126,21 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
       </main>
     );
   }
-  if (chosen) return <ChildView child={chosen} deviceToken={deviceToken} onDone={() => setChosen(undefined)} />;
+  const napping = [
+    parts?.printer === "offline" && "printer",
+    parts?.scanner === "offline" && "scanner",
+  ].filter(Boolean);
+  const banner =
+    napping.length > 0 ? <p role="alert">The {napping.join(" and ")} {napping.length > 1 ? "are" : "is"} napping. Ask a grown-up!</p> : null;
+
+  if (chosen) {
+    return (
+      <>
+        {banner}
+        <ChildView child={chosen} deviceToken={deviceToken} onDone={() => setChosen(undefined)} />
+      </>
+    );
+  }
 
   const showPairingCode = async () => {
     const result = await api("POST", "/api/observatory/pairing-codes", undefined, deviceToken);
@@ -124,6 +149,7 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
 
   return (
     <main>
+      {banner}
       <h1>Who are you?</h1>
       {children.length === 0 && <p>No children yet. A grown-up can add them in the Control Center.</p>}
       {children.map((child) => (

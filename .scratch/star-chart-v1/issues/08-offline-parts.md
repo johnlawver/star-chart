@@ -4,13 +4,20 @@
 
 **Blocked by:** 04 (Print a chore ticket)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Printing while the Printer is disconnected fails with a reason the screen can display, and no ticket is created.
-- [ ] Nothing printed while a Printer is offline appears later when it reconnects.
-- [ ] The screen indicates when the Scanner is offline.
-- [ ] The Control Center lists each Observatory's parts with their online status.
+- [x] Printing while the Printer is disconnected fails with a reason the screen can display, and no ticket is created.
+- [x] Nothing printed while a Printer is offline appears later when it reconnects.
+- [x] The screen indicates when the Scanner is offline.
+- [x] The Control Center lists each Observatory's parts with their online status.
 
 ## Notes from earlier tickets
 
 - Until this ticket, printing when the observatory has no printer connected still creates the Open ticket and silently drops the print job. This ticket must refuse instead, and create no ticket.
+
+## Notes
+
+- Printing hands the job to the printer inside the transaction that creates the ticket; if no printer takes it, the transaction rolls back, so there's never a ticket nobody holds. The screen gets a 503 with `reason: "printer-offline"`.
+- A heartbeat (every 15 seconds; `heartbeatMs` in the app config) pings every connected device and drops any that didn't answer the previous ping. Without it, a printer that loses power never says goodbye and would look online, swallowing print jobs. Browsers answer pings automatically; real hardware must too.
+- Test live connections are now real network connections to a listening test server. The in-process WebSocket helper didn't pass a client's close on to the server, which hid how disconnects really behave.
+- The ticket 03 pairing test now expects each part's online status in the observatory list.
