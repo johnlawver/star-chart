@@ -22,4 +22,17 @@ describe("pairing an observatory", () => {
       { id: expect.any(String), nickname: "Nova", displayStyle: "words" },
     ]);
   });
+
+  test("after pairing, the grown-up is signed out on the observatory, and it stays paired", async () => {
+    const owner = await signUpOwner(newClient());
+    const screen = newClient();
+    await screen.post("/api/sign-in", { email: owner.email, password: owner.password });
+
+    const { deviceToken } = (await screen.post("/api/observatories")).body;
+
+    expect((await screen.get("/api/me")).status).toBe(401);
+    const laterThatWeek = newClient();
+    laterThatWeek.useDeviceToken(deviceToken);
+    expect((await laterThatWeek.get("/api/observatory/children")).status).toBe(200);
+  });
 });
