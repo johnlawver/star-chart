@@ -2,6 +2,7 @@ import { afterAll } from "vitest";
 import { buildApp, type AppConfig } from "../../src/server/app.js";
 import { createTestDatabase } from "./database.js";
 import { FakeClock } from "./fake-clock.js";
+import { LiveConnection } from "./live-connection.js";
 
 type Body = Record<string, unknown>;
 
@@ -65,7 +66,12 @@ export async function startTestApp(config: Partial<AppConfig> = {}) {
     await app.close();
     await db.destroy();
   });
-  return { clock, newClient: () => new ApiClient(app) };
+  return {
+    clock,
+    newClient: () => new ApiClient(app),
+    /** Opens a device's live connection to the server, the way a printer or scanner would. */
+    openLiveConnection: async () => new LiveConnection(await app.injectWS("/api/parts/live")),
+  };
 }
 
 let uniqueCounter = 0;

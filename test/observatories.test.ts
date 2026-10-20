@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { signUpOwner } from "./support/sign-up.js";
 import { startTestApp } from "./support/test-app.js";
 
-const { newClient, clock } = await startTestApp();
+const { newClient, clock, openLiveConnection } = await startTestApp();
 
 describe("pairing an observatory", () => {
   test("the owner signs in on a fresh observatory to pair it, and it then shows the chart's children", async () => {
@@ -81,5 +81,35 @@ describe("pairing parts", () => {
     const tooLate = await newClient().post("/api/parts", { code, kind: "printer" });
 
     expect(tooLate.status).toBe(404);
+  });
+});
+
+describe("live connections", () => {
+  async function pairedPrinter() {
+    const owner = await signUpOwner(newClient());
+    const screen = newClient();
+    await screen.post("/api/sign-in", { email: owner.email, password: owner.password });
+    screen.useDeviceToken((await screen.post("/api/observatories")).body.deviceToken);
+    const { code } = (await screen.post("/api/observatory/pairing-codes")).body;
+    const { deviceToken } = (await newClient().post("/api/parts", { code, kind: "printer" })).body;
+    return { owner, deviceToken: deviceToken as string };
+  }
+
+  test("a paired printer connects out to the server and is welcomed", async () => {
+    const { deviceToken } = await pairedPrinter();
+    const printer = await openLiveConnection();
+
+    printer.send({ type: "hello", deviceToken });
+
+    expect(await printer.nextMessage()).toEqual({ type: "welcome", kind: "printer" });
+    printer.close();
+  });
+
+  test("a connection with a credential the server doesn't recognise is closed", async () => {
+    const impostor = await openLiveConnection();
+
+    impostor.send({ type: "hello", deviceToken: "made-up" });
+
+    expect(await impostor.closed).toEqual({ code: 4401 });
   });
 });

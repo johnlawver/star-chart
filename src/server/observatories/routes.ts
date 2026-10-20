@@ -3,13 +3,18 @@ import { requireGrownUp, sessionCookie, sessionCookieOptions } from "../people/a
 import type { Children } from "../people/children.js";
 import type { People } from "../people/people.js";
 import { requireDevice } from "./authenticate-device.js";
+import { notPairedCloseCode, type LiveParts } from "./live-parts.js";
 import type { Observatories } from "./observatories.js";
+
+// How long a newly opened connection has to say hello before it is closed.
+const helloTimeoutMs = 10_000;
 
 export async function observatoryRoutes(
   app: FastifyInstance,
   people: People,
   children: Children,
   observatories: Observatories,
+  liveParts: LiveParts,
 ) {
   // Pairing an observatory's screen. The grown-up who signed in on it is then signed out,
   // so the children are never left in a grown-up's session.
@@ -60,9 +65,38 @@ export async function observatoryRoutes(
     },
   );
 
+  // Printers and scanners connect out to the server here and keep the connection open (ADR 0003).
+  // Their first message must be a hello carrying their credential; browsers can't send headers on a WebSocket.
+  app.get("/api/parts/live", { websocket: true }, (socket) => {
+    const timeout = setTimeout(() => socket.close(notPairedCloseCode, "no hello"), helloTimeoutMs);
+    socket.once("message", async (data) => {
+      clearTimeout(timeout);
+      const hello = parseMessage(data);
+      const device =
+        hello?.type === "hello" && typeof hello.deviceToken === "string"
+          ? await observatories.deviceFor(hello.deviceToken)
+          : undefined;
+      if (!device || device.kind === "screen") {
+        socket.close(notPairedCloseCode, "not a paired part");
+        return;
+      }
+      liveParts.add(device, socket);
+      socket.send(JSON.stringify({ type: "welcome", kind: device.kind }));
+    });
+  });
+
   app.get("/api/observatory/children", async (request, reply) => {
     const screen = await requireDevice(observatories, "screen", request, reply);
     if (!screen) return reply;
     return { children: await children.list(screen.chartId) };
   });
+}
+
+function parseMessage(data: unknown): Record<string, unknown> | undefined {
+  try {
+    const message = JSON.parse(String(data));
+    return typeof message === "object" && message !== null ? message : undefined;
+  } catch {
+    return undefined;
+  }
 }
