@@ -28,8 +28,48 @@ export interface TicketSummary {
   state: TicketState;
 }
 
+/** The outcome of a grown-up's decision on a ticket. */
+export type Decision<T> = T | { refused: "not-found" } | { refused: "not-allowed"; state: TicketState };
+
+type GrownUpAction = "approve" | "reject" | "dismiss";
+
+/**
+ * The states each grown-up action can be taken from. Approved and Dismissed appear nowhere: they're final.
+ * A rejection only makes sense once a child has handed a ticket in.
+ */
+const allowedFrom: Record<GrownUpAction, TicketState[]> = {
+  approve: ["open", "handed-in"],
+  reject: ["handed-in"],
+  dismiss: ["open", "handed-in"],
+};
+
 /** The tickets module: printing tickets and their whole lifecycle. */
 export function createTickets(db: Database, clock: Clock, stars: Stars) {
+  /**
+   * Applies a grown-up's action to one of the chart's tickets, if its current state allows it. The ticket is locked
+   * for the length of the transaction, so two grown-ups acting at once can't, say, award its stars twice.
+   */
+  async function decide<T>(
+    chartId: string,
+    ticketId: string,
+    action: GrownUpAction,
+    apply: (trx: Database, ticket: { id: string; child_id: string; stars: number }) => Promise<T>,
+  ): Promise<Decision<T>> {
+    if (!isId(ticketId)) return { refused: "not-found" };
+    return db.transaction().execute(async (trx) => {
+      const ticket = await trx
+        .selectFrom("tickets")
+        .select(["id", "child_id", "stars", "state"])
+        .where("chart_id", "=", chartId)
+        .where("id", "=", ticketId)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!ticket) return { refused: "not-found" as const };
+      if (!allowedFrom[action].includes(ticket.state)) return { refused: "not-allowed" as const, state: ticket.state };
+      return apply(trx, ticket);
+    });
+  }
+
   return {
     /**
      * Creates an open ticket for what a child chose at an observatory, and returns its print job.
@@ -107,67 +147,54 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
 
     /**
      * A grown-up approves an open or handed-in ticket (a hand-in isn't required): it becomes Approved (final), and its
-     * stars, or the grown-up's override, are added to the child's record. Undefined if there's no such ticket here.
+     * stars, or the grown-up's override, are added to the child's record.
      */
     async approve(
       chartId: string,
       ticketId: string,
       starsOverride?: number,
-    ): Promise<{ id: string; state: TicketState; stars: number } | undefined> {
-      if (!isId(ticketId)) return undefined;
-      return db.transaction().execute(async (trx) => {
-        const ticket = await trx
+    ): Promise<Decision<{ id: string; state: TicketState; stars: number }>> {
+      return decide(chartId, ticketId, "approve", async (trx, ticket) => {
+        const awarded = starsOverride ?? ticket.stars;
+        await trx
           .updateTable("tickets")
-          .set((eb) => ({
-            state: "approved",
-            awarded_stars: starsOverride === undefined ? eb.ref("stars") : starsOverride,
-          }))
-          .where("chart_id", "=", chartId)
-          .where("id", "=", ticketId)
-          .where("state", "in", ["open", "handed-in"])
-          .returning(["id", "state", "child_id", "awarded_stars"])
-          .executeTakeFirst();
-        if (!ticket) return undefined;
-        const awarded = ticket.awarded_stars ?? 0;
+          .set({ state: "approved", awarded_stars: awarded })
+          .where("id", "=", ticket.id)
+          .execute();
         await stars.earnFromTicket(trx, { chartId, childId: ticket.child_id, ticketId: ticket.id, amount: awarded });
-        return { id: ticket.id, state: ticket.state, stars: awarded };
+        return { id: ticket.id, state: "approved", stars: awarded };
       });
     },
 
-    /**
-     * A grown-up decides a handed-in ticket isn't done yet: it goes back to Open, with an optional note,
-     * and earns no stars. Undefined if there's no such handed-in ticket in this chart.
-     */
+    /** A grown-up decides a handed-in ticket isn't done yet: it goes back to Open, with an optional note, and earns no stars. */
     async reject(
       chartId: string,
       ticketId: string,
       note?: string,
-    ): Promise<{ id: string; state: TicketState; note: string | null } | undefined> {
-      if (!isId(ticketId)) return undefined;
-      return db
-        .updateTable("tickets")
-        .set({ state: "open", note: note?.trim() || null })
-        .where("chart_id", "=", chartId)
-        .where("id", "=", ticketId)
-        .where("state", "=", "handed-in")
-        .returning(["id", "state", "note"])
-        .executeTakeFirst();
+    ): Promise<Decision<{ id: string; state: TicketState; note: string | null }>> {
+      return decide(chartId, ticketId, "reject", async (trx, ticket) =>
+        trx
+          .updateTable("tickets")
+          .set({ state: "open", note: note?.trim() || null })
+          .where("id", "=", ticket.id)
+          .returning(["id", "state", "note"])
+          .executeTakeFirstOrThrow(),
+      );
     },
 
     /**
      * A grown-up closes an open or handed-in ticket without stars, for example because it was lost or the chore
-     * was already done by someone else. Undefined if there's no such ticket in this chart that can be dismissed.
+     * was already done by someone else.
      */
-    async dismiss(chartId: string, ticketId: string): Promise<{ id: string; state: TicketState } | undefined> {
-      if (!isId(ticketId)) return undefined;
-      return db
-        .updateTable("tickets")
-        .set({ state: "dismissed" })
-        .where("chart_id", "=", chartId)
-        .where("id", "=", ticketId)
-        .where("state", "in", ["open", "handed-in"])
-        .returning(["id", "state"])
-        .executeTakeFirst();
+    async dismiss(chartId: string, ticketId: string): Promise<Decision<{ id: string; state: TicketState }>> {
+      return decide(chartId, ticketId, "dismiss", async (trx, ticket) =>
+        trx
+          .updateTable("tickets")
+          .set({ state: "dismissed" })
+          .where("id", "=", ticket.id)
+          .returning(["id", "state"])
+          .executeTakeFirstOrThrow(),
+      );
     },
 
     /** The chart's tickets in a given state, oldest first, for grown-ups to work through. */

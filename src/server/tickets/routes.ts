@@ -5,7 +5,17 @@ import type { Observatories } from "../observatories/observatories.js";
 import { requireGrownUp } from "../people/authenticate.js";
 import type { People } from "../people/people.js";
 import type { TicketState } from "../database.js";
-import type { Tickets } from "./tickets.js";
+import type { FastifyReply } from "fastify";
+import type { Decision, Tickets } from "./tickets.js";
+
+/** Replies with a grown-up decision's outcome: the ticket, or why it was refused. */
+function sendDecision<T>(reply: FastifyReply, decision: Decision<T>) {
+  if (typeof decision === "object" && decision !== null && "refused" in decision) {
+    if (decision.refused === "not-found") return reply.code(404).send({ error: "no such ticket" });
+    return reply.code(409).send({ error: `that can't be done to a ticket that is ${decision.state}` });
+  }
+  return reply.send({ ticket: decision });
+}
 
 const idField = { type: "string", maxLength: 36 } as const;
 
@@ -58,9 +68,7 @@ export async function ticketRoutes(
     async (request, reply) => {
       const signedIn = await requireGrownUp(people, request, reply);
       if (!signedIn) return reply;
-      const ticket = await tickets.approve(signedIn.chart.id, request.params.ticketId, request.body.stars);
-      if (!ticket) return reply.code(404).send({ error: "no handed-in ticket like that" });
-      return { ticket };
+      return sendDecision(reply, await tickets.approve(signedIn.chart.id, request.params.ticketId, request.body.stars));
     },
   );
 
@@ -78,9 +86,7 @@ export async function ticketRoutes(
     async (request, reply) => {
       const signedIn = await requireGrownUp(people, request, reply);
       if (!signedIn) return reply;
-      const ticket = await tickets.reject(signedIn.chart.id, request.params.ticketId, request.body.note);
-      if (!ticket) return reply.code(404).send({ error: "no handed-in ticket like that" });
-      return { ticket };
+      return sendDecision(reply, await tickets.reject(signedIn.chart.id, request.params.ticketId, request.body.note));
     },
   );
 
@@ -90,9 +96,7 @@ export async function ticketRoutes(
     async (request, reply) => {
       const signedIn = await requireGrownUp(people, request, reply);
       if (!signedIn) return reply;
-      const ticket = await tickets.dismiss(signedIn.chart.id, request.params.ticketId);
-      if (!ticket) return reply.code(404).send({ error: "no open or handed-in ticket like that" });
-      return { ticket };
+      return sendDecision(reply, await tickets.dismiss(signedIn.chart.id, request.params.ticketId));
     },
   );
 

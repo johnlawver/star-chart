@@ -78,3 +78,47 @@ describe("approving without a hand-in", () => {
     closeAll();
   });
 });
+
+describe("approved and dismissed are final", () => {
+  test("an approved ticket can't be approved again, rejected or dismissed, and its stars count once", async () => {
+    const { chart, ticketId, balance, closeAll } = await novaWithAPrintedChore(2);
+    await chart.owner.post(`/api/tickets/${ticketId}/approve`, {});
+
+    const again = await chart.owner.post(`/api/tickets/${ticketId}/approve`, {});
+    const rejected = await chart.owner.post(`/api/tickets/${ticketId}/reject`, {});
+    const dismissed = await chart.owner.post(`/api/tickets/${ticketId}/dismiss`, {});
+
+    expect([again.status, rejected.status, dismissed.status]).toEqual([409, 409, 409]);
+    expect(await balance()).toBe(2);
+    closeAll();
+  });
+
+  test("a dismissed ticket can't be approved", async () => {
+    const { chart, ticketId, balance, closeAll } = await novaWithAPrintedChore(2);
+    await chart.owner.post(`/api/tickets/${ticketId}/dismiss`, {});
+
+    const approved = await chart.owner.post(`/api/tickets/${ticketId}/approve`, {});
+
+    expect(approved.status).toBe(409);
+    expect(await balance()).toBe(0);
+    closeAll();
+  });
+
+  test("a ticket that hasn't been handed in can't be rejected", async () => {
+    const { chart, ticketId, closeAll } = await novaWithAPrintedChore();
+
+    const rejected = await chart.owner.post(`/api/tickets/${ticketId}/reject`, {});
+
+    expect(rejected.status).toBe(409);
+    closeAll();
+  });
+
+  test("a ticket that doesn't exist is not found", async () => {
+    const { chart, closeAll } = await novaWithAPrintedChore();
+
+    const approved = await chart.owner.post("/api/tickets/00000000-0000-4000-8000-000000000000/approve", {});
+
+    expect(approved.status).toBe(404);
+    closeAll();
+  });
+});
