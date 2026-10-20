@@ -4,11 +4,11 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress (waiting on `tailscale serve`, see notes)
+**Status:** done
 
 - [x] The whole stack starts locally with a single command under `doppler run`, with Postgres in Docker. There are no committed `.env` files.
 - [x] Every schema change is a migration; a fresh database migrates from empty.
-- [ ] The app is served over HTTPS locally. (Done as `tailscale serve` in front of the server; needs to be switched on once on the dev server.)
+- [x] The app is served over HTTPS locally, via `tailscale serve` at `https://mini.wolverine-pumpkinseed.ts.net/` (confirmed loading on a phone).
 - [x] A grown-up can sign up with an email and password, create a Chart with a name and time zone, and become its Owner.
 - [x] A grown-up can sign in and sign out. A wrong password is refused.
 - [x] A server setting turns off creating new Charts. When it's off, sign-up refuses to create a Chart.
@@ -18,5 +18,5 @@
 ## Notes
 
 - The whole stack starts with `npm run dev` under `doppler run` (Doppler project `star-chart`, config `dev`). The server defaults to port 4310 because another app on the dev server already uses 3000.
-- HTTPS comes from `tailscale serve` rather than certificates in the app, because development happens over SSH on a headless server and phones need a trusted certificate. Run `tailscale serve --bg http://127.0.0.1:4310` once (see README).
+- HTTPS comes from `tailscale serve` rather than certificates in the app, because development happens over SSH on a headless server and phones need a trusted certificate. It's switched on with `tailscale serve --bg http://127.0.0.1:4310` (see README). Requests from the Mac mini to its own Tailscale address fail the TLS handshake, but other devices on the tailnet work fine.
 - Docker Desktop is the container runtime. On the headless Mac mini it needs a logged-in desktop session to start.
