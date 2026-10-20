@@ -3,6 +3,12 @@ import type { Database, TaskKindName } from "../database.js";
 import { isId } from "../ids.js";
 import { taskKind, type Choice } from "./task-kinds.js";
 
+/** How often a chore can earn stars: so many times per day or per week. Once a day unless a grown-up says otherwise. */
+export interface Frequency {
+  times: number;
+  per: "day" | "week";
+}
+
 export interface MenuCategory {
   id: string;
   name: string;
@@ -27,7 +33,7 @@ export function createCatalog(db: Database, clock: Clock) {
      */
     async addChore(
       chartId: string,
-      input: { categoryId: string; name: string; stars: number; childIds: string[] },
+      input: { categoryId: string; name: string; stars: number; childIds: string[]; frequency?: Frequency },
     ): Promise<{ id: string; name: string; stars: number } | { refused: string }> {
       if (!isId(input.categoryId) || !input.childIds.every(isId)) return { refused: "unknown category or child" };
       return db.transaction().execute(async (trx) => {
@@ -52,7 +58,14 @@ export function createCatalog(db: Database, clock: Clock) {
         if (children.length !== childIds.length) return { refused: "unknown category or child" };
         const chore = await trx
           .insertInto("chores")
-          .values({ category_id: input.categoryId, name: input.name.trim(), stars: input.stars, created_at: clock.now() })
+          .values({
+            category_id: input.categoryId,
+            name: input.name.trim(),
+            stars: input.stars,
+            frequency_times: input.frequency?.times ?? 1,
+            frequency_per: input.frequency?.per ?? "day",
+            created_at: clock.now(),
+          })
           .returning(["id", "name", "stars"])
           .executeTakeFirstOrThrow();
         if (childIds.length > 0) {
@@ -77,14 +90,31 @@ export function createCatalog(db: Database, clock: Clock) {
         .selectFrom("chores")
         .innerJoin("task_categories", "task_categories.id", "chores.category_id")
         .leftJoin("chore_assignments", "chore_assignments.chore_id", "chores.id")
-        .select(["chores.id", "chores.category_id", "chores.name", "chores.stars", "chore_assignments.child_id"])
+        .select([
+          "chores.id",
+          "chores.category_id",
+          "chores.name",
+          "chores.stars",
+          "chores.frequency_times",
+          "chores.frequency_per",
+          "chore_assignments.child_id",
+        ])
         .where("task_categories.chart_id", "=", chartId)
         .orderBy("chores.name")
         .execute();
       return categories.map((category) => {
-        const byId = new Map<string, { id: string; name: string; stars: number; childIds: string[] }>();
+        const byId = new Map<
+          string,
+          { id: string; name: string; stars: number; frequency: Frequency; childIds: string[] }
+        >();
         for (const row of chores.filter((chore) => chore.category_id === category.id)) {
-          const chore = byId.get(row.id) ?? { id: row.id, name: row.name, stars: row.stars, childIds: [] };
+          const chore = byId.get(row.id) ?? {
+            id: row.id,
+            name: row.name,
+            stars: row.stars,
+            frequency: { times: row.frequency_times, per: row.frequency_per },
+            childIds: [],
+          };
           if (row.child_id) chore.childIds.push(row.child_id);
           byId.set(row.id, chore);
         }

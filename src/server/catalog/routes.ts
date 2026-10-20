@@ -4,7 +4,7 @@ import { requireDevice } from "../observatories/authenticate-device.js";
 import type { Observatories } from "../observatories/observatories.js";
 import { requireGrownUp } from "../people/authenticate.js";
 import type { People } from "../people/people.js";
-import type { Catalog } from "./catalog.js";
+import type { Catalog, Frequency } from "./catalog.js";
 
 const nameField = { type: "string", minLength: 1, maxLength: 60, pattern: "\\S" } as const;
 const idField = { type: "string", maxLength: 36 } as const;
@@ -36,7 +36,7 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
     },
   );
 
-  app.post<{ Body: { categoryId: string; name: string; stars: number; childIds: string[] } }>(
+  app.post<{ Body: { categoryId: string; name: string; stars: number; childIds: string[]; frequency?: Frequency } }>(
     "/api/chores",
     {
       schema: {
@@ -47,6 +47,15 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
             name: nameField,
             stars: { type: "integer", minimum: 0, maximum: 100 },
             childIds: { type: "array", items: idField, maxItems: 100 },
+            frequency: {
+              type: "object",
+              properties: {
+                times: { type: "integer", minimum: 1, maximum: 10 },
+                per: { type: "string", enum: ["day", "week"] },
+              },
+              required: ["times", "per"],
+              additionalProperties: false,
+            },
           },
           required: ["categoryId", "name", "stars", "childIds"],
           additionalProperties: false,

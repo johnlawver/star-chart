@@ -79,8 +79,14 @@ describe("chores in the Control Center", () => {
         name: "Chores",
         kind: "chore",
         chores: [
-          { id: expect.any(String), name: "Feed the cat", stars: 2, childIds: [nova] },
-          { id: expect.any(String), name: "Make your bed", stars: 1, childIds: expect.arrayContaining([nova, pip]) },
+          { id: expect.any(String), name: "Feed the cat", stars: 2, frequency: { times: 1, per: "day" }, childIds: [nova] },
+          {
+            id: expect.any(String),
+            name: "Make your bed",
+            stars: 1,
+            frequency: { times: 1, per: "day" },
+            childIds: expect.arrayContaining([nova, pip]),
+          },
         ],
       },
     ]);
