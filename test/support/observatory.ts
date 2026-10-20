@@ -8,8 +8,8 @@ interface Harness {
 }
 
 /** A chart with an owner (signed in on their own client) and a paired observatory screen. */
-export async function chartWithObservatory(harness: Harness, chartName = "Our House") {
-  const owner = await signUpOwner(harness.newClient(), chartName);
+export async function chartWithObservatory(harness: Harness, chartName = "Our House", timeZone = "America/Chicago") {
+  const owner = await signUpOwner(harness.newClient(), chartName, timeZone);
   const screen = harness.newClient();
   await screen.post("/api/sign-in", { email: owner.email, password: owner.password });
   const screenToken: string = (await screen.post("/api/observatories")).body.deviceToken;

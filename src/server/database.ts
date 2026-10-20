@@ -9,6 +9,7 @@ export interface Tables {
     id: Generated<string>;
     name: string;
     time_zone: string;
+    daily_summary_sent_on: string | null;
     created_at: Date;
   };
   grown_ups: {

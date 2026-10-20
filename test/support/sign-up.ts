@@ -7,10 +7,10 @@ export async function signUpAsOwner(client: ApiClient, chartName = "Our House"):
 }
 
 /** Like signUpAsOwner, but also returns the owner's email and password, for signing in elsewhere. */
-export async function signUpOwner(client: ApiClient, chartName = "Our House") {
+export async function signUpOwner(client: ApiClient, chartName = "Our House", timeZone = "America/Chicago") {
   const email = uniqueEmail("owner");
   const password = "correct horse battery staple";
-  const response = await client.post("/api/sign-up", { email, password, chartName, timeZone: "America/Chicago" });
+  const response = await client.post("/api/sign-up", { email, password, chartName, timeZone });
   if (response.status !== 201) throw new Error(`sign-up failed with ${response.status}`);
   return { client, email, password };
 }

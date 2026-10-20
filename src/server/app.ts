@@ -10,6 +10,7 @@ import type { Mailer } from "./email.js";
 import type { PushSender } from "./push.js";
 import { createNotifications } from "./notifications/notifications.js";
 import { notificationRoutes } from "./notifications/routes.js";
+import { createDailySummary } from "./notifications/daily-summary.js";
 import { createPeople } from "./people/people.js";
 import { peopleRoutes } from "./people/routes.js";
 import { createChildren } from "./people/children.js";
@@ -87,6 +88,8 @@ export async function buildApp({ db, clock, mailer, push, config }: AppDependenc
     }
   });
   scheduledJobs.push(() => notifications.sendHeldBackHandIns());
+  const dailySummary = createDailySummary(db, clock, notifications, config.appUrl);
+  scheduledJobs.push(() => dailySummary.sendDue());
   const jobsEveryMs = config.scheduledJobsEveryMs === undefined ? 30_000 : config.scheduledJobsEveryMs;
   if (jobsEveryMs !== null) {
     const timer = setInterval(() => void app.runScheduledJobs(), jobsEveryMs);

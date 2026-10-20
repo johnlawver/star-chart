@@ -21,6 +21,7 @@ import * as invitations from "./0019-invitations.js";
 import * as passwordResets from "./0020-password-resets.js";
 import * as reprintRequests from "./0021-reprint-requests.js";
 import * as pushNotifications from "./0022-push-notifications.js";
+import * as dailySummary from "./0023-daily-summary.js";
 
 // Every schema change is a migration, listed here in order. Never edit one that has shipped; add a new one.
 export const migrations: Record<string, Migration> = {
@@ -46,4 +47,5 @@ export const migrations: Record<string, Migration> = {
   "0020-password-resets": passwordResets,
   "0021-reprint-requests": reprintRequests,
   "0022-push-notifications": pushNotifications,
+  "0023-daily-summary": dailySummary,
 };
