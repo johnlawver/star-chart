@@ -107,3 +107,20 @@ describe("chore frequency", () => {
     ]);
   });
 });
+
+describe("unfinished chores carry over (ADR 0001)", () => {
+  test("a chore ticket printed yesterday and never finished still hands in today", async () => {
+    clock.set(new Date("2026-10-20T23:00:00Z")); // 6pm in Chicago
+    const { chart, print, printer } = await novaWithChore();
+    await print();
+    const { code } = (await printer.nextMessage()).ticket;
+    const scanner = await chart.connectScanner();
+    const screen = await chart.connectScreen();
+
+    clock.set(new Date("2026-10-21T13:00:00Z")); // the next morning
+    scanner.send({ type: "scan", code });
+
+    expect(await screen.nextMessage()).toMatchObject({ result: "handed-in", title: "Feed the cat" });
+    [printer, scanner, screen].forEach((connection) => connection.close());
+  });
+});
