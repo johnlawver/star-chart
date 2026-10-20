@@ -59,4 +59,29 @@ describe("approving a ticket", () => {
     expect(await balanceOf(chart, nova)).toBe(2);
     expect((await chart.owner.get("/api/tickets?state=handed-in")).body.tickets).toEqual([]);
   });
+
+  test("a grown-up can override the stars when approving, and the balance adds up every approval", async () => {
+    const chart = await chartWithObservatory(harness);
+    const nova = await chart.addChild("Nova");
+    const feedTheCat = await chart.addChore("Feed the cat", 2, [nova]);
+    const tidyRoom = await chart.addChore("Tidy your room", 3, [nova]);
+    const printer = await chart.connectPrinter();
+    const scanner = await chart.connectScanner();
+    const screen = await chart.connectScreen();
+    const handIn = async (chore: { categoryId: string; choreId: string }) => {
+      const printed = await chart.print(nova, chore, printer);
+      scanner.send({ type: "scan", code: printed.code });
+      await screen.nextMessage();
+      return printed.ticketId;
+    };
+    const cat = await handIn(feedTheCat);
+    const room = await handIn(tidyRoom);
+
+    await chart.owner.post(`/api/tickets/${cat}/approve`, {});
+    const bonus = await chart.owner.post(`/api/tickets/${room}/approve`, { stars: 5 });
+
+    expect(bonus.body.ticket.stars).toBe(5);
+    expect(await balanceOf(chart, nova)).toBe(7);
+    for (const connection of [printer, scanner, screen]) connection.close();
+  });
 });
