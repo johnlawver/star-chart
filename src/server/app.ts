@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Clock } from "./clock.js";
 import type { Database } from "./database.js";
+import type { Mailer } from "./email.js";
 import { createPeople } from "./people/people.js";
 import { peopleRoutes } from "./people/routes.js";
 import { createChildren } from "./people/children.js";
@@ -28,21 +29,24 @@ export interface AppConfig {
   allowNewCharts: boolean;
   /** How often connected devices are checked for signs of life. Defaults to 15 seconds. */
   heartbeatMs?: number;
+  /** The address people use to reach Star Chart, for links in emails, such as https://mini.example.ts.net */
+  appUrl: string;
 }
 
 export interface AppDependencies {
   db: Database;
   clock: Clock;
+  mailer: Mailer;
   config: AppConfig;
 }
 
-export async function buildApp({ db, clock, config }: AppDependencies) {
+export async function buildApp({ db, clock, mailer, config }: AppDependencies) {
   // Unexpected fields in a request are refused, not silently dropped (we never store more than we asked for).
   const app = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
   await app.register(cookie);
   await app.register(websocket);
   const people = createPeople(db, clock);
-  await peopleRoutes(app, people, config);
+  await peopleRoutes(app, people, config, mailer);
   const children = createChildren(db, clock);
   await childrenRoutes(app, people, children);
   const observatories = createObservatories(db, clock);

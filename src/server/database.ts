@@ -110,6 +110,14 @@ export interface Tables {
     created_at: Date;
     seq: Generated<string>;
   };
+  invitations: {
+    token_hash: string;
+    chart_id: string;
+    email: string;
+    invited_by_grown_up_id: string | null;
+    expires_at: Date;
+    created_at: Date;
+  };
   phone_setup_codes: {
     code_hash: string;
     grown_up_id: string;

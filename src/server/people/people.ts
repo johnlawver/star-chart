@@ -7,6 +7,7 @@ import { isId } from "../ids.js";
 import { isUniqueViolation } from "../database-errors.js";
 
 const phoneSetupCodeLifetimeMs = 5 * 60 * 1000;
+const invitationLifetimeMs = 7 * 24 * 60 * 60 * 1000;
 
 /** The charts-and-people module: charts, grown-ups and their sessions. */
 export interface SignedInGrownUp {
@@ -124,6 +125,62 @@ export function createPeople(db: Database, clock: Clock) {
         if (!used || used.expires_at <= now) return undefined;
         return startSession(trx, used.grown_up_id, now);
       });
+    },
+
+    /** Records an invitation to join a chart and returns the token for its emailed link (valid for 7 days). */
+    async invite(input: { chartId: string; invitedBy: string; email: string }): Promise<string> {
+      const token = newToken();
+      const now = clock.now();
+      await db
+        .insertInto("invitations")
+        .values({
+          token_hash: hashToken(token),
+          chart_id: input.chartId,
+          email: input.email.trim(),
+          invited_by_grown_up_id: input.invitedBy,
+          expires_at: new Date(now.getTime() + invitationLifetimeMs),
+          created_at: now,
+        })
+        .execute();
+      return token;
+    },
+
+    /**
+     * Uses up an invitation: creates the invited grown-up in its chart with the password they chose, and signs them in.
+     * Refused if the invitation isn't valid, or its email already belongs to a chart (a person belongs to exactly one).
+     */
+    async acceptInvitation(
+      token: string,
+      password: string,
+    ): Promise<{ token: string } | { refused: "invalid-invitation" | "email-in-use" }> {
+      const passwordHash = await hash(password);
+      return db
+        .transaction()
+        .execute(async (trx) => {
+          const invitation = await trx
+            .deleteFrom("invitations")
+            .where("token_hash", "=", hashToken(token))
+            .returning(["chart_id", "email", "expires_at"])
+            .executeTakeFirst();
+          const now = clock.now();
+          if (!invitation || invitation.expires_at <= now) return { refused: "invalid-invitation" as const };
+          const grownUp = await trx
+            .insertInto("grown_ups")
+            .values({
+              chart_id: invitation.chart_id,
+              email: invitation.email,
+              password_hash: passwordHash,
+              role: "grown-up",
+              created_at: now,
+            })
+            .returning("id")
+            .executeTakeFirstOrThrow();
+          return { token: await startSession(trx, grownUp.id, now) };
+        })
+        .catch((error: unknown) => {
+          if (isUniqueViolation(error, "grown_ups_email_unique")) return { refused: "email-in-use" as const };
+          throw error;
+        });
     },
 
     async signOut(token: string): Promise<void> {

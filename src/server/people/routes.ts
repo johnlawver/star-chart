@@ -2,8 +2,12 @@ import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../app.js";
 import { requireGrownUp, sessionCookie, sessionCookieOptions as cookieOptions } from "./authenticate.js";
 import type { People } from "./people.js";
+import type { Mailer } from "../email.js";
 
-export async function peopleRoutes(app: FastifyInstance, people: People, config: AppConfig) {
+// A password needs to be at least this long.
+const passwordField = { type: "string", minLength: 8, maxLength: 200 } as const;
+
+export async function peopleRoutes(app: FastifyInstance, people: People, config: AppConfig, mailer: Mailer) {
   app.post<{ Body: { email: string; password: string; chartName: string; timeZone: string } }>(
     "/api/sign-up",
     async (request, reply) => {
@@ -68,6 +72,70 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
       const token = await people.claimPhoneSetupCode(request.body.code);
       if (!token) return reply.code(404).send({ error: "That code has expired or was already used. Show a new one." });
       reply.setCookie(sessionCookie, token, cookieOptions);
+      return {};
+    },
+  );
+
+  app.post<{ Body: { email: string } }>(
+    "/api/invitations",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { email: { type: "string", format: "email", maxLength: 200 } },
+          required: ["email"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      if (signedIn.grownUp.role === "grown-up") {
+        return reply.code(403).send({ error: "Only the chart's owner and admins can invite grown-ups." });
+      }
+      const token = await people.invite({
+        chartId: signedIn.chart.id,
+        invitedBy: signedIn.grownUp.id,
+        email: request.body.email,
+      });
+      await mailer.send({
+        to: request.body.email,
+        subject: `You're invited to ${signedIn.chart.name} on Star Chart`,
+        text: [
+          `${signedIn.grownUp.email} has invited you to help run ${signedIn.chart.name} on Star Chart.`,
+          "",
+          "Choose a password to join:",
+          `${config.appUrl}/accept-invitation.html#token=${encodeURIComponent(token)}`,
+          "",
+          "This link works once and expires in 7 days.",
+        ].join("\n"),
+      });
+      return reply.code(201).send({});
+    },
+  );
+
+  app.post<{ Body: { token: string; password: string } }>(
+    "/api/invitations/accept",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { token: { type: "string", minLength: 1, maxLength: 100 }, password: passwordField },
+          required: ["token", "password"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const result = await people.acceptInvitation(request.body.token, request.body.password);
+      if ("refused" in result) {
+        if (result.refused === "email-in-use") {
+          return reply.code(409).send({ error: "That email already belongs to a chart. Ask for an invitation to another email." });
+        }
+        return reply.code(404).send({ error: "That invitation has expired or was already used. Ask for a new one." });
+      }
+      reply.setCookie(sessionCookie, result.token, cookieOptions);
       return {};
     },
   );

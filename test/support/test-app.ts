@@ -2,6 +2,7 @@ import { afterAll } from "vitest";
 import { buildApp, type AppConfig } from "../../src/server/app.js";
 import { createTestDatabase } from "./database.js";
 import { FakeClock } from "./fake-clock.js";
+import { FakeMailer } from "./fake-mailer.js";
 import { LiveConnection } from "./live-connection.js";
 import WebSocket from "ws";
 
@@ -64,13 +65,14 @@ export class ApiClient {
   }
 }
 
-const defaultConfig: AppConfig = { allowNewCharts: true };
+const defaultConfig: AppConfig = { allowNewCharts: true, appUrl: "https://star-chart.test" };
 
 /** Starts the real server in-process against the test database, with a controllable clock. */
 export async function startTestApp(config: Partial<AppConfig> = {}) {
   const db = createTestDatabase();
   const clock = new FakeClock(new Date("2026-10-20T08:00:00Z"));
-  const app = await buildApp({ db, clock, config: { ...defaultConfig, ...config } });
+  const mailer = new FakeMailer();
+  const app = await buildApp({ db, clock, mailer, config: { ...defaultConfig, ...config } });
   // HTTP requests are injected in-process, but live connections are real network connections (ADR 0003),
   // so connecting, closing and dropping behave exactly as they do for real devices.
   await app.listen({ host: "127.0.0.1", port: 0 });
@@ -83,6 +85,7 @@ export async function startTestApp(config: Partial<AppConfig> = {}) {
   });
   return {
     clock,
+    mailer,
     newClient: () => new ApiClient(app),
     /** Opens a device's live connection to the server, the way a screen, printer or scanner would. */
     openLiveConnection: async () => {

@@ -4,6 +4,7 @@ import WebSocket from "ws";
 import { buildApp } from "../../src/server/app.js";
 import { createTestDatabase } from "../support/database.js";
 import { FakeClock } from "../support/fake-clock.js";
+import { FakeMailer } from "../support/fake-mailer.js";
 import { uniqueEmail } from "../support/test-app.js";
 
 // The one browser smoke test: the real observatory page, in a real (headless) browser, against the real server.
@@ -11,7 +12,12 @@ import { uniqueEmail } from "../support/test-app.js";
 // tested through the API, because the observatory's screens will be redesigned.
 
 const db = createTestDatabase();
-const app = await buildApp({ db, clock: new FakeClock(new Date()), config: { allowNewCharts: true } });
+const app = await buildApp({
+  db,
+  clock: new FakeClock(new Date()),
+  mailer: new FakeMailer(),
+  config: { allowNewCharts: true, appUrl: "https://star-chart.test" },
+});
 let base = "";
 let browser: Browser;
 
