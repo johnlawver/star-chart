@@ -118,6 +118,11 @@ export interface Tables {
     expires_at: Date;
     created_at: Date;
   };
+  password_resets: {
+    token_hash: string;
+    grown_up_id: string;
+    expires_at: Date;
+  };
   phone_setup_codes: {
     code_hash: string;
     grown_up_id: string;

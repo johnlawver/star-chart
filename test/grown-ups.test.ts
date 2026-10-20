@@ -217,3 +217,70 @@ describe("who can pair observatories and their parts", () => {
     expect((await school.client.post("/api/observatory/pairing-codes")).status).toBe(403);
   });
 });
+
+describe("forgotten passwords", () => {
+  async function resetLinkFor(email: string) {
+    const asked = await harness.newClient().post("/api/password-reset", { email });
+    const message = mailer.lastTo(email);
+    return { asked, message, token: message ? FakeMailer.linkParameter(message, "token") : undefined };
+  }
+
+  test("a reset email's link sets a new password, and the old one stops working", async () => {
+    const owner = await signUpOwner(harness.newClient());
+    const { asked, message, token } = await resetLinkFor(owner.email);
+    const browser = harness.newClient();
+
+    const reset = await browser.post("/api/password-reset/complete", { token, password: "a brand new password" });
+
+    expect(asked.status).toBe(204);
+    expect(message?.text).toContain("https://star-chart.test/reset-password.html#token=");
+    expect(reset.status).toBe(200);
+    expect((await browser.get("/api/me")).status).toBe(200);
+    expect((await harness.newClient().post("/api/sign-in", { email: owner.email, password: owner.password })).status).toBe(401);
+    expect(
+      (await harness.newClient().post("/api/sign-in", { email: owner.email, password: "a brand new password" })).status,
+    ).toBe(200);
+  });
+
+  test("resetting a password signs the grown-up out everywhere else", async () => {
+    const owner = await signUpOwner(harness.newClient());
+    const { token } = await resetLinkFor(owner.email);
+
+    await harness.newClient().post("/api/password-reset/complete", { token, password: "a brand new password" });
+
+    expect((await owner.client.get("/api/me")).status).toBe(401);
+  });
+
+  test("a reset link works once, and expires after an hour", async () => {
+    const owner = await signUpOwner(harness.newClient());
+    const first = await resetLinkFor(owner.email);
+    await harness.newClient().post("/api/password-reset/complete", { token: first.token, password: "a brand new password" });
+    const second = await resetLinkFor(owner.email);
+
+    const reused = await harness.newClient().post("/api/password-reset/complete", { token: first.token, password: "yet another password" });
+    clock.advanceBy(60 * 60 * 1000 + 1000);
+    const expired = await harness.newClient().post("/api/password-reset/complete", { token: second.token, password: "yet another password" });
+
+    expect([reused.status, expired.status]).toEqual([404, 404]);
+  });
+
+  test("asking about an email nobody uses gives the same answer, and sends nothing", async () => {
+    const nobody = uniqueEmail("nobody");
+
+    const { asked, message } = await resetLinkFor(nobody);
+
+    expect(asked.status).toBe(204);
+    expect(message).toBeUndefined();
+  });
+
+  test("signing up needs a password of at least 8 characters", async () => {
+    const signUp = await harness.newClient().post("/api/sign-up", {
+      email: uniqueEmail("owner"),
+      password: "short",
+      chartName: "Our House",
+      timeZone: "America/Chicago",
+    });
+
+    expect(signUp.status).toBe(400);
+  });
+});

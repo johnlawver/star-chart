@@ -8,6 +8,7 @@ import { isUniqueViolation } from "../database-errors.js";
 
 const phoneSetupCodeLifetimeMs = 5 * 60 * 1000;
 const invitationLifetimeMs = 7 * 24 * 60 * 60 * 1000;
+const passwordResetLifetimeMs = 60 * 60 * 1000;
 
 /** The charts-and-people module: charts, grown-ups and their sessions. */
 export interface SignedInGrownUp {
@@ -217,6 +218,46 @@ export function createPeople(db: Database, clock: Clock) {
         .where("id", "=", grownUpId)
         .returning(["id", "role"])
         .executeTakeFirstOrThrow();
+    },
+
+    /** A token for an hour-long password reset link, or undefined if no grown-up has this email. */
+    async requestPasswordReset(email: string): Promise<string | undefined> {
+      const grownUp = await db
+        .selectFrom("grown_ups")
+        .select("id")
+        .where(sql`lower(email)`, "=", email.trim().toLowerCase())
+        .executeTakeFirst();
+      if (!grownUp) return undefined;
+      const token = newToken();
+      await db
+        .insertInto("password_resets")
+        .values({
+          token_hash: hashToken(token),
+          grown_up_id: grownUp.id,
+          expires_at: new Date(clock.now().getTime() + passwordResetLifetimeMs),
+        })
+        .execute();
+      return token;
+    },
+
+    /**
+     * Uses up a reset link: sets the new password, signs the grown-up out everywhere (whoever knew the old password
+     * shouldn't stay signed in), and returns a fresh session. Undefined if the link isn't valid.
+     */
+    async completePasswordReset(token: string, password: string): Promise<string | undefined> {
+      const passwordHash = await hash(password);
+      return db.transaction().execute(async (trx) => {
+        const reset = await trx
+          .deleteFrom("password_resets")
+          .where("token_hash", "=", hashToken(token))
+          .returning(["grown_up_id", "expires_at"])
+          .executeTakeFirst();
+        const now = clock.now();
+        if (!reset || reset.expires_at <= now) return undefined;
+        await trx.updateTable("grown_ups").set({ password_hash: passwordHash }).where("id", "=", reset.grown_up_id).execute();
+        await trx.deleteFrom("sessions").where("grown_up_id", "=", reset.grown_up_id).execute();
+        return startSession(trx, reset.grown_up_id, now);
+      });
     },
 
     async signOut(token: string): Promise<void> {

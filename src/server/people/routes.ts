@@ -10,6 +10,21 @@ const passwordField = { type: "string", minLength: 8, maxLength: 200 } as const;
 export async function peopleRoutes(app: FastifyInstance, people: People, config: AppConfig, mailer: Mailer) {
   app.post<{ Body: { email: string; password: string; chartName: string; timeZone: string } }>(
     "/api/sign-up",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            email: { type: "string", format: "email", maxLength: 200 },
+            password: passwordField,
+            chartName: { type: "string", minLength: 1, maxLength: 60, pattern: "\\S" },
+            timeZone: { type: "string", minLength: 1, maxLength: 60 },
+          },
+          required: ["email", "password", "chartName", "timeZone"],
+          additionalProperties: false,
+        },
+      },
+    },
     async (request, reply) => {
       if (!config.allowNewCharts) return reply.code(403).send({ error: "new charts can't be created on this server" });
       const result = await people.signUp(request.body);
@@ -172,6 +187,62 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
         return reply.code(404).send({ error: "no such grown-up" });
       }
       return { grownUp: result };
+    },
+  );
+
+  // Always the same answer, whether or not the email belongs to anyone, so it can't be used to find accounts.
+  app.post<{ Body: { email: string } }>(
+    "/api/password-reset",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { email: { type: "string", maxLength: 200 } },
+          required: ["email"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const token = await people.requestPasswordReset(request.body.email);
+      if (token) {
+        // Sent in the background, so the reply takes as long whether or not the email exists.
+        void mailer
+          .send({
+            to: request.body.email.trim(),
+            subject: "Choose a new Star Chart password",
+            text: [
+              "Someone (hopefully you) asked to reset your Star Chart password.",
+              "",
+              "Choose a new one here:",
+              `${config.appUrl}/reset-password.html#token=${encodeURIComponent(token)}`,
+              "",
+              "This link works once and expires in an hour. If you didn't ask, ignore this email.",
+            ].join("\n"),
+          })
+          .catch((error: unknown) => request.log.error({ error }, "couldn't send a password reset email"));
+      }
+      return reply.code(204).send();
+    },
+  );
+
+  app.post<{ Body: { token: string; password: string } }>(
+    "/api/password-reset/complete",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { token: { type: "string", minLength: 1, maxLength: 100 }, password: passwordField },
+          required: ["token", "password"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const session = await people.completePasswordReset(request.body.token, request.body.password);
+      if (!session) return reply.code(404).send({ error: "That link has expired or was already used. Ask for a new one." });
+      reply.setCookie(sessionCookie, session, cookieOptions);
+      return {};
     },
   );
 
