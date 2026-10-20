@@ -19,6 +19,7 @@ import * as pinLockout from "./0017-pin-lockout.js";
 import * as phoneSetupCodes from "./0018-phone-setup-codes.js";
 import * as invitations from "./0019-invitations.js";
 import * as passwordResets from "./0020-password-resets.js";
+import * as reprintRequests from "./0021-reprint-requests.js";
 
 // Every schema change is a migration, listed here in order. Never edit one that has shipped; add a new one.
 export const migrations: Record<string, Migration> = {
@@ -42,4 +43,5 @@ export const migrations: Record<string, Migration> = {
   "0018-phone-setup-codes": phoneSetupCodes,
   "0019-invitations": invitations,
   "0020-password-resets": passwordResets,
+  "0021-reprint-requests": reprintRequests,
 };

@@ -99,6 +99,16 @@ export interface Tables {
     created_at: Date;
     seq: Generated<string>;
   };
+  reprint_requests: {
+    id: Generated<string>;
+    chart_id: string;
+    ticket_id: string;
+    observatory_id: string | null;
+    state: "pending" | "approved" | "declined";
+    decided_by_grown_up_id: string | null;
+    created_at: Date;
+    decided_at: Date | null;
+  };
   star_movements: {
     id: Generated<string>;
     chart_id: string;
