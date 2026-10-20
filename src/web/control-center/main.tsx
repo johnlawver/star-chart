@@ -8,7 +8,7 @@ import { ConstellationList, type Constellation } from "../shared/constellation.j
 // The Control Center, deliberately plain for now: sign up, sign in, and see your chart.
 
 interface Me {
-  grownUp: { email: string; role: string };
+  grownUp: { id: string; email: string; role: "owner" | "admin" | "grown-up" };
   chart: { name: string; timeZone: string };
 }
 
@@ -85,7 +85,8 @@ function ControlCenter() {
       <ChildrenSection />
       <PinSection />
       <ChoresSection />
-      {me.grownUp.role === "owner" && <ObservatoriesSection />}
+      <GrownUpsSection me={me} />
+      {me.grownUp.role !== "grown-up" && <ObservatoriesSection />}
     </main>
   );
 }
@@ -176,6 +177,87 @@ function ChildrenSection() {
   );
 }
 
+function ForgotPassword() {
+  const [open, setOpen] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  if (!open) return <button onClick={() => setOpen(true)}>Forgot your password?</button>;
+  if (sent) return <p role="status">If that email belongs to a Star Chart login, a link to choose a new password is on its way.</p>;
+
+  const ask = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const { email } = Object.fromEntries(new FormData(event.currentTarget));
+    await api("POST", "/api/password-reset", { email });
+    setSent(true);
+  };
+
+  return (
+    <form onSubmit={ask}>
+      <label>
+        Your email <input name="email" type="email" required />
+      </label>{" "}
+      <button type="submit">Send me a link</button>
+    </form>
+  );
+}
+
+function GrownUpsSection({ me }: { me: Me }) {
+  const [grownUps, setGrownUps] = useState<{ id: string; email: string; role: string }[]>([]);
+  const [message, setMessage] = useState<string | undefined>();
+
+  const load = async () => {
+    const result = await api("GET", "/api/grown-ups");
+    if (result.ok) setGrownUps(result.data.grownUps);
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const setRole = async (id: string, role: "admin" | "grown-up") => {
+    const result = await api("PATCH", `/api/grown-ups/${id}`, { role });
+    setMessage(result.ok ? undefined : result.data?.error);
+    await load();
+  };
+
+  const invite = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const { email } = Object.fromEntries(new FormData(form));
+    const result = await api("POST", "/api/invitations", { email });
+    setMessage(result.ok ? `Invitation sent to ${email}.` : (result.data?.error ?? "Couldn't send that invitation."));
+    if (result.ok) form.reset();
+  };
+
+  return (
+    <section>
+      <h2>Grown-ups</h2>
+      <ul>
+        {grownUps.map((grownUp) => (
+          <li key={grownUp.id}>
+            {grownUp.email} ({grownUp.role}){grownUp.id === me.grownUp.id ? " (you)" : ""}{" "}
+            {me.grownUp.role === "owner" && grownUp.role === "grown-up" && (
+              <button onClick={() => setRole(grownUp.id, "admin")}>Make admin</button>
+            )}
+            {me.grownUp.role === "owner" && grownUp.role === "admin" && (
+              <button onClick={() => setRole(grownUp.id, "grown-up")}>Make grown-up</button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {me.grownUp.role !== "grown-up" && (
+        <form onSubmit={invite}>
+          <label>
+            Invite by email <input name="email" type="email" required />
+          </label>{" "}
+          <button type="submit">Send invitation</button>
+        </form>
+      )}
+      {message && <p role="status">{message}</p>}
+    </section>
+  );
+}
+
 function SignedOut({ onSignedIn }: { onSignedIn: () => void }) {
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [error, setError] = useState<string | undefined>();
@@ -218,6 +300,7 @@ function SignedOut({ onSignedIn }: { onSignedIn: () => void }) {
         <button type="submit">{mode === "sign-in" ? "Sign in" : "Create chart"}</button>
       </form>
       {error && <p role="alert">{error}</p>}
+      {mode === "sign-in" && <ForgotPassword />}
       <button onClick={() => (setError(undefined), setMode(mode === "sign-in" ? "sign-up" : "sign-in"))}>
         {mode === "sign-in" ? "New here? Create a chart" : "Already have an account? Sign in"}
       </button>

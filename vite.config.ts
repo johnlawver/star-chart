@@ -15,6 +15,8 @@ export default defineConfig({
         "fake-printer": "src/web/fake-printer.html",
         "fake-scanner": "src/web/fake-scanner.html",
         "phone-setup": "src/web/phone-setup.html",
+        "accept-invitation": "src/web/accept-invitation.html",
+        "reset-password": "src/web/reset-password.html",
       },
     },
   },
