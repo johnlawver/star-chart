@@ -26,4 +26,34 @@ describe("unlocking the Control Center on the observatory", () => {
     expect(unlocked.status).toBe(200);
     expect((await chart.screen.get("/api/me")).body.grownUp).toMatchObject({ email: grownUp.email, role: "owner" });
   });
+
+  test("a wrong PIN is refused, and the observatory stays locked", async () => {
+    const { chart, unlock } = await ownerWithPin("2468");
+
+    const wrong = await unlock("1357");
+
+    expect(wrong.status).toBe(401);
+    expect((await chart.screen.get("/api/me")).status).toBe(401);
+  });
+
+  test("grown-ups who haven't set a PIN aren't offered, and can't unlock", async () => {
+    const chart = await chartWithObservatory(harness);
+    const { grownUp } = (await chart.owner.get("/api/me")).body;
+
+    const offered = (await chart.screen.get("/api/observatory/grown-ups")).body.grownUps;
+    const tried = await chart.screen.post("/api/observatory/unlock", { grownUpId: grownUp.id, pin: "0000" });
+
+    expect(offered).toEqual([]);
+    expect(tried.status).toBe(401);
+  });
+
+  test("a PIN must be 4 to 8 digits", async () => {
+    const chart = await chartWithObservatory(harness);
+
+    const statuses = await Promise.all(
+      ["123", "123456789", "12ab", ""].map(async (pin) => (await chart.owner.put("/api/me/pin", { pin })).status),
+    );
+
+    expect(statuses).toEqual([400, 400, 400, 400]);
+  });
 });

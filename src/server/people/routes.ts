@@ -56,6 +56,6 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
     const signedIn = await requireGrownUp(people, request, reply);
     if (!signedIn) return reply;
     const { grownUp, chart } = signedIn;
-    return { grownUp: { email: grownUp.email, role: grownUp.role }, chart };
+    return { grownUp: { id: grownUp.id, email: grownUp.email, role: grownUp.role }, chart };
   });
 }
