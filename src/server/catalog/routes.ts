@@ -10,6 +10,12 @@ const nameField = { type: "string", minLength: 1, maxLength: 60, pattern: "\\S" 
 const idField = { type: "string", maxLength: 36 } as const;
 
 export async function catalogRoutes(app: FastifyInstance, people: People, observatories: Observatories, catalog: Catalog) {
+  app.get("/api/categories", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    return { categories: await catalog.listForGrownUps(signedIn.chart.id) };
+  });
+
   app.post<{ Body: { name: string; kind: TaskKindName } }>(
     "/api/categories",
     {

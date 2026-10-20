@@ -65,6 +65,33 @@ export function createCatalog(db: Database, clock: Clock) {
       });
     },
 
+    /** Every category in the chart with its chores and the children each chore is assigned to. */
+    async listForGrownUps(chartId: string) {
+      const categories = await db
+        .selectFrom("task_categories")
+        .select(["id", "name", "kind"])
+        .where("chart_id", "=", chartId)
+        .orderBy("name")
+        .execute();
+      const chores = await db
+        .selectFrom("chores")
+        .innerJoin("task_categories", "task_categories.id", "chores.category_id")
+        .leftJoin("chore_assignments", "chore_assignments.chore_id", "chores.id")
+        .select(["chores.id", "chores.category_id", "chores.name", "chores.stars", "chore_assignments.child_id"])
+        .where("task_categories.chart_id", "=", chartId)
+        .orderBy("chores.name")
+        .execute();
+      return categories.map((category) => {
+        const byId = new Map<string, { id: string; name: string; stars: number; childIds: string[] }>();
+        for (const row of chores.filter((chore) => chore.category_id === category.id)) {
+          const chore = byId.get(row.id) ?? { id: row.id, name: row.name, stars: row.stars, childIds: [] };
+          if (row.child_id) chore.childIds.push(row.child_id);
+          byId.set(row.id, chore);
+        }
+        return { ...category, chores: [...byId.values()] };
+      });
+    },
+
     /** The categories a child sees at the observatory: only those with something they can choose. */
     async menuFor(chartId: string, childId: string): Promise<MenuCategory[] | undefined> {
       if (!isId(childId)) return undefined;

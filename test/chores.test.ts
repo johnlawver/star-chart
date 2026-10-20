@@ -62,6 +62,31 @@ describe("chores at the observatory", () => {
   });
 });
 
+describe("chores in the Control Center", () => {
+  test("a grown-up sees each category with its chores and who they're assigned to", async () => {
+    const chart = await chartWithObservatory(harness);
+    const nova = await chart.addChild("Nova");
+    const pip = await chart.addChild("Pip", "pictures");
+    const { category } = (await chart.owner.post("/api/categories", { name: "Chores", kind: "chore" })).body;
+    await chart.owner.post("/api/chores", { categoryId: category.id, name: "Make your bed", stars: 1, childIds: [nova, pip] });
+    await chart.owner.post("/api/chores", { categoryId: category.id, name: "Feed the cat", stars: 2, childIds: [nova] });
+
+    const categories = (await chart.owner.get("/api/categories")).body.categories;
+
+    expect(categories).toEqual([
+      {
+        id: category.id,
+        name: "Chores",
+        kind: "chore",
+        chores: [
+          { id: expect.any(String), name: "Feed the cat", stars: 2, childIds: [nova] },
+          { id: expect.any(String), name: "Make your bed", stars: 1, childIds: expect.arrayContaining([nova, pip]) },
+        ],
+      },
+    ]);
+  });
+});
+
 describe("chore codes (ADR 0001)", () => {
   test("a chore's code is the same every time it's printed for a child, and different for each child", async () => {
     const chart = await chartWithObservatory(harness);
