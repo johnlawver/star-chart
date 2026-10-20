@@ -13,10 +13,38 @@ type MessageHandler = (device: PairedDevice, message: Record<string, unknown>) =
 export class LiveParts {
   private readonly connections = new Map<WebSocket, PairedDevice>();
   private readonly handlers = new Map<string, MessageHandler>();
+  private readonly answeredLastPing = new WeakSet<WebSocket>();
+  private readonly heartbeat: ReturnType<typeof setInterval>;
+
+  /**
+   * A device that loses power or Wi-Fi never says goodbye, so every `heartbeatMs` each connection is pinged,
+   * and any that didn't answer the previous ping is dropped. Otherwise it would look online, and swallow print jobs.
+   */
+  constructor(heartbeatMs: number) {
+    this.heartbeat = setInterval(() => {
+      for (const socket of this.connections.keys()) {
+        if (!this.answeredLastPing.has(socket)) {
+          socket.terminate();
+          continue;
+        }
+        this.answeredLastPing.delete(socket);
+        socket.ping();
+      }
+    }, heartbeatMs);
+    this.heartbeat.unref();
+  }
 
   add(device: PairedDevice, socket: WebSocket): void {
     this.connections.set(socket, device);
+    this.answeredLastPing.add(socket);
+    socket.on("pong", () => this.answeredLastPing.add(socket));
     socket.once("close", () => this.connections.delete(socket));
+  }
+
+  /** Stops the heartbeat and drops every connection, when the server shuts down. */
+  stop(): void {
+    clearInterval(this.heartbeat);
+    for (const socket of this.connections.keys()) socket.terminate();
   }
 
   /** Registers what to do when a connected device sends a message of a given type, such as a scanner's "scan". */

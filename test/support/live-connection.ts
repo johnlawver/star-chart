@@ -42,4 +42,9 @@ export class LiveConnection {
   close(): void {
     this.socket.close();
   }
+
+  /** Stops responding entirely, like a device that lost power or Wi-Fi without saying goodbye. */
+  goSilent(): void {
+    this.socket.pause();
+  }
 }

@@ -25,6 +25,8 @@ const webRoot = fileURLToPath(new URL("../../dist/web", import.meta.url));
 export interface AppConfig {
   /** When false, nobody can create a new chart (keeps a home server closed to strangers). */
   allowNewCharts: boolean;
+  /** How often connected devices are checked for signs of life. Defaults to 15 seconds. */
+  heartbeatMs?: number;
 }
 
 export interface AppDependencies {
@@ -43,7 +45,8 @@ export async function buildApp({ db, clock, config }: AppDependencies) {
   const children = createChildren(db, clock);
   await childrenRoutes(app, people, children);
   const observatories = createObservatories(db, clock);
-  const liveParts = new LiveParts();
+  const liveParts = new LiveParts(config.heartbeatMs ?? 15_000);
+  app.addHook("onClose", async () => liveParts.stop());
   await observatoryRoutes(app, people, children, observatories, liveParts);
   await catalogRoutes(app, people, observatories, createCatalog(db, clock));
   const stars = createStars(db, clock);
