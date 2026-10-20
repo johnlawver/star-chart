@@ -45,7 +45,10 @@ export async function reprintRoutes(
         }
         return reply.code(404).send({ error: "There's no ticket to print again here." });
       }
-      return reply.code(201).send({ reprintRequest: result });
+      void notifications
+        .reprintRequested(screen.chartId, result)
+        .catch((error: unknown) => request.log.error({ error }, "couldn't send a reprint notification"));
+      return reply.code(201).send({ reprintRequest: { id: result.id } });
     },
   );
 

@@ -86,6 +86,7 @@ export async function buildApp({ db, clock, mailer, push, config }: AppDependenc
       }
     }
   });
+  scheduledJobs.push(() => notifications.sendHeldBackHandIns());
   const jobsEveryMs = config.scheduledJobsEveryMs === undefined ? 30_000 : config.scheduledJobsEveryMs;
   if (jobsEveryMs !== null) {
     const timer = setInterval(() => void app.runScheduledJobs(), jobsEveryMs);

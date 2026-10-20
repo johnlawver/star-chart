@@ -49,7 +49,7 @@ export class ApiClient {
   post = (url: string, payload?: Body) => this.request("POST", url, payload);
   put = (url: string, payload?: Body) => this.request("PUT", url, payload);
   patch = (url: string, payload?: Body) => this.request("PATCH", url, payload);
-  delete = (url: string) => this.request("DELETE", url);
+  delete = (url: string, payload?: Body) => this.request("DELETE", url, payload);
 
   /** From now on, act as a paired device: send its credential the way a device would. */
   useDeviceToken(token: string): void {

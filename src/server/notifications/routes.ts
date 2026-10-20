@@ -45,6 +45,12 @@ export async function notificationRoutes(
     },
   );
 
+  app.get("/api/push/subscriptions", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    return { subscriptions: await notifications.subscriptionsOf(signedIn.grownUp.id) };
+  });
+
   app.delete<{ Body: { endpoint: string } }>(
     "/api/push/subscriptions",
     {

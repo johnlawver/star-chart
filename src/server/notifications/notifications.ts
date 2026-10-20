@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import type { Clock } from "../clock.js";
 import type { Database } from "../database.js";
 import type { PushMessage, PushSender, PushSubscription } from "../push.js";
@@ -90,6 +91,37 @@ export function createNotifications(
         url: controlCenter(),
         tag: "hand-ins",
       });
+    },
+
+    /** Scheduled job: once a grouping window has passed, sends the hand-ins held back during it as one notification. */
+    async sendHeldBackHandIns(): Promise<void> {
+      const now = clock.now();
+      const windowStart = new Date(now.getTime() - settings.handInGroupingMs);
+      // Reads each count and clears it in one statement, so a hand-in is never sent twice, or lost in between.
+      const due = await sql<{ chart_id: string; held_back: number }>`
+        UPDATE hand_in_notices AS notice
+        SET held_back = 0, last_sent_at = ${now}
+        FROM (
+          SELECT chart_id, held_back FROM hand_in_notices
+          WHERE held_back > 0 AND last_sent_at <= ${windowStart}
+          FOR UPDATE
+        ) AS before
+        WHERE notice.chart_id = before.chart_id
+        RETURNING before.chart_id, before.held_back
+      `.execute(db);
+      for (const { chart_id, held_back } of due.rows) {
+        await toChart(chart_id, {
+          title: held_back === 1 ? "1 more ticket handed in" : `${held_back} more tickets handed in`,
+          body: "They're waiting for you to check.",
+          url: controlCenter(),
+          tag: "hand-ins",
+        });
+      }
+    },
+
+    /** The devices where a grown-up has turned on notifications. */
+    async subscriptionsOf(grownUpId: string): Promise<{ endpoint: string }[]> {
+      return db.selectFrom("push_subscriptions").select("endpoint").where("grown_up_id", "=", grownUpId).execute();
     },
 
     /** A child asked for a lost ticket to be printed again. */

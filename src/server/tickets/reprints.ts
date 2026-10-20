@@ -23,15 +23,16 @@ export function createReprints(db: Database, clock: Clock) {
       observatoryId: string;
       childId: string;
       categoryId: string;
-    }): Promise<{ id: string } | { refused: "no-open-ticket" | "already-asked" }> {
+    }): Promise<{ id: string; childNickname: string; title: string } | { refused: "no-open-ticket" | "already-asked" }> {
       if (!isId(input.childId) || !isId(input.categoryId)) return { refused: "no-open-ticket" };
       const ticket = await db
         .selectFrom("tickets")
-        .select("id")
-        .where("chart_id", "=", input.chartId)
-        .where("child_id", "=", input.childId)
-        .where("category_id", "=", input.categoryId)
-        .where("state", "=", "open")
+        .innerJoin("children", "children.id", "tickets.child_id")
+        .select(["tickets.id", "tickets.title", "children.nickname"])
+        .where("tickets.chart_id", "=", input.chartId)
+        .where("tickets.child_id", "=", input.childId)
+        .where("tickets.category_id", "=", input.categoryId)
+        .where("tickets.state", "=", "open")
         .executeTakeFirst();
       if (!ticket) return { refused: "no-open-ticket" };
       return db
@@ -45,6 +46,7 @@ export function createReprints(db: Database, clock: Clock) {
         })
         .returning("id")
         .executeTakeFirstOrThrow()
+        .then((created) => ({ id: created.id, childNickname: ticket.nickname, title: ticket.title }))
         .catch((error: unknown) => {
           if (isUniqueViolation(error, "reprint_requests_one_pending")) return { refused: "already-asked" as const };
           throw error;
