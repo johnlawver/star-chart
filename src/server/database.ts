@@ -110,6 +110,11 @@ export interface Tables {
     created_at: Date;
     seq: Generated<string>;
   };
+  phone_setup_codes: {
+    code_hash: string;
+    grown_up_id: string;
+    expires_at: Date;
+  };
   sessions: {
     token_hash: string;
     grown_up_id: string;

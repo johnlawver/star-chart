@@ -6,6 +6,8 @@ import { hashToken, newToken } from "../tokens.js";
 import { isId } from "../ids.js";
 import { isUniqueViolation } from "../database-errors.js";
 
+const phoneSetupCodeLifetimeMs = 5 * 60 * 1000;
+
 /** The charts-and-people module: charts, grown-ups and their sessions. */
 export interface SignedInGrownUp {
   grownUp: { id: string; email: string; role: Role };
@@ -97,6 +99,31 @@ export function createPeople(db: Database, clock: Clock) {
       if (!grownUp?.pin_hash || !(await verify(grownUp.pin_hash, input.pin))) return undefined;
       const now = clock.now();
       return startSession(db, grownUp.id, now, new Date(now.getTime() + input.lifetimeMs));
+    },
+
+    /** A single-use code, valid for 5 minutes, that signs a phone in as this grown-up. */
+    async newPhoneSetupCode(grownUpId: string): Promise<{ code: string; expiresAt: Date }> {
+      const code = newToken();
+      const expiresAt = new Date(clock.now().getTime() + phoneSetupCodeLifetimeMs);
+      await db
+        .insertInto("phone_setup_codes")
+        .values({ code_hash: hashToken(code), grown_up_id: grownUpId, expires_at: expiresAt })
+        .execute();
+      return { code, expiresAt };
+    },
+
+    /** Uses up a phone setup code and returns a lasting session for its grown-up, or undefined if it isn't valid. */
+    async claimPhoneSetupCode(code: string): Promise<string | undefined> {
+      return db.transaction().execute(async (trx) => {
+        const used = await trx
+          .deleteFrom("phone_setup_codes")
+          .where("code_hash", "=", hashToken(code))
+          .returning(["grown_up_id", "expires_at"])
+          .executeTakeFirst();
+        const now = clock.now();
+        if (!used || used.expires_at <= now) return undefined;
+        return startSession(trx, used.grown_up_id, now);
+      });
     },
 
     async signOut(token: string): Promise<void> {

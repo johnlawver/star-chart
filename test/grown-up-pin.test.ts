@@ -98,3 +98,44 @@ describe("an unlocked observatory locks itself again", () => {
     expect((await chart.owner.get("/api/me")).status).toBe(200);
   });
 });
+
+describe("setting up a phone from the observatory", () => {
+  test("the unlocked observatory makes a code that signs a phone in as that grown-up, once", async () => {
+    const { chart, grownUp, unlock } = await ownerWithPin("2468");
+    await unlock("2468");
+    const { code } = (await chart.screen.post("/api/phone-setup")).body;
+    const phone = harness.newClient();
+    const someoneElsesPhone = harness.newClient();
+
+    const claimed = await phone.post("/api/phone-setup/claim", { code });
+    const claimedAgain = await someoneElsesPhone.post("/api/phone-setup/claim", { code });
+
+    expect(claimed.status).toBe(200);
+    expect((await phone.get("/api/me")).body.grownUp.email).toBe(grownUp.email);
+    expect(claimedAgain.status).toBe(404);
+    expect((await someoneElsesPhone.get("/api/me")).status).toBe(401);
+  });
+
+  test("a phone setup code stops working after 5 minutes", async () => {
+    const { chart, unlock } = await ownerWithPin("2468");
+    await unlock("2468");
+    const { code } = (await chart.screen.post("/api/phone-setup")).body;
+
+    clock.advanceBy(5 * 60 * 1000 + 1000);
+    const tooLate = await harness.newClient().post("/api/phone-setup/claim", { code });
+
+    expect(tooLate.status).toBe(404);
+  });
+
+  test("the phone's sign-in lasts, unlike the observatory's", async () => {
+    const { chart, unlock } = await ownerWithPin("2468");
+    await unlock("2468");
+    const { code } = (await chart.screen.post("/api/phone-setup")).body;
+    const phone = harness.newClient();
+    await phone.post("/api/phone-setup/claim", { code });
+
+    clock.advanceBy(24 * 60 * 60 * 1000);
+
+    expect((await phone.get("/api/me")).status).toBe(200);
+  });
+});

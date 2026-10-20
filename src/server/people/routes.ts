@@ -45,6 +45,33 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
     },
   );
 
+  // An unlocked observatory shows this code as a QR; the grown-up's phone claims it to sign in as them.
+  app.post("/api/phone-setup", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    return reply.code(201).send(await people.newPhoneSetupCode(signedIn.grownUp.id));
+  });
+
+  app.post<{ Body: { code: string } }>(
+    "/api/phone-setup/claim",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { code: { type: "string", minLength: 1, maxLength: 100 } },
+          required: ["code"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const token = await people.claimPhoneSetupCode(request.body.code);
+      if (!token) return reply.code(404).send({ error: "That code has expired or was already used. Show a new one." });
+      reply.setCookie(sessionCookie, token, cookieOptions);
+      return {};
+    },
+  );
+
   app.post("/api/sign-out", async (request, reply) => {
     const token = request.cookies[sessionCookie];
     if (token) await people.signOut(token);

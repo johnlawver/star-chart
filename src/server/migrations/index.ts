@@ -16,6 +16,7 @@ import * as redemptions from "./0014-redemptions.js";
 import * as starMovementOrder from "./0015-star-movement-order.js";
 import * as grownUpPins from "./0016-grown-up-pins.js";
 import * as pinLockout from "./0017-pin-lockout.js";
+import * as phoneSetupCodes from "./0018-phone-setup-codes.js";
 
 // Every schema change is a migration, listed here in order. Never edit one that has shipped; add a new one.
 export const migrations: Record<string, Migration> = {
@@ -36,4 +37,5 @@ export const migrations: Record<string, Migration> = {
   "0015-star-movement-order": starMovementOrder,
   "0016-grown-up-pins": grownUpPins,
   "0017-pin-lockout": pinLockout,
+  "0018-phone-setup-codes": phoneSetupCodes,
 };
