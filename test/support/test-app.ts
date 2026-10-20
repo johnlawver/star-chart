@@ -3,6 +3,7 @@ import { buildApp, type AppConfig } from "../../src/server/app.js";
 import { createTestDatabase } from "./database.js";
 import { FakeClock } from "./fake-clock.js";
 import { LiveConnection } from "./live-connection.js";
+import WebSocket from "ws";
 
 type Body = Record<string, unknown>;
 
@@ -62,6 +63,12 @@ export async function startTestApp(config: Partial<AppConfig> = {}) {
   const db = createTestDatabase();
   const clock = new FakeClock(new Date("2026-10-20T08:00:00Z"));
   const app = await buildApp({ db, clock, config: { ...defaultConfig, ...config } });
+  // HTTP requests are injected in-process, but live connections are real network connections (ADR 0003),
+  // so connecting, closing and dropping behave exactly as they do for real devices.
+  await app.listen({ host: "127.0.0.1", port: 0 });
+  const address = app.server.address();
+  if (!address || typeof address === "string") throw new Error("test server has no port");
+  const liveUrl = `ws://127.0.0.1:${address.port}/api/parts/live`;
   afterAll(async () => {
     await app.close();
     await db.destroy();
@@ -69,8 +76,15 @@ export async function startTestApp(config: Partial<AppConfig> = {}) {
   return {
     clock,
     newClient: () => new ApiClient(app),
-    /** Opens a device's live connection to the server, the way a printer or scanner would. */
-    openLiveConnection: async () => new LiveConnection(await app.injectWS("/api/parts/live")),
+    /** Opens a device's live connection to the server, the way a screen, printer or scanner would. */
+    openLiveConnection: async () => {
+      const socket = new WebSocket(liveUrl);
+      await new Promise((resolve, reject) => {
+        socket.once("open", resolve);
+        socket.once("error", reject);
+      });
+      return new LiveConnection(socket);
+    },
   };
 }
 

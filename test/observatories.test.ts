@@ -59,7 +59,7 @@ describe("pairing parts", () => {
     expect(paired.body.deviceToken).toEqual(expect.any(String));
     const observatories = (await owner.get("/api/observatories")).body.observatories;
     expect(observatories).toEqual([
-      { id: observatoryId, parts: [{ kind: "printer" }, { kind: "screen" }] },
+      { id: observatoryId, parts: [{ kind: "printer", online: false }, { kind: "screen", online: false }] },
     ]);
   });
 

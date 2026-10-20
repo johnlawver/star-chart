@@ -64,20 +64,20 @@ export function createObservatories(db: Database, clock: Clock) {
       });
     },
 
-    /** A chart's observatories and the parts paired to each. */
-    async list(chartId: string): Promise<{ id: string; parts: { kind: DeviceKind }[] }[]> {
+    /** A chart's observatories and the parts (devices) paired to each. */
+    async list(chartId: string): Promise<{ id: string; parts: { deviceId: string; kind: DeviceKind }[] }[]> {
       const rows = await db
         .selectFrom("observatories")
         .leftJoin("devices", "devices.observatory_id", "observatories.id")
-        .select(["observatories.id", "observatories.created_at", "devices.kind"])
+        .select(["observatories.id", "observatories.created_at", "devices.id as deviceId", "devices.kind"])
         .where("observatories.chart_id", "=", chartId)
         .orderBy("observatories.created_at")
         .orderBy("devices.kind")
         .execute();
-      const observatories = new Map<string, { id: string; parts: { kind: DeviceKind }[] }>();
+      const observatories = new Map<string, { id: string; parts: { deviceId: string; kind: DeviceKind }[] }>();
       for (const row of rows) {
         const observatory = observatories.get(row.id) ?? { id: row.id, parts: [] };
-        if (row.kind) observatory.parts.push({ kind: row.kind });
+        if (row.deviceId && row.kind) observatory.parts.push({ deviceId: row.deviceId, kind: row.kind });
         observatories.set(row.id, observatory);
       }
       return [...observatories.values()];

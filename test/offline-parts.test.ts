@@ -23,3 +23,41 @@ describe("printing when the printer is offline", () => {
     printerComingOnline.close();
   });
 });
+
+describe("parts' online status", () => {
+  test("grown-ups see which of an observatory's parts are online", async () => {
+    const chart = await chartWithObservatory(harness);
+    const printer = await chart.connectPrinter();
+    const { code } = (await chart.screen.post("/api/observatory/pairing-codes")).body;
+    await harness.newClient().post("/api/parts", { code, kind: "scanner" }); // paired, but never connects
+    const screen = await chart.connectScreen();
+
+    const [observatory] = (await chart.owner.get("/api/observatories")).body.observatories;
+
+    expect(observatory.parts).toEqual([
+      { kind: "printer", online: true },
+      { kind: "scanner", online: false },
+      { kind: "screen", online: true },
+    ]);
+    printer.close();
+    screen.close();
+  });
+
+  test("a part that disconnects shows as offline, and printing is refused again", async () => {
+    const chart = await chartWithObservatory(harness);
+    const nova = await chart.addChild("Nova");
+    const chore = await chart.addChore("Feed the cat", 2, [nova]);
+    const printer = await chart.connectPrinter();
+
+    printer.close();
+
+    await expect
+      .poll(async () => (await chart.owner.get("/api/observatories")).body.observatories[0].parts)
+      .toContainEqual({ kind: "printer", online: false });
+    const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, {
+      categoryId: chore.categoryId,
+      choiceId: chore.choreId,
+    });
+    expect(printed.status).toBe(503);
+  });
+});

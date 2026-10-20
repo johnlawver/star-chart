@@ -30,6 +30,14 @@ export class LiveParts {
     await handler?.(device, message);
   }
 
+  /** Whether a device is holding a live connection right now. */
+  isOnline(deviceId: string): boolean {
+    for (const device of this.connections.values()) {
+      if (device.deviceId === deviceId) return true;
+    }
+    return false;
+  }
+
   /** Sends a message to an observatory's printer. Returns false if no printer of that observatory is connected. */
   sendToPrinter(observatoryId: string, message: unknown): boolean {
     for (const [socket, device] of this.connections) {

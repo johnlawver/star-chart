@@ -34,7 +34,13 @@ export async function observatoryRoutes(
   app.get("/api/observatories", async (request, reply) => {
     const signedIn = await requireGrownUp(people, request, reply);
     if (!signedIn) return reply;
-    return { observatories: await observatories.list(signedIn.chart.id) };
+    const list = await observatories.list(signedIn.chart.id);
+    return {
+      observatories: list.map((observatory) => ({
+        id: observatory.id,
+        parts: observatory.parts.map((part) => ({ kind: part.kind, online: liveParts.isOnline(part.deviceId) })),
+      })),
+    };
   });
 
   app.delete<{ Params: { observatoryId: string } }>("/api/observatories/:observatoryId", async (request, reply) => {
