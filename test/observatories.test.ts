@@ -130,3 +130,59 @@ describe("live connections", () => {
     expect(await reconnecting.closed).toEqual({ code: 4401 });
   });
 });
+
+describe("keeping charts and devices apart", () => {
+  async function chartWithObservatory(chartName: string, childNickname: string) {
+    const owner = await signUpOwner(newClient(), chartName);
+    await owner.client.post("/api/children", { nickname: childNickname, displayStyle: "words" });
+    const screen = newClient();
+    await screen.post("/api/sign-in", { email: owner.email, password: owner.password });
+    screen.useDeviceToken((await screen.post("/api/observatories")).body.deviceToken);
+    return { owner: owner.client, screen };
+  }
+
+  test("an observatory only ever shows its own chart's children", async () => {
+    const home = await chartWithObservatory("Our House", "Nova");
+    const school = await chartWithObservatory("Room 12", "Ava");
+
+    const homeNicknames = (await home.screen.get("/api/observatory/children")).body.children.map(
+      (child: { nickname: string }) => child.nickname,
+    );
+    const schoolNicknames = (await school.screen.get("/api/observatory/children")).body.children.map(
+      (child: { nickname: string }) => child.nickname,
+    );
+
+    expect(homeNicknames).toEqual(["Nova"]);
+    expect(schoolNicknames).toEqual(["Ava"]);
+  });
+
+  test("a grown-up in another chart can't see or unpair our observatory", async () => {
+    const home = await chartWithObservatory("Our House", "Nova");
+    const school = await chartWithObservatory("Room 12", "Ava");
+    const [homeObservatory] = (await home.owner.get("/api/observatories")).body.observatories;
+
+    const schoolSees = (await school.owner.get("/api/observatories")).body.observatories;
+    const unpaired = await school.owner.delete(`/api/observatories/${homeObservatory.id}`);
+
+    expect(schoolSees.map((o: { id: string }) => o.id)).not.toContain(homeObservatory.id);
+    expect(unpaired.status).toBe(404);
+    expect((await home.screen.get("/api/observatory/children")).status).toBe(200);
+  });
+
+  test("a printer's credential can't be used to act as a screen", async () => {
+    const { screen } = await chartWithObservatory("Our House", "Nova");
+    const { code } = (await screen.post("/api/observatory/pairing-codes")).body;
+    const printer = newClient();
+    printer.useDeviceToken((await newClient().post("/api/parts", { code, kind: "printer" })).body.deviceToken);
+
+    expect((await printer.get("/api/observatory/children")).status).toBe(401);
+    expect((await printer.post("/api/observatory/pairing-codes")).status).toBe(401);
+  });
+
+  test("someone who isn't signed in can't pair or list observatories", async () => {
+    const stranger = newClient();
+
+    expect((await stranger.post("/api/observatories")).status).toBe(401);
+    expect((await stranger.get("/api/observatories")).status).toBe(401);
+  });
+});
