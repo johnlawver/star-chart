@@ -48,6 +48,7 @@ export interface Tables {
     chart_id: string;
     name: string;
     kind: TaskKindName;
+    icon: string | null;
     created_at: Date;
   };
   chores: {
@@ -57,6 +58,7 @@ export interface Tables {
     stars: number;
     frequency_times: Generated<number>;
     frequency_per: Generated<"day" | "week">;
+    icon: string | null;
     created_at: Date;
   };
   chore_assignments: {
@@ -81,6 +83,7 @@ export interface Tables {
     printed_by_observatory_id: string | null;
     awarded_stars: number | null;
     note: string | null;
+    icon: string | null;
     created_at: Date;
   };
   ticket_events: {

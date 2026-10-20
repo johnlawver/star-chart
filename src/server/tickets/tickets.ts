@@ -12,6 +12,8 @@ export interface PrintJob {
   childNickname: string;
   displayStyle: DisplayStyle;
   title: string;
+  /** An icon from the built-in library, printed large for a child whose display style is pictures. */
+  icon: string | null;
   stars: number;
   code: string;
 }
@@ -155,6 +157,7 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
             chore_id: issued.choreId,
             code: issued.code,
             title: issued.title,
+            icon: issued.icon,
             stars: issued.stars,
             state: "open",
             printed_by_observatory_id: input.observatoryId,
@@ -173,6 +176,7 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
           childNickname: child.nickname,
           displayStyle: child.display_style,
           title: issued.title,
+          icon: issued.icon,
           stars: issued.stars,
           code: issued.code,
         };

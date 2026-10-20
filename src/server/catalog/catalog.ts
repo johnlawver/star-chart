@@ -13,17 +13,18 @@ export interface MenuCategory {
   id: string;
   name: string;
   kind: TaskKindName;
+  icon: string | null;
   choices: Choice[];
 }
 
 /** The catalog module: task categories, chores, and what each child can choose. All scoped to one chart. */
 export function createCatalog(db: Database, clock: Clock) {
   return {
-    async addCategory(chartId: string, input: { name: string; kind: TaskKindName }) {
+    async addCategory(chartId: string, input: { name: string; kind: TaskKindName; icon?: string }) {
       return db
         .insertInto("task_categories")
-        .values({ chart_id: chartId, name: input.name.trim(), kind: input.kind, created_at: clock.now() })
-        .returning(["id", "name", "kind"])
+        .values({ chart_id: chartId, name: input.name.trim(), kind: input.kind, icon: input.icon ?? null, created_at: clock.now() })
+        .returning(["id", "name", "kind", "icon"])
         .executeTakeFirstOrThrow();
     },
 
@@ -33,8 +34,8 @@ export function createCatalog(db: Database, clock: Clock) {
      */
     async addChore(
       chartId: string,
-      input: { categoryId: string; name: string; stars: number; childIds: string[]; frequency?: Frequency },
-    ): Promise<{ id: string; name: string; stars: number } | { refused: string }> {
+      input: { categoryId: string; name: string; stars: number; childIds: string[]; frequency?: Frequency; icon?: string },
+    ): Promise<{ id: string; name: string; stars: number; icon: string | null } | { refused: string }> {
       if (!isId(input.categoryId) || !input.childIds.every(isId)) return { refused: "unknown category or child" };
       return db.transaction().execute(async (trx) => {
         const category = await trx
@@ -64,9 +65,10 @@ export function createCatalog(db: Database, clock: Clock) {
             stars: input.stars,
             frequency_times: input.frequency?.times ?? 1,
             frequency_per: input.frequency?.per ?? "day",
+            icon: input.icon ?? null,
             created_at: clock.now(),
           })
-          .returning(["id", "name", "stars"])
+          .returning(["id", "name", "stars", "icon"])
           .executeTakeFirstOrThrow();
         if (childIds.length > 0) {
           await trx
@@ -82,7 +84,7 @@ export function createCatalog(db: Database, clock: Clock) {
     async listForGrownUps(chartId: string) {
       const categories = await db
         .selectFrom("task_categories")
-        .select(["id", "name", "kind"])
+        .select(["id", "name", "kind", "icon"])
         .where("chart_id", "=", chartId)
         .orderBy("name")
         .execute();
@@ -97,6 +99,7 @@ export function createCatalog(db: Database, clock: Clock) {
           "chores.stars",
           "chores.frequency_times",
           "chores.frequency_per",
+          "chores.icon",
           "chore_assignments.child_id",
         ])
         .where("task_categories.chart_id", "=", chartId)
@@ -105,13 +108,14 @@ export function createCatalog(db: Database, clock: Clock) {
       return categories.map((category) => {
         const byId = new Map<
           string,
-          { id: string; name: string; stars: number; frequency: Frequency; childIds: string[] }
+          { id: string; name: string; stars: number; icon: string | null; frequency: Frequency; childIds: string[] }
         >();
         for (const row of chores.filter((chore) => chore.category_id === category.id)) {
           const chore = byId.get(row.id) ?? {
             id: row.id,
             name: row.name,
             stars: row.stars,
+            icon: row.icon,
             frequency: { times: row.frequency_times, per: row.frequency_per },
             childIds: [],
           };
@@ -134,7 +138,7 @@ export function createCatalog(db: Database, clock: Clock) {
       if (!child) return undefined;
       const categories = await db
         .selectFrom("task_categories")
-        .select(["id", "name", "kind"])
+        .select(["id", "name", "kind", "icon"])
         .where("chart_id", "=", chartId)
         .orderBy("name")
         .execute();

@@ -4,10 +4,13 @@ import { requireDevice } from "../observatories/authenticate-device.js";
 import type { Observatories } from "../observatories/observatories.js";
 import { requireGrownUp } from "../people/authenticate.js";
 import type { People } from "../people/people.js";
+import { iconLibrary } from "../icons/icons.js";
 import type { Catalog, Frequency } from "./catalog.js";
 
 const nameField = { type: "string", minLength: 1, maxLength: 60, pattern: "\\S" } as const;
 const idField = { type: "string", maxLength: 36 } as const;
+const iconField = { type: "string", maxLength: 40 } as const;
+const unknownIcon = { error: "that icon isn't in the library" };
 
 export async function catalogRoutes(app: FastifyInstance, people: People, observatories: Observatories, catalog: Catalog) {
   app.get("/api/categories", async (request, reply) => {
@@ -16,14 +19,14 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
     return { categories: await catalog.listForGrownUps(signedIn.chart.id) };
   });
 
-  app.post<{ Body: { name: string; kind: TaskKindName } }>(
+  app.post<{ Body: { name: string; kind: TaskKindName; icon?: string } }>(
     "/api/categories",
     {
       schema: {
         body: {
           type: "object",
           // Only chores for now; quizzes arrive in ticket 10.
-          properties: { name: nameField, kind: { type: "string", enum: ["chore"] } },
+          properties: { name: nameField, kind: { type: "string", enum: ["chore"] }, icon: iconField },
           required: ["name", "kind"],
           additionalProperties: false,
         },
@@ -32,11 +35,14 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
     async (request, reply) => {
       const signedIn = await requireGrownUp(people, request, reply);
       if (!signedIn) return reply;
+      if (request.body.icon !== undefined && !iconLibrary.has(request.body.icon)) return reply.code(400).send(unknownIcon);
       return reply.code(201).send({ category: await catalog.addCategory(signedIn.chart.id, request.body) });
     },
   );
 
-  app.post<{ Body: { categoryId: string; name: string; stars: number; childIds: string[]; frequency?: Frequency } }>(
+  app.post<{
+    Body: { categoryId: string; name: string; stars: number; childIds: string[]; frequency?: Frequency; icon?: string };
+  }>(
     "/api/chores",
     {
       schema: {
@@ -47,6 +53,7 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
             name: nameField,
             stars: { type: "integer", minimum: 0, maximum: 100 },
             childIds: { type: "array", items: idField, maxItems: 100 },
+            icon: iconField,
             frequency: {
               type: "object",
               properties: {
@@ -65,6 +72,7 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
     async (request, reply) => {
       const signedIn = await requireGrownUp(people, request, reply);
       if (!signedIn) return reply;
+      if (request.body.icon !== undefined && !iconLibrary.has(request.body.icon)) return reply.code(400).send(unknownIcon);
       const result = await catalog.addChore(signedIn.chart.id, request.body);
       if ("refused" in result) return reply.code(400).send({ error: result.refused });
       return reply.code(201).send({ chore: result });

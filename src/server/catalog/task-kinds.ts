@@ -9,6 +9,7 @@ export interface Choice {
   id: string;
   name: string;
   stars: number;
+  icon: string | null;
   /** Already done as often as it can earn stars for now (for example, once today), so it can't be printed. */
   done: boolean;
 }
@@ -16,6 +17,7 @@ export interface Choice {
 /** What goes on a ticket when a child chooses something. */
 export interface IssuedTask {
   title: string;
+  icon: string | null;
   stars: number;
   code: string;
   choreId: string | null;
@@ -55,7 +57,14 @@ export const choreKind: TaskKind = {
     const chores = await db
       .selectFrom("chores")
       .innerJoin("chore_assignments", "chore_assignments.chore_id", "chores.id")
-      .select(["chores.id", "chores.name", "chores.stars", "chores.frequency_times", "chores.frequency_per"])
+      .select([
+        "chores.id",
+        "chores.name",
+        "chores.stars",
+        "chores.icon",
+        "chores.frequency_times",
+        "chores.frequency_per",
+      ])
       .where("chores.category_id", "=", categoryId)
       .where("chore_assignments.child_id", "=", childId)
       .orderBy("chores.name")
@@ -77,6 +86,7 @@ export const choreKind: TaskKind = {
         id: chore.id,
         name: chore.name,
         stars: chore.stars,
+        icon: chore.icon,
         done: Number(approvals) >= chore.frequency_times,
       });
     }
@@ -100,7 +110,7 @@ export const choreKind: TaskKind = {
       .where("child_id", "=", childId)
       .where("chore_id", "=", chore.id)
       .executeTakeFirstOrThrow();
-    return { title: chore.name, stars: chore.stars, code, choreId: chore.id };
+    return { title: chore.name, icon: chore.icon, stars: chore.stars, code, choreId: chore.id };
   },
 };
 

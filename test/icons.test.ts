@@ -33,3 +33,46 @@ describe("the icon library", () => {
     expect((await harness.newClient().get("/api/icons/not-an-icon.svg")).status).toBe(404);
   });
 });
+
+describe("icons on categories and chores", () => {
+  test("grown-ups give categories and chores icons, and the observatory menu shows them", async () => {
+    const { chartWithObservatory } = await import("./support/observatory.js");
+    const chart = await chartWithObservatory(harness);
+    const pip = await chart.addChild("Pip", "pictures");
+    const { category } = (await chart.owner.post("/api/categories", { name: "Chores", kind: "chore", icon: "home" })).body;
+    await chart.owner.post("/api/chores", { categoryId: category.id, name: "Feed the cat", stars: 1, childIds: [pip], icon: "cat" });
+
+    const listed = (await chart.owner.get("/api/categories")).body.categories[0];
+    const menu = (await chart.screen.get(`/api/observatory/children/${pip}/menu`)).body.categories[0];
+
+    expect(listed.icon).toBe("home");
+    expect(listed.chores[0].icon).toBe("cat");
+    expect(menu.icon).toBe("home");
+    expect(menu.choices[0].icon).toBe("cat");
+  });
+
+  test("an icon that isn't in the library is refused", async () => {
+    const { chartWithObservatory } = await import("./support/observatory.js");
+    const chart = await chartWithObservatory(harness);
+
+    const category = await chart.owner.post("/api/categories", { name: "Chores", kind: "chore", icon: "unicorn" });
+
+    expect(category.status).toBe(400);
+  });
+
+  test("the print job carries the icon, so the printer can print it large for a child who sees pictures", async () => {
+    const { chartWithObservatory } = await import("./support/observatory.js");
+    const chart = await chartWithObservatory(harness);
+    const pip = await chart.addChild("Pip", "pictures");
+    const { category } = (await chart.owner.post("/api/categories", { name: "Chores", kind: "chore", icon: "home" })).body;
+    const { chore } = (
+      await chart.owner.post("/api/chores", { categoryId: category.id, name: "Tidy toys", stars: 1, childIds: [pip], icon: "lego" })
+    ).body;
+    const printer = await chart.connectPrinter();
+
+    await chart.screen.post(`/api/observatory/children/${pip}/tickets`, { categoryId: category.id, choiceId: chore.id });
+
+    expect((await printer.nextMessage()).ticket).toMatchObject({ displayStyle: "pictures", title: "Tidy toys", icon: "lego" });
+    printer.close();
+  });
+});

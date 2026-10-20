@@ -25,7 +25,8 @@ describe("chores at the observatory", () => {
         id: category.id,
         name: "Chores",
         kind: "chore",
-        choices: [{ id: expect.any(String), name: "Feed the cat", stars: 2, done: false }],
+        icon: null,
+        choices: [{ id: expect.any(String), name: "Feed the cat", stars: 2, icon: null, done: false }],
       },
     ]);
     expect(pipsMenu).toEqual([]);
@@ -54,6 +55,7 @@ describe("chores at the observatory", () => {
         childNickname: "Nova",
         displayStyle: "words",
         title: "Feed the cat",
+        icon: null,
         stars: 2,
         code: expect.any(String),
       },
@@ -78,12 +80,21 @@ describe("chores in the Control Center", () => {
         id: category.id,
         name: "Chores",
         kind: "chore",
+        icon: null,
         chores: [
-          { id: expect.any(String), name: "Feed the cat", stars: 2, frequency: { times: 1, per: "day" }, childIds: [nova] },
+          {
+            id: expect.any(String),
+            name: "Feed the cat",
+            stars: 2,
+            icon: null,
+            frequency: { times: 1, per: "day" },
+            childIds: [nova],
+          },
           {
             id: expect.any(String),
             name: "Make your bed",
             stars: 1,
+            icon: null,
             frequency: { times: 1, per: "day" },
             childIds: expect.arrayContaining([nova, pip]),
           },
