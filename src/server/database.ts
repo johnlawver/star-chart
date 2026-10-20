@@ -16,6 +16,7 @@ export interface Tables {
     chart_id: string;
     email: string;
     password_hash: string;
+    pin_hash: string | null;
     role: Role;
     created_at: Date;
   };
@@ -111,6 +112,7 @@ export interface Tables {
     token_hash: string;
     grown_up_id: string;
     created_at: Date;
+    expires_at: Date | null;
   };
 }
 

@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import type { Clock } from "../clock.js";
 import type { Database, Role } from "../database.js";
 import { hashToken, newToken } from "../tokens.js";
+import { isId } from "../ids.js";
 import { isUniqueViolation } from "../database-errors.js";
 
 /** The charts-and-people module: charts, grown-ups and their sessions. */
@@ -59,6 +60,45 @@ export function createPeople(db: Database, clock: Clock) {
       return startSession(db, grownUp.id, clock.now());
     },
 
+    /** Sets (or changes) a grown-up's PIN for unlocking the Control Center on an observatory. */
+    async setPin(grownUpId: string, pin: string): Promise<void> {
+      await db.updateTable("grown_ups").set({ pin_hash: await hash(pin) }).where("id", "=", grownUpId).execute();
+    },
+
+    /** The chart's grown-ups who have a PIN, as an observatory shows them: by the first part of their email. */
+    async withPins(chartId: string): Promise<{ id: string; name: string }[]> {
+      const grownUps = await db
+        .selectFrom("grown_ups")
+        .select(["id", "email"])
+        .where("chart_id", "=", chartId)
+        .where("pin_hash", "is not", null)
+        .orderBy("email")
+        .execute();
+      return grownUps.map((grownUp) => ({ id: grownUp.id, name: grownUp.email.split("@")[0] ?? grownUp.email }));
+    },
+
+    /**
+     * Checks a grown-up's PIN, entered on one of their chart's observatories. If it's right, returns a session token
+     * that ends on its own after `lifetimeMs`. Undefined if the grown-up isn't in this chart or the PIN is wrong.
+     */
+    async unlockWithPin(input: {
+      chartId: string;
+      grownUpId: string;
+      pin: string;
+      lifetimeMs: number;
+    }): Promise<string | undefined> {
+      if (!isId(input.grownUpId)) return undefined;
+      const grownUp = await db
+        .selectFrom("grown_ups")
+        .select(["id", "pin_hash"])
+        .where("chart_id", "=", input.chartId)
+        .where("id", "=", input.grownUpId)
+        .executeTakeFirst();
+      if (!grownUp?.pin_hash || !(await verify(grownUp.pin_hash, input.pin))) return undefined;
+      const now = clock.now();
+      return startSession(db, grownUp.id, now, new Date(now.getTime() + input.lifetimeMs));
+    },
+
     async signOut(token: string): Promise<void> {
       await db.deleteFrom("sessions").where("token_hash", "=", hashToken(token)).execute();
     },
@@ -78,6 +118,7 @@ export function createPeople(db: Database, clock: Clock) {
           "charts.time_zone as timeZone",
         ])
         .where("sessions.token_hash", "=", hashToken(token))
+        .where((eb) => eb.or([eb("sessions.expires_at", "is", null), eb("sessions.expires_at", ">", clock.now())]))
         .executeTakeFirst();
       if (!row) return undefined;
       return {
@@ -90,9 +131,12 @@ export function createPeople(db: Database, clock: Clock) {
 
 export type People = ReturnType<typeof createPeople>;
 
-async function startSession(db: Database, grownUpId: string, now: Date): Promise<string> {
+async function startSession(db: Database, grownUpId: string, now: Date, expiresAt: Date | null = null): Promise<string> {
   const token = newToken();
-  await db.insertInto("sessions").values({ token_hash: hashToken(token), grown_up_id: grownUpId, created_at: now }).execute();
+  await db
+    .insertInto("sessions")
+    .values({ token_hash: hashToken(token), grown_up_id: grownUpId, created_at: now, expires_at: expiresAt })
+    .execute();
   return token;
 }
 

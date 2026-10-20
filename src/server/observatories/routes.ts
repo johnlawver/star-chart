@@ -6,6 +6,9 @@ import { requireDevice } from "./authenticate-device.js";
 import { notPairedCloseCode, type LiveParts } from "./live-parts.js";
 import type { Observatories } from "./observatories.js";
 
+// The longest a Control Center unlocked on an observatory stays open, even if nobody closes it.
+const unlockedSessionMs = 10 * 60 * 1000;
+
 // How long a newly opened connection has to say hello before it is closed.
 const helloTimeoutMs = 10_000;
 
@@ -69,6 +72,42 @@ export async function observatoryRoutes(
     };
     return { printer: statusOf("printer"), scanner: statusOf("scanner") };
   });
+
+  // The grown-ups a screen offers for unlocking the Control Center: only those who have set a PIN.
+  app.get("/api/observatory/grown-ups", async (request, reply) => {
+    const screen = await requireDevice(observatories, "screen", request, reply);
+    if (!screen) return reply;
+    return { grownUps: await people.withPins(screen.chartId) };
+  });
+
+  // A grown-up unlocks the Control Center on a paired observatory with their PIN. Only paired screens can try,
+  // so PINs can't be guessed from elsewhere.
+  app.post<{ Body: { grownUpId: string; pin: string } }>(
+    "/api/observatory/unlock",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { grownUpId: { type: "string", maxLength: 36 }, pin: { type: "string", maxLength: 8 } },
+          required: ["grownUpId", "pin"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const screen = await requireDevice(observatories, "screen", request, reply);
+      if (!screen) return reply;
+      const token = await people.unlockWithPin({
+        chartId: screen.chartId,
+        grownUpId: request.body.grownUpId,
+        pin: request.body.pin,
+        lifetimeMs: unlockedSessionMs,
+      });
+      if (!token) return reply.code(401).send({ error: "That PIN isn't right." });
+      reply.setCookie(sessionCookie, token, sessionCookieOptions);
+      return {};
+    },
+  );
 
   app.post("/api/observatory/pairing-codes", async (request, reply) => {
     const screen = await requireDevice(observatories, "screen", request, reply);

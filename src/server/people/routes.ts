@@ -25,6 +25,26 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
     return {};
   });
 
+  app.put<{ Body: { pin: string } }>(
+    "/api/me/pin",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { pin: { type: "string", pattern: "^[0-9]{4,8}$" } },
+          required: ["pin"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      await people.setPin(signedIn.grownUp.id, request.body.pin);
+      return reply.code(204).send();
+    },
+  );
+
   app.post("/api/sign-out", async (request, reply) => {
     const token = request.cookies[sessionCookie];
     if (token) await people.signOut(token);

@@ -22,7 +22,7 @@ export class ApiClient {
 
   constructor(private readonly app: Awaited<ReturnType<typeof buildApp>>) {}
 
-  async request(method: "GET" | "POST" | "PATCH" | "DELETE", url: string, payload?: Body): Promise<ApiResponse> {
+  async request(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, payload?: Body): Promise<ApiResponse> {
     const response = await this.app.inject({
       method,
       url,
@@ -45,6 +45,7 @@ export class ApiClient {
     return response.body;
   }
   post = (url: string, payload?: Body) => this.request("POST", url, payload);
+  put = (url: string, payload?: Body) => this.request("PUT", url, payload);
   patch = (url: string, payload?: Body) => this.request("PATCH", url, payload);
   delete = (url: string) => this.request("DELETE", url);
 
