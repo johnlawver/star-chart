@@ -122,3 +122,38 @@ describe("approved and dismissed are final", () => {
     closeAll();
   });
 });
+
+describe("every scan result", () => {
+  test("scanning a ticket that's already handed in says it's waiting for a grown-up", async () => {
+    const { scan, closeAll } = await novaWithAPrintedChore();
+    await scan();
+
+    expect(await scan()).toEqual({
+      type: "scan-result",
+      result: "waiting-for-grown-up",
+      childNickname: "Nova",
+      title: "Feed the cat",
+    });
+    closeAll();
+  });
+
+  test("scanning a ticket with nothing left to hand in says it's already done", async () => {
+    const { chart, ticketId, scan, closeAll } = await novaWithAPrintedChore();
+    await chart.owner.post(`/api/tickets/${ticketId}/approve`, {});
+
+    expect(await scan()).toEqual({
+      type: "scan-result",
+      result: "already-done",
+      childNickname: "Nova",
+      title: "Feed the cat",
+    });
+    closeAll();
+  });
+
+  test("scanning a code nobody printed isn't recognised", async () => {
+    const { scan, closeAll } = await novaWithAPrintedChore();
+
+    expect(await scan("SC-NOTAREALCODE")).toEqual({ type: "scan-result", result: "not-recognised" });
+    closeAll();
+  });
+});

@@ -16,7 +16,7 @@ export interface PrintJob {
 
 /** What happened when a ticket's code was scanned. */
 export type ScanResult =
-  | { result: "handed-in"; childNickname: string; title: string }
+  | { result: "handed-in" | "waiting-for-grown-up" | "already-done"; childNickname: string; title: string }
   | { result: "not-recognised" };
 
 export interface TicketSummary {
@@ -129,20 +129,34 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
       });
     },
 
-    /** A child scanned a ticket's code at one of this chart's observatories. */
+    /**
+     * A child scanned a ticket's code at one of this chart's observatories. A chore's code is shared by every printing
+     * for that child (ADR 0001), so the scan counts towards the child's current open ticket with that code, if any.
+     */
     async handIn(chartId: string, code: string): Promise<ScanResult> {
-      const ticket = await db
-        .updateTable("tickets")
-        .set({ state: "handed-in" })
-        .from("children")
-        .whereRef("children.id", "=", "tickets.child_id")
-        .where("tickets.chart_id", "=", chartId)
-        .where("tickets.code", "=", code)
-        .where("tickets.state", "=", "open")
-        .returning(["children.nickname", "tickets.title"])
-        .executeTakeFirst();
-      if (!ticket) return { result: "not-recognised" };
-      return { result: "handed-in", childNickname: ticket.nickname, title: ticket.title };
+      return db.transaction().execute(async (trx) => {
+        const withCode = await trx
+          .selectFrom("tickets")
+          .innerJoin("children", "children.id", "tickets.child_id")
+          .select(["tickets.id", "tickets.state", "tickets.title", "children.nickname"])
+          .where("tickets.chart_id", "=", chartId)
+          .where("tickets.code", "=", code)
+          .orderBy("tickets.created_at", "desc")
+          .forUpdate("tickets")
+          .execute();
+        const latest = withCode[0];
+        if (!latest) return { result: "not-recognised" as const };
+        const about = { childNickname: latest.nickname, title: latest.title };
+        const open = withCode.find((ticket) => ticket.state === "open");
+        if (open) {
+          await trx.updateTable("tickets").set({ state: "handed-in" }).where("id", "=", open.id).execute();
+          return { result: "handed-in" as const, ...about };
+        }
+        if (withCode.some((ticket) => ticket.state === "handed-in")) {
+          return { result: "waiting-for-grown-up" as const, ...about };
+        }
+        return { result: "already-done" as const, ...about };
+      });
     },
 
     /**
