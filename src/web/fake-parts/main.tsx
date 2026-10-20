@@ -17,6 +17,7 @@ interface PrintJob {
   childNickname: string;
   displayStyle: "pictures" | "words";
   title: string;
+  icon: string | null;
   stars: number;
   code: string;
 }
@@ -126,7 +127,11 @@ function Receipt({ job }: { job: PrintJob }) {
       }}
     >
       <div style={{ fontSize: 28, fontWeight: "bold" }}>{job.childNickname}</div>
-      <div style={{ fontSize: 24, margin: "12px 0" }}>{job.title}</div>
+      {job.displayStyle === "pictures" && job.icon ? (
+        <img src={`/api/icons/${job.icon}.svg`} alt={job.title} width={192} height={192} style={{ margin: "12px 0" }} />
+      ) : (
+        <div style={{ fontSize: 24, margin: "12px 0" }}>{job.title}</div>
+      )}
       <div style={{ fontSize: 20 }}>{"★".repeat(job.stars) || "no stars"}</div>
       {qr && <img src={qr} alt={`QR code ${job.code}`} width={256} height={256} style={{ imageRendering: "pixelated" }} />}
       <div style={{ fontSize: 14 }}>{job.code}</div>

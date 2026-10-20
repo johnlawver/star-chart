@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { api, stored } from "../shared/api.js";
 import { useLiveConnection } from "../shared/live.js";
+import { Icon } from "../shared/icons.js";
 
 // The observatory screen. Deliberately plain until its design phase (see Project conventions in CLAUDE.md).
 
@@ -185,7 +186,8 @@ interface MenuCategory {
   id: string;
   name: string;
   kind: "chore" | "quiz";
-  choices: { id: string; name: string; stars: number; done: boolean }[];
+  icon: string | null;
+  choices: { id: string; name: string; stars: number; icon: string | null; done: boolean }[];
 }
 
 function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: string; onDone: () => void }) {
@@ -193,6 +195,8 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
   const [category, setCategory] = useState<MenuCategory | undefined>();
   const [message, setMessage] = useState<string | undefined>();
   const [balance, setBalance] = useState<number | undefined>();
+  // Children who can't read yet see big icons instead of words (their display style).
+  const pictures = child.displayStyle === "pictures";
 
   useEffect(() => {
     void (async () => {
@@ -230,15 +234,15 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
       {menu?.length === 0 && <p>Nothing to do right now.</p>}
       {!category &&
         menu?.map((c) => (
-          <button key={c.id} onClick={() => setCategory(c)}>
-            {c.name}
+          <button key={c.id} onClick={() => setCategory(c)} aria-label={c.name}>
+            {pictures && c.icon ? <Icon id={c.icon} size={96} /> : c.name}
           </button>
         ))}
       {category &&
         category.choices.map((choice) => (
-          <button key={choice.id} onClick={() => print(choice.id)} disabled={choice.done}>
+          <button key={choice.id} onClick={() => print(choice.id)} disabled={choice.done} aria-label={choice.name}>
             {choice.done ? "✓ " : ""}
-            {choice.name} ({choice.stars} ★)
+            {pictures && choice.icon ? <Icon id={choice.icon} size={96} /> : `${choice.name} (${choice.stars} ★)`}
           </button>
         ))}
       <footer>

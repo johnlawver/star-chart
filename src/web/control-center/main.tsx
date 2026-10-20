@@ -1,5 +1,6 @@
 import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
+import { Icon, IconPicker } from "../shared/icons.js";
 
 // The Control Center, deliberately plain for now: sign up, sign in, and see your chart.
 
@@ -234,10 +235,12 @@ interface CategoryWithChores {
   id: string;
   name: string;
   kind: "chore" | "quiz";
+  icon: string | null;
   chores: {
     id: string;
     name: string;
     stars: number;
+    icon: string | null;
     frequency: { times: number; per: "day" | "week" };
     childIds: string[];
   }[];
@@ -263,8 +266,8 @@ function ChoresSection() {
   const addCategory = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
-    const { name } = Object.fromEntries(new FormData(form));
-    const result = await api("POST", "/api/categories", { name, kind: "chore" });
+    const { name, icon } = Object.fromEntries(new FormData(form));
+    const result = await api("POST", "/api/categories", { name, kind: "chore", ...(icon ? { icon } : {}) });
     setError(result.ok ? undefined : result.data?.error);
     form.reset();
     await load();
@@ -280,6 +283,7 @@ function ChoresSection() {
       stars: Number(data.get("stars")),
       childIds: data.getAll("childIds"),
       frequency: { times: Number(data.get("times")), per: data.get("per") },
+      ...(data.get("icon") ? { icon: data.get("icon") } : {}),
     });
     setError(result.ok ? undefined : result.data?.error);
     form.reset();
@@ -291,11 +295,13 @@ function ChoresSection() {
       <h2>Chores</h2>
       {categories.map((category) => (
         <div key={category.id}>
-          <h3>{category.name}</h3>
+          <h3>
+            <Icon id={category.icon} size={24} /> {category.name}
+          </h3>
           <ul>
             {category.chores.map((chore) => (
               <li key={chore.id}>
-                {chore.name}: {chore.stars} ★, {chore.frequency.times === 1 ? "once" : `${chore.frequency.times} times`} a{" "}
+                <Icon id={chore.icon} size={20} /> {chore.name}: {chore.stars} ★, {chore.frequency.times === 1 ? "once" : `${chore.frequency.times} times`} a{" "}
                 {chore.frequency.per}, for {chore.childIds.map(nicknameOf).join(", ") || "nobody yet"}
               </li>
             ))}
@@ -315,6 +321,7 @@ function ChoresSection() {
                 <option value="week">week</option>
               </select>
             </label>{" "}
+            <IconPicker />{" "}
             {children.map((child) => (
               <label key={child.id}>
                 <input type="checkbox" name="childIds" value={child.id} /> {child.nickname}
@@ -328,6 +335,7 @@ function ChoresSection() {
         <label>
           New chore category <input name="name" placeholder="Chores" maxLength={60} required />
         </label>{" "}
+        <IconPicker />{" "}
         <button type="submit">Add category</button>
       </form>
       {error && <p role="alert">{error}</p>}

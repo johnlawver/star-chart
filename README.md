@@ -27,3 +27,7 @@ You need Node 24+, Docker, the Doppler CLI and Tailscale.
 ## Tests
 
 `npm test` runs the API tests against the `star_chart_test` database in the same Postgres container. They don't need Doppler.
+
+## Credits
+
+The built-in icons are from [Tabler Icons](https://tabler.io/icons) by Paweł Kuna, used under the MIT licence (a copy ships in `node_modules/@tabler/icons/LICENSE`). Star Chart draws them in solid black with a heavier stroke for thermal printing.
