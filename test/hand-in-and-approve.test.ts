@@ -85,3 +85,50 @@ describe("approving a ticket", () => {
     for (const connection of [printer, scanner, screen]) connection.close();
   });
 });
+
+describe("keeping charts apart", () => {
+  async function homeWithPrintedChore() {
+    const home = await chartWithObservatory(harness, "Our House");
+    const nova = await home.addChild("Nova");
+    const chore = await home.addChore("Feed the cat", 2, [nova]);
+    const printer = await home.connectPrinter();
+    const printed = await home.print(nova, chore, printer);
+    printer.close();
+    return { home, nova, ...printed };
+  }
+
+  test("a code from another chart isn't recognised, and that chart's ticket stays open", async () => {
+    const { home, ticketId, code } = await homeWithPrintedChore();
+    const school = await chartWithObservatory(harness, "Room 12");
+    const schoolScanner = await school.connectScanner();
+    const schoolScreen = await school.connectScreen();
+
+    schoolScanner.send({ type: "scan", code });
+
+    expect(await schoolScreen.nextMessage()).toEqual({ type: "scan-result", result: "not-recognised" });
+    const stillOpen = (await home.owner.get("/api/tickets?state=open")).body.tickets;
+    expect(stillOpen.map((ticket: { id: string }) => ticket.id)).toContain(ticketId);
+    schoolScanner.close();
+    schoolScreen.close();
+  });
+
+  test("a grown-up in another chart can't see or approve our tickets, or our child's balance", async () => {
+    const { home, nova, ticketId, code } = await homeWithPrintedChore();
+    const scanner = await home.connectScanner();
+    const screen = await home.connectScreen();
+    scanner.send({ type: "scan", code });
+    await screen.nextMessage();
+    const school = await chartWithObservatory(harness, "Room 12");
+
+    const theirWaitingList = (await school.owner.get("/api/tickets?state=handed-in")).body.tickets;
+    const approved = await school.owner.post(`/api/tickets/${ticketId}/approve`, { stars: 100 });
+    const balance = await school.screen.get(`/api/observatory/children/${nova}`);
+
+    expect(theirWaitingList).toEqual([]);
+    expect(approved.status).toBe(404);
+    expect(balance.status).toBe(404);
+    expect((await home.screen.get(`/api/observatory/children/${nova}`)).body.child.balance).toBe(0);
+    scanner.close();
+    screen.close();
+  });
+});
