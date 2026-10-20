@@ -30,3 +30,44 @@ describe("invitations", () => {
     expect((await partner.get("/api/children")).body.children.map((c: { nickname: string }) => c.nickname)).toEqual(["Nova"]);
   });
 });
+
+describe("invitation links", () => {
+  test("an invitation works only once", async () => {
+    const owner = await signUpOwner(harness.newClient());
+    const { token } = await invite(owner.client);
+    await harness.newClient().post("/api/invitations/accept", { token, password: "a good long password" });
+
+    const again = await harness.newClient().post("/api/invitations/accept", { token, password: "another password" });
+
+    expect(again.status).toBe(404);
+  });
+
+  test("an invitation expires after 7 days", async () => {
+    const owner = await signUpOwner(harness.newClient());
+    const { token } = await invite(owner.client);
+
+    clock.advanceBy(7 * 24 * 60 * 60 * 1000 + 1000);
+    const tooLate = await harness.newClient().post("/api/invitations/accept", { token, password: "a good long password" });
+
+    expect(tooLate.status).toBe(404);
+  });
+
+  test("an email that already belongs to a chart can't accept an invitation to another", async () => {
+    const home = await signUpOwner(harness.newClient(), "Our House");
+    const school = await signUpOwner(harness.newClient(), "Room 12");
+    const { token } = await invite(school.client, home.email);
+
+    const accepted = await harness.newClient().post("/api/invitations/accept", { token, password: "a good long password" });
+
+    expect(accepted.status).toBe(409);
+  });
+
+  test("a password must be at least 8 characters", async () => {
+    const owner = await signUpOwner(harness.newClient());
+    const { token } = await invite(owner.client);
+
+    const accepted = await harness.newClient().post("/api/invitations/accept", { token, password: "short" });
+
+    expect(accepted.status).toBe(400);
+  });
+});
