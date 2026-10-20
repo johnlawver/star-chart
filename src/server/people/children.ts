@@ -1,5 +1,6 @@
 import type { Clock } from "../clock.js";
 import type { Database, DisplayStyle } from "../database.js";
+import { isId } from "../ids.js";
 
 export interface Child {
   id: string;
@@ -38,6 +39,7 @@ export function createChildren(db: Database, clock: Clock) {
       childId: string,
       changes: { nickname?: string; displayStyle?: DisplayStyle },
     ): Promise<Child | undefined> {
+      if (!isId(childId)) return undefined;
       return db
         .updateTable("children")
         .set({
@@ -55,6 +57,7 @@ export function createChildren(db: Database, clock: Clock) {
      * Returns false if there's no such child in this chart.
      */
     async remove(chartId: string, childId: string): Promise<boolean> {
+      if (!isId(childId)) return false;
       const result = await db
         .deleteFrom("children")
         .where("chart_id", "=", chartId)

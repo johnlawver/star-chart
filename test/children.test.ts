@@ -75,3 +75,45 @@ describe("keeping as little as possible about children", () => {
     expect(added.status).toBe(400);
   });
 });
+
+describe("keeping charts apart", () => {
+  async function twoCharts() {
+    const parent = await signUpAsOwner(newClient(), "Our House");
+    const teacher = await signUpAsOwner(newClient(), "Room 12");
+    const { child } = (await parent.post("/api/children", { nickname: "Nova", displayStyle: "words" })).body;
+    return { parent, teacher, child };
+  }
+
+  test("a grown-up in another chart doesn't see our children", async () => {
+    const { teacher } = await twoCharts();
+
+    expect((await teacher.get("/api/children")).body.children).toEqual([]);
+  });
+
+  test("a grown-up in another chart can't change or remove our child", async () => {
+    const { parent, teacher, child } = await twoCharts();
+
+    const changed = await teacher.patch(`/api/children/${child.id}`, { nickname: "Hacked" });
+    const removed = await teacher.delete(`/api/children/${child.id}`);
+
+    expect(changed.status).toBe(404);
+    expect(removed.status).toBe(404);
+    expect((await parent.get("/api/children")).body.children).toEqual([
+      { id: child.id, nickname: "Nova", displayStyle: "words" },
+    ]);
+  });
+
+  test("an unknown child id is simply not found", async () => {
+    const grownUp = await signUpAsOwner(newClient());
+
+    expect((await grownUp.patch("/api/children/not-a-real-id", { nickname: "X" })).status).toBe(404);
+    expect((await grownUp.delete("/api/children/not-a-real-id")).status).toBe(404);
+  });
+
+  test("someone who isn't signed in can't see or add children", async () => {
+    const stranger = newClient();
+
+    expect((await stranger.get("/api/children")).status).toBe(401);
+    expect((await stranger.post("/api/children", { nickname: "Nova", displayStyle: "words" })).status).toBe(401);
+  });
+});
