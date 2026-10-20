@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import type { Clock } from "../clock.js";
 import type { Database, Role } from "../database.js";
 import { hashToken, newToken } from "../tokens.js";
+import { isUniqueViolation } from "../database-errors.js";
 
 /** The charts-and-people module: charts, grown-ups and their sessions. */
 export interface SignedInGrownUp {
@@ -104,12 +105,4 @@ function isTimeZone(timeZone: string): boolean {
   }
 }
 
-function isUniqueViolation(error: unknown, constraint: string): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { code?: unknown }).code === "23505" &&
-    (error as { constraint?: unknown }).constraint === constraint
-  );
-}
 

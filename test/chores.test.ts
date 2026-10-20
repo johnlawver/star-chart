@@ -97,8 +97,13 @@ describe("chore codes (ADR 0001)", () => {
       await chart.owner.post("/api/chores", { categoryId: category.id, name: "Make your bed", stars: 1, childIds: [nova, pip] })
     ).body;
     const printer = await chart.connectPrinter();
+    // Each ticket is approved straight away, because a child can only hold one open ticket per category.
     const print = async (childId: string) => {
-      await chart.screen.post(`/api/observatory/children/${childId}/tickets`, { categoryId: category.id, choiceId: chore.id });
+      const printed = await chart.screen.post(`/api/observatory/children/${childId}/tickets`, {
+        categoryId: category.id,
+        choiceId: chore.id,
+      });
+      await chart.owner.post(`/api/tickets/${printed.body.ticket.id}/approve`, {});
       return (await printer.nextMessage()).ticket.code as string;
     };
 

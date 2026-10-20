@@ -157,3 +157,52 @@ describe("every scan result", () => {
     closeAll();
   });
 });
+
+describe("one open ticket per category", () => {
+  async function novaWithTwoChores() {
+    const chart = await chartWithObservatory(harness);
+    const nova = await chart.addChild("Nova");
+    const { category } = (await chart.owner.post("/api/categories", { name: "Chores", kind: "chore" })).body;
+    const addChore = async (name: string) =>
+      (await chart.owner.post("/api/chores", { categoryId: category.id, name, stars: 1, childIds: [nova] })).body.chore.id;
+    const bed = await addChore("Make your bed");
+    const cat = await addChore("Feed the cat");
+    const printer = await chart.connectPrinter();
+    const print = (choiceId: string) =>
+      chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId });
+    return { chart, bed, cat, printer, print };
+  }
+
+  test("a child holding an open ticket in a category can't print another one there, and is told why", async () => {
+    const { bed, cat, printer, print } = await novaWithTwoChores();
+    await print(bed);
+
+    const second = await print(cat);
+
+    expect(second.status).toBe(409);
+    expect(second.body.error).toMatch(/already/i);
+    printer.close();
+  });
+
+  test("a handed-in ticket still counts as the child's open ticket in that category", async () => {
+    const { chart, bed, cat, printer, print } = await novaWithTwoChores();
+    await print(bed);
+    const { code } = (await printer.nextMessage()).ticket;
+    const scanner = await chart.connectScanner();
+    const screen = await chart.connectScreen();
+    scanner.send({ type: "scan", code });
+    await screen.nextMessage();
+
+    expect((await print(cat)).status).toBe(409);
+    [printer, scanner, screen].forEach((connection) => connection.close());
+  });
+
+  test("once the ticket is approved, the child can print another one in that category", async () => {
+    const { chart, bed, cat, printer, print } = await novaWithTwoChores();
+    const first = (await print(bed)).body.ticket.id;
+    await chart.owner.post(`/api/tickets/${first}/approve`, {});
+
+    expect((await print(cat)).status).toBe(201);
+    printer.close();
+  });
+});

@@ -2,6 +2,7 @@ import { taskKind } from "../catalog/task-kinds.js";
 import type { Clock } from "../clock.js";
 import type { Database, DisplayStyle, TicketState } from "../database.js";
 import { isId } from "../ids.js";
+import { isUniqueViolation } from "../database-errors.js";
 import type { Stars } from "../stars/stars.js";
 
 /** Everything a printer needs to print a ticket, independent of any printer's own format. */
@@ -81,7 +82,9 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
       childId: string;
       categoryId: string;
       choiceId: string;
-    }): Promise<{ ticket: { id: string; state: TicketState }; job: PrintJob } | undefined> {
+    }): Promise<
+      { ticket: { id: string; state: TicketState }; job: PrintJob } | { refused: "already-holding"; category: string } | undefined
+    > {
       if (!isId(input.childId) || !isId(input.categoryId)) return undefined;
       return db.transaction().execute(async (trx) => {
         const child = await trx
@@ -92,11 +95,19 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
           .executeTakeFirst();
         const category = await trx
           .selectFrom("task_categories")
-          .select("kind")
+          .select(["kind", "name"])
           .where("chart_id", "=", input.chartId)
           .where("id", "=", input.categoryId)
           .executeTakeFirst();
         if (!child || !category) return undefined;
+        const alreadyHolding = await trx
+          .selectFrom("tickets")
+          .select("id")
+          .where("child_id", "=", input.childId)
+          .where("category_id", "=", input.categoryId)
+          .where("state", "in", ["open", "handed-in"])
+          .executeTakeFirst();
+        if (alreadyHolding) return { refused: "already-holding" as const, category: category.name };
         const issued = await taskKind(category.kind).issue(trx, input.categoryId, input.childId, input.choiceId);
         if (!issued) return undefined;
         const ticket = await trx
@@ -114,7 +125,13 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
             created_at: clock.now(),
           })
           .returning(["id", "state"])
-          .executeTakeFirstOrThrow();
+          .executeTakeFirstOrThrow()
+          .catch((error: unknown) => {
+            // Another print for this child and category won the race between the check above and this insert.
+            if (isUniqueViolation(error, "tickets_one_open_per_category")) return undefined;
+            throw error;
+          });
+        if (!ticket) return { refused: "already-holding" as const, category: category.name };
         return {
           ticket,
           job: {

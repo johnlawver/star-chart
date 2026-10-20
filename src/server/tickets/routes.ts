@@ -123,6 +123,9 @@ export async function ticketRoutes(
         ...request.body,
       });
       if (!printed) return reply.code(404).send({ error: "that isn't something this child can print" });
+      if ("refused" in printed) {
+        return reply.code(409).send({ error: `You already have a ${printed.category} ticket. Finish that one first!` });
+      }
       liveParts.sendToPrinter(screen.observatoryId, { type: "print", ticket: printed.job });
       return reply.code(201).send({ ticket: printed.ticket });
     },
