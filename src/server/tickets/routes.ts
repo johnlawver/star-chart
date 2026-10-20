@@ -124,17 +124,17 @@ export async function ticketRoutes(
     async (request, reply) => {
       const screen = await requireDevice(observatories, "screen", request, reply);
       if (!screen) return reply;
-      const printed = await tickets.print({
-        chartId: screen.chartId,
-        observatoryId: screen.observatoryId,
-        childId: request.params.childId,
-        ...request.body,
-      });
+      const printed = await tickets.print(
+        { chartId: screen.chartId, observatoryId: screen.observatoryId, childId: request.params.childId, ...request.body },
+        (job) => liveParts.sendToPrinter(screen.observatoryId, { type: "print", ticket: job }),
+      );
       if (!printed) return reply.code(404).send({ error: "that isn't something this child can print" });
       if ("refused" in printed) {
+        if (printed.refused === "printer-offline") {
+          return reply.code(503).send({ reason: "printer-offline", error: "The printer is napping. Ask a grown-up!" });
+        }
         return reply.code(409).send({ error: `You already have a ${printed.category} ticket. Finish that one first!` });
       }
-      liveParts.sendToPrinter(screen.observatoryId, { type: "print", ticket: printed.job });
       return reply.code(201).send({ ticket: printed.ticket });
     },
   );

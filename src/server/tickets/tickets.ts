@@ -29,6 +29,8 @@ export interface TicketSummary {
   state: TicketState;
 }
 
+class PrinterOffline extends Error {}
+
 /** The outcome of a grown-up's decision on a ticket. */
 export type Decision<T> = T | { refused: "not-found" } | { refused: "not-allowed"; state: TicketState };
 
@@ -99,14 +101,21 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
      * Creates an open ticket for what a child chose at an observatory, and returns its print job.
      * Undefined if the child, category or choice isn't something this child can print in this chart.
      */
-    async print(input: {
-      chartId: string;
-      observatoryId: string;
-      childId: string;
-      categoryId: string;
-      choiceId: string;
-    }): Promise<
-      { ticket: { id: string; state: TicketState }; job: PrintJob } | { refused: "already-holding"; category: string } | undefined
+    async print(
+      input: {
+        chartId: string;
+        observatoryId: string;
+        childId: string;
+        categoryId: string;
+        choiceId: string;
+      },
+      /** Hands the print job to the observatory's printer. Returns false if no printer is there to take it. */
+      deliver: (job: PrintJob) => boolean,
+    ): Promise<
+      | { ticket: { id: string; state: TicketState }; job: PrintJob }
+      | { refused: "already-holding"; category: string }
+      | { refused: "printer-offline" }
+      | undefined
     > {
       if (!isId(input.childId) || !isId(input.categoryId)) return undefined;
       return db.transaction().execute(async (trx) => {
@@ -155,17 +164,20 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
             throw error;
           });
         if (!ticket) return { refused: "already-holding" as const, category: category.name };
-        return {
-          ticket,
-          job: {
-            id: ticket.id,
-            childNickname: child.nickname,
-            displayStyle: child.display_style,
-            title: issued.title,
-            stars: issued.stars,
-            code: issued.code,
-          },
+        const job: PrintJob = {
+          id: ticket.id,
+          childNickname: child.nickname,
+          displayStyle: child.display_style,
+          title: issued.title,
+          stars: issued.stars,
+          code: issued.code,
         };
+        // No printer, no ticket: roll the whole print back rather than leave a ticket nobody can hold.
+        if (!deliver(job)) throw new PrinterOffline();
+        return { ticket, job };
+      }).catch((error: unknown) => {
+        if (error instanceof PrinterOffline) return { refused: "printer-offline" as const };
+        throw error;
       });
     },
 
