@@ -33,10 +33,17 @@ export class ApiClient {
       if (cookie.value === "" || (cookie.maxAge !== undefined && cookie.maxAge <= 0)) this.cookies.delete(cookie.name);
       else this.cookies.set(cookie.name, cookie.value);
     }
-    return { status: response.statusCode, body: response.body === "" ? undefined : response.json() };
+    const isJson = String(response.headers["content-type"] ?? "").includes("json");
+    return { status: response.statusCode, body: response.body === "" || !isJson ? undefined : response.json() };
   }
 
   get = (url: string) => this.request("GET", url);
+
+  /** Fetches a non-JSON resource, such as an SVG, and returns its body as text. */
+  async getText(url: string): Promise<string> {
+    const response = await this.app.inject({ method: "GET", url, headers: this.cookieHeader() });
+    return response.body;
+  }
   post = (url: string, payload?: Body) => this.request("POST", url, payload);
   patch = (url: string, payload?: Body) => this.request("PATCH", url, payload);
   delete = (url: string) => this.request("DELETE", url);

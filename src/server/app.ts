@@ -19,6 +19,7 @@ import { createTickets } from "./tickets/tickets.js";
 import { ticketRoutes } from "./tickets/routes.js";
 import { createStars } from "./stars/stars.js";
 import { starRoutes } from "./stars/routes.js";
+import { iconRoutes } from "./icons/routes.js";
 
 const webRoot = fileURLToPath(new URL("../../dist/web", import.meta.url));
 
@@ -52,6 +53,7 @@ export async function buildApp({ db, clock, config }: AppDependencies) {
   const stars = createStars(db, clock);
   await ticketRoutes(app, people, observatories, liveParts, createTickets(db, clock, stars));
   await starRoutes(app, observatories, children, stars);
+  await iconRoutes(app);
   // The built web front ends (`vite build`), if present. Tests drive the API directly and don't need them.
   if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot });
   return app;
