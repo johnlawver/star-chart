@@ -43,4 +43,72 @@ describe("the daily summary", () => {
     ]);
     printer.close();
   });
+
+  test("nothing goes out before 7pm, it goes out once however often the job runs, and again the next evening", async () => {
+    clock.set(new Date("2026-10-20T23:59:00Z")); // 6:59pm in Chicago
+    const { printer, summaries } = await aFamilyDay();
+    await harness.runScheduledJobs();
+    const before = summaries().length;
+
+    clock.set(new Date("2026-10-21T00:00:00Z")); // 7pm
+    await harness.runScheduledJobs();
+    clock.set(new Date("2026-10-21T02:00:00Z")); // 9pm
+    await harness.runScheduledJobs();
+    await harness.runScheduledJobs();
+    const thatEvening = summaries().length;
+    clock.set(new Date("2026-10-22T00:00:00Z")); // 7pm the next day
+    await harness.runScheduledJobs();
+
+    expect(before).toBe(0);
+    expect(thatEvening).toBe(1);
+    expect(summaries()).toHaveLength(2);
+    printer.close();
+  });
+
+  test("each chart gets its summary at its own 7pm", async () => {
+    clock.set(new Date("2026-10-20T12:00:00Z"));
+    const chicago = await aFamilyDay("America/Chicago");
+    const london = await aFamilyDay("Europe/London");
+
+    clock.set(new Date("2026-10-20T18:00:00Z")); // 7pm in London, 1pm in Chicago
+    await harness.runScheduledJobs();
+    const atLondonsSeven = [london.summaries().length, chicago.summaries().length];
+    clock.set(new Date("2026-10-21T00:00:00Z")); // 7pm in Chicago
+    await harness.runScheduledJobs();
+
+    expect(atLondonsSeven).toEqual([1, 0]);
+    expect([london.summaries().length, chicago.summaries().length]).toEqual([1, 1]);
+    chicago.printer.close();
+    london.printer.close();
+  });
+
+  test("if the server was down at 7pm it goes out when it's back that evening, but never after midnight", async () => {
+    clock.set(new Date("2026-10-20T15:00:00Z"));
+    const { printer, summaries } = await aFamilyDay();
+
+    clock.set(new Date("2026-10-21T00:30:00Z")); // 7:30pm: back up after missing 7pm
+    await harness.runScheduledJobs();
+    const lateThatEvening = summaries().length;
+    clock.set(new Date("2026-10-22T05:30:00Z")); // missed the whole next evening; now 12:30am the day after
+    await harness.runScheduledJobs();
+
+    expect(lateThatEvening).toBe(1);
+    expect(summaries()).toHaveLength(1);
+    printer.close();
+  });
+
+  test("only stars earned today count, not yesterday's, and not stars spent", async () => {
+    clock.set(new Date("2026-10-20T15:00:00Z")); // Tuesday morning in Chicago
+    const { chart, nova, earn, printer, summaries } = await aFamilyDay();
+    await earn("Feed the cat", 4);
+    clock.set(new Date("2026-10-21T15:00:00Z")); // Wednesday morning
+    await earn("Tidy your room", 3);
+    await chart.owner.post(`/api/children/${nova}/redemptions`, { amount: 5, note: "Ice cream" });
+
+    clock.set(new Date("2026-10-22T00:00:00Z")); // Wednesday, 7pm
+    await harness.runScheduledJobs();
+
+    expect(summaries().at(-1)?.body).toContain("Nova: 3 ★");
+    printer.close();
+  });
 });
