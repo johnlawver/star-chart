@@ -28,7 +28,7 @@ describe("parts' online status", () => {
   test("grown-ups see which of an observatory's parts are online", async () => {
     const chart = await chartWithObservatory(harness);
     const printer = await chart.connectPrinter();
-    const { code } = (await chart.screen.post("/api/observatory/pairing-codes")).body;
+    const code = await chart.pairingCode();
     await harness.newClient().post("/api/parts", { code, kind: "scanner" }); // paired, but never connects
     const screen = await chart.connectScreen();
 
@@ -67,7 +67,7 @@ describe("what the observatory screen knows about its own parts", () => {
     const chart = await chartWithObservatory(harness);
     const printer = await chart.connectPrinter();
     const before = (await chart.screen.get("/api/observatory/parts")).body;
-    const { code } = (await chart.screen.post("/api/observatory/pairing-codes")).body;
+    const code = await chart.pairingCode();
     await harness.newClient().post("/api/parts", { code, kind: "scanner" });
 
     const after = (await chart.screen.get("/api/observatory/parts")).body;

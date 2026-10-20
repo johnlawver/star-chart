@@ -44,6 +44,8 @@ describe("pairing parts", () => {
     await screen.post("/api/sign-in", { email: owner.email, password: owner.password });
     const paired = (await screen.post("/api/observatories")).body;
     screen.useDeviceToken(paired.deviceToken);
+    // An owner unlocked on the screen, as when pairing parts on a real observatory.
+    await screen.post("/api/sign-in", { email: owner.email, password: owner.password });
     await owner.client.post("/api/sign-in", { email: owner.email, password: owner.password });
     return { owner: owner.client, screen, observatoryId: paired.observatory.id as string };
   }
@@ -90,6 +92,7 @@ describe("live connections", () => {
     const screen = newClient();
     await screen.post("/api/sign-in", { email: owner.email, password: owner.password });
     screen.useDeviceToken((await screen.post("/api/observatories")).body.deviceToken);
+    await screen.post("/api/sign-in", { email: owner.email, password: owner.password }); // unlocked, to pair parts
     const { code } = (await screen.post("/api/observatory/pairing-codes")).body;
     const { deviceToken } = (await newClient().post("/api/parts", { code, kind: "printer" })).body;
     return { owner, screen, deviceToken: deviceToken as string };
@@ -138,6 +141,7 @@ describe("keeping charts and devices apart", () => {
     const screen = newClient();
     await screen.post("/api/sign-in", { email: owner.email, password: owner.password });
     screen.useDeviceToken((await screen.post("/api/observatories")).body.deviceToken);
+    await screen.post("/api/sign-in", { email: owner.email, password: owner.password }); // unlocked, to pair parts
     return { owner: owner.client, screen };
   }
 

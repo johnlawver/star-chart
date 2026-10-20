@@ -138,3 +138,82 @@ describe("roles", () => {
     expect(asAdmin.status).toBe(201);
   });
 });
+
+describe("who can pair observatories and their parts", () => {
+  async function signedInOn(email: string) {
+    const client = harness.newClient();
+    await client.post("/api/sign-in", { email, password: "a good long password" });
+    return client;
+  }
+
+  async function ownerAndPartnerWithEmail() {
+    const owner = await signUpOwner(harness.newClient());
+    const email = uniqueEmail("partner");
+    const { token } = await invite(owner.client, email);
+    await harness.newClient().post("/api/invitations/accept", { token, password: "a good long password" });
+    const partnerId = (await owner.client.get("/api/grown-ups")).body.grownUps.find(
+      (grownUp: { email: string }) => grownUp.email === email,
+    ).id;
+    return { owner, email, partnerId };
+  }
+
+  test("a grown-up who isn't an admin is told to ask an admin; an admin can pair an observatory", async () => {
+    const { owner, email, partnerId } = await ownerAndPartnerWithEmail();
+
+    const asGrownUp = await (await signedInOn(email)).post("/api/observatories");
+    await owner.client.patch(`/api/grown-ups/${partnerId}`, { role: "admin" });
+    const asAdmin = await (await signedInOn(email)).post("/api/observatories");
+
+    expect(asGrownUp.status).toBe(403);
+    expect(asGrownUp.body.error).toMatch(/admin/i);
+    expect(asAdmin.status).toBe(201);
+  });
+
+  test("only admins and the owner can unpair an observatory", async () => {
+    const { owner, email, partnerId } = await ownerAndPartnerWithEmail();
+    const screen = harness.newClient();
+    await screen.post("/api/sign-in", { email: owner.email, password: owner.password });
+    const { observatory } = (await screen.post("/api/observatories")).body;
+    const partner = await signedInOn(email);
+
+    const asGrownUp = await partner.delete(`/api/observatories/${observatory.id}`);
+    await owner.client.patch(`/api/grown-ups/${partnerId}`, { role: "admin" });
+    const asAdmin = await partner.delete(`/api/observatories/${observatory.id}`);
+
+    expect(asGrownUp.status).toBe(403);
+    expect(asAdmin.status).toBe(204);
+  });
+
+  test("pairing a printer or scanner needs an admin or the owner unlocked on that observatory's screen", async () => {
+    const { owner, email } = await ownerAndPartnerWithEmail();
+    const setUp = harness.newClient();
+    await setUp.post("/api/sign-in", { email: owner.email, password: owner.password });
+    const { deviceToken } = (await setUp.post("/api/observatories")).body;
+    const screenAlone = harness.newClient();
+    screenAlone.useDeviceToken(deviceToken);
+    const screenWithGrownUp = await signedInOn(email);
+    screenWithGrownUp.useDeviceToken(deviceToken);
+    const screenWithOwner = harness.newClient();
+    await screenWithOwner.post("/api/sign-in", { email: owner.email, password: owner.password });
+    screenWithOwner.useDeviceToken(deviceToken);
+
+    const statuses = [
+      (await screenAlone.post("/api/observatory/pairing-codes")).status,
+      (await screenWithGrownUp.post("/api/observatory/pairing-codes")).status,
+      (await screenWithOwner.post("/api/observatory/pairing-codes")).status,
+    ];
+
+    expect(statuses).toEqual([401, 403, 201]);
+  });
+
+  test("an owner of another chart can't get a pairing code from our observatory's screen", async () => {
+    const home = await signUpOwner(harness.newClient(), "Our House");
+    const setUp = harness.newClient();
+    await setUp.post("/api/sign-in", { email: home.email, password: home.password });
+    const { deviceToken } = (await setUp.post("/api/observatories")).body;
+    const school = await signUpOwner(harness.newClient(), "Room 12");
+    school.client.useDeviceToken(deviceToken);
+
+    expect((await school.client.post("/api/observatory/pairing-codes")).status).toBe(403);
+  });
+});

@@ -2,9 +2,15 @@ import type { FastifyInstance } from "fastify";
 import { requireGrownUp, sessionCookie, sessionCookieOptions } from "../people/authenticate.js";
 import type { Children } from "../people/children.js";
 import type { People } from "../people/people.js";
+import type { Role } from "../database.js";
 import { requireDevice } from "./authenticate-device.js";
 import { notPairedCloseCode, type LiveParts } from "./live-parts.js";
 import type { Observatories } from "./observatories.js";
+
+/** Admins and the owner pair and unpair observatories and their parts; other grown-ups can't. */
+function managesDevices(role: Role): boolean {
+  return role === "owner" || role === "admin";
+}
 
 // The longest a Control Center unlocked on an observatory stays open, even if nobody closes it.
 const unlockedSessionMs = 10 * 60 * 1000;
@@ -24,8 +30,8 @@ export async function observatoryRoutes(
   app.post("/api/observatories", async (request, reply) => {
     const signedIn = await requireGrownUp(people, request, reply);
     if (!signedIn) return reply;
-    if (signedIn.grownUp.role !== "owner") {
-      return reply.code(403).send({ error: "only the chart's owner can pair an observatory" });
+    if (!managesDevices(signedIn.grownUp.role)) {
+      return reply.code(403).send({ error: "Ask an admin to set up this observatory." });
     }
     const { observatoryId, deviceToken } = await observatories.pair(signedIn.chart.id);
     const sessionToken = request.cookies[sessionCookie];
@@ -49,8 +55,8 @@ export async function observatoryRoutes(
   app.delete<{ Params: { observatoryId: string } }>("/api/observatories/:observatoryId", async (request, reply) => {
     const signedIn = await requireGrownUp(people, request, reply);
     if (!signedIn) return reply;
-    if (signedIn.grownUp.role !== "owner") {
-      return reply.code(403).send({ error: "only the chart's owner can unpair an observatory" });
+    if (!managesDevices(signedIn.grownUp.role)) {
+      return reply.code(403).send({ error: "Only the chart's owner and admins can unpair an observatory." });
     }
     const { observatoryId } = request.params;
     if (!(await observatories.unpair(signedIn.chart.id, observatoryId))) {
@@ -116,9 +122,15 @@ export async function observatoryRoutes(
     },
   );
 
+  // A printer or scanner pairing code: the observatory's screen asks, with an admin or the owner unlocked on it.
   app.post("/api/observatory/pairing-codes", async (request, reply) => {
     const screen = await requireDevice(observatories, "screen", request, reply);
     if (!screen) return reply;
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    if (signedIn.chart.id !== screen.chartId || !managesDevices(signedIn.grownUp.role)) {
+      return reply.code(403).send({ error: "Ask an admin to pair a printer or scanner." });
+    }
     return reply.code(201).send(await observatories.newPairingCode(screen.observatoryId));
   });
 

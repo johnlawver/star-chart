@@ -23,8 +23,16 @@ export async function chartWithObservatory(harness: Harness, chartName = "Our Ho
     return connection;
   }
 
+  /** A printer or scanner pairing code, asked for by the screen with the owner unlocked on it. */
+  async function pairingCode(): Promise<string> {
+    const unlockedScreen = harness.newClient();
+    await unlockedScreen.post("/api/sign-in", { email: owner.email, password: owner.password });
+    unlockedScreen.useDeviceToken(screenToken);
+    return (await unlockedScreen.post("/api/observatory/pairing-codes")).body.code;
+  }
+
   async function connectPart(kind: "printer" | "scanner"): Promise<LiveConnection> {
-    const { code } = (await screen.post("/api/observatory/pairing-codes")).body;
+    const code = await pairingCode();
     const { deviceToken } = (await harness.newClient().post("/api/parts", { code, kind })).body;
     return connect(deviceToken);
   }
@@ -32,6 +40,7 @@ export async function chartWithObservatory(harness: Harness, chartName = "Our Ho
   return {
     owner: owner.client,
     screen,
+    pairingCode,
 
     /** Pairs a printer to this observatory and opens its live connection, ready to receive print jobs. */
     connectPrinter: () => connectPart("printer"),

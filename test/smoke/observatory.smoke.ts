@@ -64,6 +64,7 @@ test("on the observatory, a child picks themselves and a chore, and the printer 
   const screenSetup = httpClient();
   await screenSetup("POST", "/api/sign-in", credentials);
   const { deviceToken: screenToken } = await screenSetup("POST", "/api/observatories");
+  await screenSetup("POST", "/api/sign-in", credentials); // the owner unlocked on the screen, to pair the printer
   const { code } = await screenSetup("POST", "/api/observatory/pairing-codes", undefined, screenToken);
   const { deviceToken: printerToken } = await httpClient()("POST", "/api/parts", { code, kind: "printer" });
   const printer = new WebSocket(`${base.replace("http", "ws")}/api/parts/live`);
