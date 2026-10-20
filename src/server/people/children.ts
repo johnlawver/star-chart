@@ -24,7 +24,7 @@ export function createChildren(db: Database, clock: Clock) {
         .insertInto("children")
         .values({
           chart_id: chartId,
-          nickname: input.nickname,
+          nickname: input.nickname.trim(),
           display_style: input.displayStyle,
           created_at: clock.now(),
         })
@@ -41,7 +41,7 @@ export function createChildren(db: Database, clock: Clock) {
       return db
         .updateTable("children")
         .set({
-          ...(changes.nickname === undefined ? {} : { nickname: changes.nickname }),
+          ...(changes.nickname === undefined ? {} : { nickname: changes.nickname.trim() }),
           ...(changes.displayStyle === undefined ? {} : { display_style: changes.displayStyle }),
         })
         .where("chart_id", "=", chartId)

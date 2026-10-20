@@ -24,7 +24,8 @@ export interface AppDependencies {
 }
 
 export async function buildApp({ db, clock, config }: AppDependencies) {
-  const app = Fastify();
+  // Unexpected fields in a request are refused, not silently dropped (we never store more than we asked for).
+  const app = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
   await app.register(cookie);
   const people = createPeople(db, clock);
   await peopleRoutes(app, people, config);

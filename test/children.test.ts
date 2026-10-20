@@ -43,3 +43,35 @@ describe("children", () => {
     expect(nicknames).toEqual(["Pip"]);
   });
 });
+
+describe("keeping as little as possible about children", () => {
+  test("a child can't be given any personal details beyond a nickname and display style", async () => {
+    const grownUp = await signUpAsOwner(newClient());
+
+    const added = await grownUp.post("/api/children", {
+      nickname: "Nova",
+      displayStyle: "words",
+      birthday: "2020-04-01",
+      lastName: "Smith",
+    });
+
+    expect(added.status).toBe(400);
+    expect((await grownUp.get("/api/children")).body.children).toEqual([]);
+  });
+
+  test("a display style must be pictures or words", async () => {
+    const grownUp = await signUpAsOwner(newClient());
+
+    const added = await grownUp.post("/api/children", { nickname: "Nova", displayStyle: "braille" });
+
+    expect(added.status).toBe(400);
+  });
+
+  test("a child needs a nickname", async () => {
+    const grownUp = await signUpAsOwner(newClient());
+
+    const added = await grownUp.post("/api/children", { nickname: "  ", displayStyle: "words" });
+
+    expect(added.status).toBe(400);
+  });
+});
