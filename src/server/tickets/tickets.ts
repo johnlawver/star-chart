@@ -154,6 +154,22 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
         .executeTakeFirst();
     },
 
+    /**
+     * A grown-up closes an open or handed-in ticket without stars, for example because it was lost or the chore
+     * was already done by someone else. Undefined if there's no such ticket in this chart that can be dismissed.
+     */
+    async dismiss(chartId: string, ticketId: string): Promise<{ id: string; state: TicketState } | undefined> {
+      if (!isId(ticketId)) return undefined;
+      return db
+        .updateTable("tickets")
+        .set({ state: "dismissed" })
+        .where("chart_id", "=", chartId)
+        .where("id", "=", ticketId)
+        .where("state", "in", ["open", "handed-in"])
+        .returning(["id", "state"])
+        .executeTakeFirst();
+    },
+
     /** The chart's tickets in a given state, oldest first, for grown-ups to work through. */
     async list(chartId: string, state: TicketState): Promise<TicketSummary[]> {
       return db

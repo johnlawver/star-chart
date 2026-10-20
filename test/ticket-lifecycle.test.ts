@@ -38,3 +38,30 @@ describe("rejecting a ticket", () => {
     closeAll();
   });
 });
+
+describe("dismissing a ticket", () => {
+  test("a grown-up can dismiss an open ticket, and it earns no stars", async () => {
+    const { chart, ticketId, balance, ticketsIn, closeAll } = await novaWithAPrintedChore();
+
+    const dismissed = await chart.owner.post(`/api/tickets/${ticketId}/dismiss`, {});
+
+    expect(dismissed.status).toBe(200);
+    expect(dismissed.body.ticket).toMatchObject({ id: ticketId, state: "dismissed" });
+    expect(await ticketsIn("dismissed")).toEqual([ticketId]);
+    expect(await ticketsIn("open")).toEqual([]);
+    expect(await balance()).toBe(0);
+    closeAll();
+  });
+
+  test("a grown-up can dismiss a handed-in ticket too", async () => {
+    const { chart, ticketId, scan, ticketsIn, closeAll } = await novaWithAPrintedChore();
+    await scan();
+
+    const dismissed = await chart.owner.post(`/api/tickets/${ticketId}/dismiss`, {});
+
+    expect(dismissed.status).toBe(200);
+    expect(await ticketsIn("handed-in")).toEqual([]);
+    expect(await ticketsIn("dismissed")).toEqual([ticketId]);
+    closeAll();
+  });
+});

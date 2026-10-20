@@ -84,6 +84,18 @@ export async function ticketRoutes(
     },
   );
 
+  app.post<{ Params: { ticketId: string } }>(
+    "/api/tickets/:ticketId/dismiss",
+    { schema: { body: { type: "object", additionalProperties: false } } },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      const ticket = await tickets.dismiss(signedIn.chart.id, request.params.ticketId);
+      if (!ticket) return reply.code(404).send({ error: "no open or handed-in ticket like that" });
+      return { ticket };
+    },
+  );
+
   // A child at an observatory chooses something to print.
   app.post<{ Params: { childId: string }; Body: { categoryId: string; choiceId: string } }>(
     "/api/observatory/children/:childId/tickets",
