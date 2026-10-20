@@ -1,9 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../app.js";
+import { requireGrownUp, sessionCookie, sessionCookieOptions as cookieOptions } from "./authenticate.js";
 import type { People } from "./people.js";
-
-const sessionCookie = "star_chart_session";
-const cookieOptions = { path: "/", httpOnly: true, secure: true, sameSite: "lax" } as const;
 
 export async function peopleRoutes(app: FastifyInstance, people: People, config: AppConfig) {
   app.post<{ Body: { email: string; password: string; chartName: string; timeZone: string } }>(
@@ -35,9 +33,8 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
   });
 
   app.get("/api/me", async (request, reply) => {
-    const token = request.cookies[sessionCookie];
-    const signedIn = token ? await people.whoIs(token) : undefined;
-    if (!signedIn) return reply.code(401).send({ error: "not signed in" });
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
     const { grownUp, chart } = signedIn;
     return { grownUp: { email: grownUp.email, role: grownUp.role }, chart };
   });

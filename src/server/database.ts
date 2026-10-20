@@ -19,6 +19,13 @@ export interface Tables {
     role: Role;
     created_at: Date;
   };
+  children: {
+    id: Generated<string>;
+    chart_id: string;
+    nickname: string;
+    display_style: DisplayStyle;
+    created_at: Date;
+  };
   sessions: {
     token_hash: string;
     grown_up_id: string;
@@ -27,6 +34,7 @@ export interface Tables {
 }
 
 export type Role = "owner" | "admin" | "grown-up";
+export type DisplayStyle = "pictures" | "words";
 
 export type Database = Kysely<Tables>;
 

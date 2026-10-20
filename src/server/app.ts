@@ -7,6 +7,8 @@ import type { Clock } from "./clock.js";
 import type { Database } from "./database.js";
 import { createPeople } from "./people/people.js";
 import { peopleRoutes } from "./people/routes.js";
+import { createChildren } from "./people/children.js";
+import { childrenRoutes } from "./people/children-routes.js";
 
 const webRoot = fileURLToPath(new URL("../../dist/web", import.meta.url));
 
@@ -24,7 +26,9 @@ export interface AppDependencies {
 export async function buildApp({ db, clock, config }: AppDependencies) {
   const app = Fastify();
   await app.register(cookie);
-  await peopleRoutes(app, createPeople(db, clock), config);
+  const people = createPeople(db, clock);
+  await peopleRoutes(app, people, config);
+  await childrenRoutes(app, people, createChildren(db, clock));
   // The built web front ends (`vite build`), if present. Tests drive the API directly and don't need them.
   if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot });
   return app;
