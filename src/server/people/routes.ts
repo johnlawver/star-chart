@@ -140,6 +140,41 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
     },
   );
 
+  app.get("/api/grown-ups", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    return { grownUps: await people.grownUpsIn(signedIn.chart.id) };
+  });
+
+  app.patch<{ Params: { grownUpId: string }; Body: { role: "admin" | "grown-up" } }>(
+    "/api/grown-ups/:grownUpId",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { role: { type: "string", enum: ["admin", "grown-up"] } },
+          required: ["role"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      if (signedIn.grownUp.role !== "owner") {
+        return reply.code(403).send({ error: "Only the chart's owner can change who is an admin." });
+      }
+      const result = await people.setRole(signedIn.chart.id, request.params.grownUpId, request.body.role);
+      if ("refused" in result) {
+        if (result.refused === "is-owner") {
+          return reply.code(409).send({ error: "The owner stays the owner until they hand ownership to an admin." });
+        }
+        return reply.code(404).send({ error: "no such grown-up" });
+      }
+      return { grownUp: result };
+    },
+  );
+
   app.post("/api/sign-out", async (request, reply) => {
     const token = request.cookies[sessionCookie];
     if (token) await people.signOut(token);

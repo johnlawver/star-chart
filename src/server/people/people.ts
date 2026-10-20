@@ -183,6 +183,42 @@ export function createPeople(db: Database, clock: Clock) {
         });
     },
 
+    /** Everyone in a chart who has a login, and their role. */
+    async grownUpsIn(chartId: string): Promise<{ id: string; email: string; role: Role }[]> {
+      return db
+        .selectFrom("grown_ups")
+        .select(["id", "email", "role"])
+        .where("chart_id", "=", chartId)
+        .orderBy("created_at")
+        .execute();
+    },
+
+    /**
+     * Makes a grown-up an admin, or back to a plain grown-up. The owner's own role can't change this way:
+     * ownership is handed over instead. Refused if there's no such grown-up in this chart.
+     */
+    async setRole(
+      chartId: string,
+      grownUpId: string,
+      role: "admin" | "grown-up",
+    ): Promise<{ id: string; role: Role } | { refused: "no-such-grown-up" | "is-owner" }> {
+      if (!isId(grownUpId)) return { refused: "no-such-grown-up" };
+      const grownUp = await db
+        .selectFrom("grown_ups")
+        .select("role")
+        .where("chart_id", "=", chartId)
+        .where("id", "=", grownUpId)
+        .executeTakeFirst();
+      if (!grownUp) return { refused: "no-such-grown-up" };
+      if (grownUp.role === "owner") return { refused: "is-owner" };
+      return db
+        .updateTable("grown_ups")
+        .set({ role })
+        .where("id", "=", grownUpId)
+        .returning(["id", "role"])
+        .executeTakeFirstOrThrow();
+    },
+
     async signOut(token: string): Promise<void> {
       await db.deleteFrom("sessions").where("token_hash", "=", hashToken(token)).execute();
     },
