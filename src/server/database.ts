@@ -78,6 +78,7 @@ export interface Tables {
     state: TicketState;
     printed_by_observatory_id: string | null;
     awarded_stars: number | null;
+    note: string | null;
     created_at: Date;
   };
   star_movements: {

@@ -134,6 +134,26 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
       });
     },
 
+    /**
+     * A grown-up decides a handed-in ticket isn't done yet: it goes back to Open, with an optional note,
+     * and earns no stars. Undefined if there's no such handed-in ticket in this chart.
+     */
+    async reject(
+      chartId: string,
+      ticketId: string,
+      note?: string,
+    ): Promise<{ id: string; state: TicketState; note: string | null } | undefined> {
+      if (!isId(ticketId)) return undefined;
+      return db
+        .updateTable("tickets")
+        .set({ state: "open", note: note?.trim() || null })
+        .where("chart_id", "=", chartId)
+        .where("id", "=", ticketId)
+        .where("state", "=", "handed-in")
+        .returning(["id", "state", "note"])
+        .executeTakeFirst();
+    },
+
     /** The chart's tickets in a given state, oldest first, for grown-ups to work through. */
     async list(chartId: string, state: TicketState): Promise<TicketSummary[]> {
       return db
