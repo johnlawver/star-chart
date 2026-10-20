@@ -18,3 +18,8 @@ export function newPairingCode(length = 8): string {
   const bytes = randomBytes(length);
   return Array.from(bytes, (byte) => pairingAlphabet[byte % pairingAlphabet.length]).join("");
 }
+
+/** The code printed as a ticket's QR code: opaque and unguessable, but short enough to type into a fake scanner. */
+export function newTicketCode(): string {
+  return `SC-${newPairingCode(12)}`;
+}

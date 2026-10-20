@@ -30,4 +30,34 @@ describe("chores at the observatory", () => {
     ]);
     expect(pipsMenu).toEqual([]);
   });
+
+  test("tapping a chore prints a ticket on the observatory's printer", async () => {
+    const chart = await chartWithObservatory(harness);
+    const nova = await chart.addChild("Nova");
+    const { category } = (await chart.owner.post("/api/categories", { name: "Chores", kind: "chore" })).body;
+    const { chore } = (
+      await chart.owner.post("/api/chores", { categoryId: category.id, name: "Feed the cat", stars: 2, childIds: [nova] })
+    ).body;
+    const printer = await chart.connectPrinter();
+
+    const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, {
+      categoryId: category.id,
+      choiceId: chore.id,
+    });
+
+    expect(printed.status).toBe(201);
+    expect(printed.body.ticket).toEqual({ id: expect.any(String), state: "open" });
+    expect(await printer.nextMessage()).toEqual({
+      type: "print",
+      ticket: {
+        id: printed.body.ticket.id,
+        childNickname: "Nova",
+        displayStyle: "words",
+        title: "Feed the cat",
+        stars: 2,
+        code: expect.any(String),
+      },
+    });
+    printer.close();
+  });
 });

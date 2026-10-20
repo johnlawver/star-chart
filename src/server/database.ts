@@ -61,6 +61,24 @@ export interface Tables {
     chore_id: string;
     child_id: string;
   };
+  chore_codes: {
+    child_id: string;
+    chore_id: string;
+    code: string;
+  };
+  tickets: {
+    id: Generated<string>;
+    chart_id: string;
+    child_id: string;
+    category_id: string;
+    chore_id: string | null;
+    code: string;
+    title: string;
+    stars: number;
+    state: TicketState;
+    printed_by_observatory_id: string | null;
+    created_at: Date;
+  };
   sessions: {
     token_hash: string;
     grown_up_id: string;
@@ -72,6 +90,7 @@ export type Role = "owner" | "admin" | "grown-up";
 export type DisplayStyle = "pictures" | "words";
 export type DeviceKind = "screen" | "printer" | "scanner";
 export type TaskKindName = "chore" | "quiz";
+export type TicketState = "open" | "handed-in" | "approved" | "dismissed";
 
 export type Database = Kysely<Tables>;
 

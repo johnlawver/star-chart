@@ -15,6 +15,8 @@ import { observatoryRoutes } from "./observatories/routes.js";
 import { LiveParts } from "./observatories/live-parts.js";
 import { createCatalog } from "./catalog/catalog.js";
 import { catalogRoutes } from "./catalog/routes.js";
+import { createTickets } from "./tickets/tickets.js";
+import { ticketRoutes } from "./tickets/routes.js";
 
 const webRoot = fileURLToPath(new URL("../../dist/web", import.meta.url));
 
@@ -39,8 +41,10 @@ export async function buildApp({ db, clock, config }: AppDependencies) {
   const children = createChildren(db, clock);
   await childrenRoutes(app, people, children);
   const observatories = createObservatories(db, clock);
-  await observatoryRoutes(app, people, children, observatories, new LiveParts());
+  const liveParts = new LiveParts();
+  await observatoryRoutes(app, people, children, observatories, liveParts);
   await catalogRoutes(app, people, observatories, createCatalog(db, clock));
+  await ticketRoutes(app, observatories, liveParts, createTickets(db, clock));
   // The built web front ends (`vite build`), if present. Tests drive the API directly and don't need them.
   if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot });
   return app;

@@ -13,6 +13,17 @@ export class LiveParts {
     socket.once("close", () => this.connections.delete(socket));
   }
 
+  /** Sends a message to an observatory's printer. Returns false if no printer of that observatory is connected. */
+  sendToPrinter(observatoryId: string, message: unknown): boolean {
+    for (const [socket, device] of this.connections) {
+      if (device.observatoryId === observatoryId && device.kind === "printer") {
+        socket.send(JSON.stringify(message));
+        return true;
+      }
+    }
+    return false;
+  }
+
   /** Closes the connections of every part of an observatory, for example when it's unpaired. */
   disconnectObservatory(observatoryId: string): void {
     for (const [socket, device] of this.connections) {
