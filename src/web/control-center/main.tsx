@@ -234,7 +234,13 @@ interface CategoryWithChores {
   id: string;
   name: string;
   kind: "chore" | "quiz";
-  chores: { id: string; name: string; stars: number; childIds: string[] }[];
+  chores: {
+    id: string;
+    name: string;
+    stars: number;
+    frequency: { times: number; per: "day" | "week" };
+    childIds: string[];
+  }[];
 }
 
 function ChoresSection() {
@@ -273,6 +279,7 @@ function ChoresSection() {
       name: data.get("name"),
       stars: Number(data.get("stars")),
       childIds: data.getAll("childIds"),
+      frequency: { times: Number(data.get("times")), per: data.get("per") },
     });
     setError(result.ok ? undefined : result.data?.error);
     form.reset();
@@ -288,7 +295,8 @@ function ChoresSection() {
           <ul>
             {category.chores.map((chore) => (
               <li key={chore.id}>
-                {chore.name}: {chore.stars} ★, for {chore.childIds.map(nicknameOf).join(", ") || "nobody yet"}
+                {chore.name}: {chore.stars} ★, {chore.frequency.times === 1 ? "once" : `${chore.frequency.times} times`} a{" "}
+                {chore.frequency.per}, for {chore.childIds.map(nicknameOf).join(", ") || "nobody yet"}
               </li>
             ))}
           </ul>
@@ -298,6 +306,14 @@ function ChoresSection() {
             </label>{" "}
             <label>
               Stars <input name="stars" type="number" min={0} max={100} defaultValue={1} required />
+            </label>{" "}
+            <label>
+              <input name="times" type="number" min={1} max={10} defaultValue={1} required style={{ width: "3em" }} /> times
+              a{" "}
+              <select name="per" defaultValue="day">
+                <option value="day">day</option>
+                <option value="week">week</option>
+              </select>
             </label>{" "}
             {children.map((child) => (
               <label key={child.id}>

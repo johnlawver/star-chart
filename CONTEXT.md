@@ -69,7 +69,7 @@ A task that is reused over and over, such as "Make your bed", with its own star 
 _Avoid_: Job, duty
 
 **Frequency**:
-How often a chore can earn stars, such as once per day. It is set when a grown-up adds the chore.
+How often a chore can earn stars: a number of times per day or per week, such as once a day or twice a day. It is set when a grown-up adds the chore, and is once a day unless they choose otherwise. Days start at midnight and weeks on Monday, in the chart's time zone.
 _Avoid_: Cooldown, schedule, repeat
 
 **Topic**:

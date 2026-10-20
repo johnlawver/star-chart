@@ -185,7 +185,7 @@ interface MenuCategory {
   id: string;
   name: string;
   kind: "chore" | "quiz";
-  choices: { id: string; name: string; stars: number }[];
+  choices: { id: string; name: string; stars: number; done: boolean }[];
 }
 
 function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: string; onDone: () => void }) {
@@ -236,7 +236,8 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
         ))}
       {category &&
         category.choices.map((choice) => (
-          <button key={choice.id} onClick={() => print(choice.id)}>
+          <button key={choice.id} onClick={() => print(choice.id)} disabled={choice.done}>
+            {choice.done ? "✓ " : ""}
             {choice.name} ({choice.stars} ★)
           </button>
         ))}
