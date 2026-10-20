@@ -61,3 +61,19 @@ describe("parts' online status", () => {
     expect(printed.status).toBe(503);
   });
 });
+
+describe("what the observatory screen knows about its own parts", () => {
+  test("the screen can tell whether its printer and scanner are online, offline or not paired", async () => {
+    const chart = await chartWithObservatory(harness);
+    const printer = await chart.connectPrinter();
+    const before = (await chart.screen.get("/api/observatory/parts")).body;
+    const { code } = (await chart.screen.post("/api/observatory/pairing-codes")).body;
+    await harness.newClient().post("/api/parts", { code, kind: "scanner" });
+
+    const after = (await chart.screen.get("/api/observatory/parts")).body;
+
+    expect(before).toEqual({ printer: "online", scanner: "not-paired" });
+    expect(after).toEqual({ printer: "online", scanner: "offline" });
+    printer.close();
+  });
+});

@@ -83,6 +83,15 @@ export function createObservatories(db: Database, clock: Clock) {
       return [...observatories.values()];
     },
 
+    /** The devices paired to one observatory. */
+    async partsOf(observatoryId: string): Promise<{ deviceId: string; kind: DeviceKind }[]> {
+      return db
+        .selectFrom("devices")
+        .select(["id as deviceId", "kind"])
+        .where("observatory_id", "=", observatoryId)
+        .execute();
+    },
+
     /**
      * Removes an observatory from its chart. Its devices and pairing codes go with it, so every credential
      * it had stops working. Returns false if there's no such observatory in this chart.

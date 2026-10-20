@@ -57,6 +57,19 @@ export async function observatoryRoutes(
     return reply.code(204).send();
   });
 
+  // The screen asks about its own printer and scanner, so it can warn children when one is missing.
+  app.get("/api/observatory/parts", async (request, reply) => {
+    const screen = await requireDevice(observatories, "screen", request, reply);
+    if (!screen) return reply;
+    const parts = await observatories.partsOf(screen.observatoryId);
+    const statusOf = (kind: "printer" | "scanner") => {
+      const paired = parts.filter((part) => part.kind === kind);
+      if (paired.length === 0) return "not-paired";
+      return paired.some((part) => liveParts.isOnline(part.deviceId)) ? "online" : "offline";
+    };
+    return { printer: statusOf("printer"), scanner: statusOf("scanner") };
+  });
+
   app.post("/api/observatory/pairing-codes", async (request, reply) => {
     const screen = await requireDevice(observatories, "screen", request, reply);
     if (!screen) return reply;
