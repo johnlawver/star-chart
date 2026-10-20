@@ -9,3 +9,12 @@ export function newToken(): string {
 export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("base64url");
 }
+
+// No 0/O, 1/I/L or other look-alikes, so a code can be read off a screen and typed without mistakes.
+const pairingAlphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+
+/** A short code for a person (or a camera) to copy from one device to another. */
+export function newPairingCode(length = 8): string {
+  const bytes = randomBytes(length);
+  return Array.from(bytes, (byte) => pairingAlphabet[byte % pairingAlphabet.length]).join("");
+}

@@ -36,3 +36,30 @@ describe("pairing an observatory", () => {
     expect((await laterThatWeek.get("/api/observatory/children")).status).toBe(200);
   });
 });
+
+describe("pairing parts", () => {
+  async function pairedObservatory() {
+    const owner = await signUpOwner(newClient());
+    const screen = newClient();
+    await screen.post("/api/sign-in", { email: owner.email, password: owner.password });
+    const paired = (await screen.post("/api/observatories")).body;
+    screen.useDeviceToken(paired.deviceToken);
+    await owner.client.post("/api/sign-in", { email: owner.email, password: owner.password });
+    return { owner: owner.client, screen, observatoryId: paired.observatory.id as string };
+  }
+
+  test("a printer pairs to an observatory with the pairing code its screen shows", async () => {
+    const { owner, screen, observatoryId } = await pairedObservatory();
+    const { code } = (await screen.post("/api/observatory/pairing-codes")).body;
+    const printer = newClient();
+
+    const paired = await printer.post("/api/parts", { code, kind: "printer" });
+
+    expect(paired.status).toBe(201);
+    expect(paired.body.deviceToken).toEqual(expect.any(String));
+    const observatories = (await owner.get("/api/observatories")).body.observatories;
+    expect(observatories).toEqual([
+      { id: observatoryId, parts: [{ kind: "printer" }, { kind: "screen" }] },
+    ]);
+  });
+});

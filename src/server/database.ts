@@ -38,6 +38,11 @@ export interface Tables {
     token_hash: string;
     created_at: Date;
   };
+  pairing_codes: {
+    code_hash: string;
+    observatory_id: string;
+    expires_at: Date;
+  };
   sessions: {
     token_hash: string;
     grown_up_id: string;

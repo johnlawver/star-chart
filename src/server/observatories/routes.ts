@@ -26,6 +26,40 @@ export async function observatoryRoutes(
     return reply.code(201).send({ observatory: { id: observatoryId }, deviceToken });
   });
 
+  app.get("/api/observatories", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    return { observatories: await observatories.list(signedIn.chart.id) };
+  });
+
+  app.post("/api/observatory/pairing-codes", async (request, reply) => {
+    const screen = await requireDevice(observatories, "screen", request, reply);
+    if (!screen) return reply;
+    return reply.code(201).send(await observatories.newPairingCode(screen.observatoryId));
+  });
+
+  app.post<{ Body: { code: string; kind: "printer" | "scanner" } }>(
+    "/api/parts",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            code: { type: "string", minLength: 1, maxLength: 20 },
+            kind: { type: "string", enum: ["printer", "scanner"] },
+          },
+          required: ["code", "kind"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const paired = await observatories.pairPart(request.body.code, request.body.kind);
+      if (!paired) return reply.code(404).send({ error: "that pairing code isn't valid; ask for a new one" });
+      return reply.code(201).send(paired);
+    },
+  );
+
   app.get("/api/observatory/children", async (request, reply) => {
     const screen = await requireDevice(observatories, "screen", request, reply);
     if (!screen) return reply;
