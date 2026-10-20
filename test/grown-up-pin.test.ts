@@ -139,3 +139,17 @@ describe("setting up a phone from the observatory", () => {
     expect((await phone.get("/api/me")).status).toBe(200);
   });
 });
+
+describe("keeping charts apart", () => {
+  test("our observatory never offers or unlocks another chart's grown-up, even with their right PIN", async () => {
+    const home = await ownerWithPin("2468");
+    const school = await ownerWithPin("1357");
+
+    const offered = (await home.chart.screen.get("/api/observatory/grown-ups")).body.grownUps;
+    const tried = await home.unlock("1357", school.listed.id);
+
+    expect(offered.map((g: { id: string }) => g.id)).toEqual([home.listed.id]);
+    expect(tried.status).toBe(401);
+    expect((await home.chart.screen.get("/api/me")).status).toBe(401);
+  });
+});
