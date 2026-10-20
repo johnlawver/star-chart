@@ -254,6 +254,7 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
   const [message, setMessage] = useState<string | undefined>();
   const [balance, setBalance] = useState<number | undefined>();
   const [constellation, setConstellation] = useState<Constellation | undefined>();
+  const [lostCategoryId, setLostCategoryId] = useState<string | undefined>();
   // Children who can't read yet see big icons instead of words (their display style).
   const pictures = child.displayStyle === "pictures";
 
@@ -280,10 +281,38 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
       deviceToken,
     );
     setMessage(result.ok ? "Printing your ticket!" : (result.data?.error ?? "That didn't work. Ask a grown-up."));
+    // Already holding a ticket here? Offer to ask a grown-up for a new copy, in case it's lost.
+    if (result.status === 409 && /already have/i.test(result.data?.error ?? "")) {
+      setLostCategoryId(category.id);
+      return;
+    }
     setTimeout(onDone, 3000);
   };
 
-  if (message) return <main><h1>{message}</h1></main>;
+  const askForReprint = async () => {
+    const result = await api(
+      "POST",
+      `/api/observatory/children/${child.id}/reprint-requests`,
+      { categoryId: lostCategoryId },
+      deviceToken,
+    );
+    setLostCategoryId(undefined);
+    setMessage(result.ok ? "OK! A grown-up will check, then print it again." : (result.data?.error ?? "Ask a grown-up."));
+    setTimeout(onDone, 3000);
+  };
+
+  if (message) {
+    return (
+      <main>
+        <h1>{message}</h1>
+        {lostCategoryId && (
+          <>
+            <button onClick={askForReprint}>I lost it</button> <button onClick={onDone}>I still have it</button>
+          </>
+        )}
+      </main>
+    );
+  }
 
   const showConstellation = async () => {
     const result = await api("GET", `/api/observatory/children/${child.id}/constellation`, undefined, deviceToken);

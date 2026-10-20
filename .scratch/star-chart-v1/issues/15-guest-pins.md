@@ -11,3 +11,7 @@
 - [ ] Guests can approve, reject and dismiss tickets, and are refused everything else: setup, Redemptions, people, pairing.
 - [ ] Guest actions are recorded and shown as "by a guest".
 - [ ] When ticket 16 lands, guests can also handle Reprint Requests (that ticket covers it).
+
+## Notes from earlier tickets
+
+- Reprint requests (ticket 16) exist, with endpoints for grown-ups (`/api/reprint-requests`, approve, decline). Guests must be able to see and answer them too, and their decisions should be recorded as "by a guest" (reprint requests record `decided_by_grown_up_id` today).

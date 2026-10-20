@@ -15,3 +15,7 @@
 - [ ] Printing from an empty pool reuses a quiz the child has done before in that Topic, on a new ticket, and records a recycled-quiz alert.
 - [ ] A pool falling below the configured threshold records a pool-low alert. Push delivery comes in ticket 17.
 - [ ] The one-open-ticket-per-category rule applies to quiz categories.
+
+## Notes from earlier tickets
+
+- Reprint requests (ticket 16) already exist and reprint a ticket exactly as stored on the ticket row (code, title, icon, stars). A quiz's printed content (its questions) must be stored on, or reachable from, the ticket, and included in the print job built for a reprint (`createReprints().approve` in `src/server/tickets/reprints.ts`), with a test that a reprinted quiz has the same questions.

@@ -475,6 +475,46 @@ interface WaitingTicket {
   stars: number;
 }
 
+function LostTickets({ onChange }: { onChange: () => void }) {
+  const [requests, setRequests] = useState<{ id: string; childNickname: string; title: string }[]>([]);
+  const [error, setError] = useState<string | undefined>();
+
+  const load = async () => {
+    const result = await api("GET", "/api/reprint-requests");
+    if (result.ok) setRequests(result.data.reprintRequests);
+  };
+
+  useEffect(() => {
+    void load();
+    const refresh = setInterval(load, 10_000);
+    return () => clearInterval(refresh);
+  }, []);
+
+  const answer = async (id: string, decision: "approve" | "decline") => {
+    const result = await api("POST", `/api/reprint-requests/${id}/${decision}`, {});
+    setError(result.ok ? undefined : result.data?.error);
+    await load();
+    onChange();
+  };
+
+  if (requests.length === 0 && !error) return null;
+  return (
+    <>
+      <h3>Lost tickets</h3>
+      <ul>
+        {requests.map((request) => (
+          <li key={request.id}>
+            <strong>{request.childNickname}</strong> lost "{request.title}"{" "}
+            <button onClick={() => answer(request.id, "approve")}>Print again</button>{" "}
+            <button onClick={() => answer(request.id, "decline")}>No</button>
+          </li>
+        ))}
+      </ul>
+      {error && <p role="alert">{error}</p>}
+    </>
+  );
+}
+
 function WaitingSection() {
   const [waiting, setWaiting] = useState<WaitingTicket[]>([]);
   const [open, setOpen] = useState<WaitingTicket[]>([]);
@@ -541,6 +581,7 @@ function WaitingSection() {
       <h2>Waiting for you</h2>
       {waiting.length === 0 && <p>Nothing to check right now.</p>}
       <ul>{waiting.map((ticket) => row(ticket, true))}</ul>
+      <LostTickets onChange={load} />
       <h3>Still open</h3>
       {open.length === 0 && <p>No open tickets.</p>}
       <ul>{open.map((ticket) => row(ticket, false))}</ul>
