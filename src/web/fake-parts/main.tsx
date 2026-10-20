@@ -1,5 +1,6 @@
 import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
+import QRCode from "qrcode";
 import { api, stored } from "../shared/api.js";
 
 // A stand-in for a real printer or scanner. It pairs and connects to the server exactly as real hardware will
@@ -11,6 +12,16 @@ const tokenKey = `star-chart.fake-${kind}.deviceToken`;
 const notPairedCloseCode = 4401;
 
 type Status = "connecting" | "connected" | "disconnected";
+
+/** A print job, exactly as the server sends it to any printer. */
+interface PrintJob {
+  id: string;
+  childNickname: string;
+  displayStyle: "pictures" | "words";
+  title: string;
+  stars: number;
+  code: string;
+}
 
 function FakePart() {
   const [deviceToken, setDeviceToken] = useState(stored.get(tokenKey));
@@ -51,6 +62,7 @@ function Pair({ onPaired }: { onPaired: (token: string) => void }) {
 
 function Connected({ deviceToken, onUnpaired }: { deviceToken: string; onUnpaired: () => void }) {
   const [status, setStatus] = useState<Status>("connecting");
+  const [printed, setPrinted] = useState<PrintJob[]>([]);
 
   useEffect(() => {
     let socket: WebSocket | undefined;
@@ -65,6 +77,7 @@ function Connected({ deviceToken, onUnpaired }: { deviceToken: string; onUnpaire
       socket.onmessage = (event) => {
         const message = JSON.parse(event.data);
         if (message.type === "welcome") setStatus("connected");
+        if (message.type === "print" && kind === "printer") setPrinted((jobs) => [message.ticket, ...jobs]);
       };
       socket.onclose = (event) => {
         if (stopped) return;
@@ -86,7 +99,46 @@ function Connected({ deviceToken, onUnpaired }: { deviceToken: string; onUnpaire
     <>
       <p>Status: {status}</p>
       <button onClick={onUnpaired}>Forget pairing</button>
+      {kind === "printer" && (
+        <section>
+          <h2>Printed tickets</h2>
+          {printed.length === 0 && <p>Nothing printed yet.</p>}
+          {printed.map((job) => (
+            <Receipt key={`${job.id}-${printed.indexOf(job)}`} job={job} />
+          ))}
+        </section>
+      )}
     </>
+  );
+}
+
+// A thermal printer is 58 mm wide (384 dots) and prints pure black on white, with no greys.
+function Receipt({ job }: { job: PrintJob }) {
+  const [qr, setQr] = useState<string | undefined>();
+  useEffect(() => {
+    void QRCode.toDataURL(job.code, { margin: 1, width: 256, color: { dark: "#000000", light: "#ffffff" } }).then(setQr);
+  }, [job.code]);
+
+  return (
+    <article
+      data-testid="receipt"
+      style={{
+        width: 384,
+        background: "#fff",
+        color: "#000",
+        fontFamily: "monospace",
+        padding: 16,
+        margin: "16px 0",
+        border: "1px dashed #000",
+        textAlign: "center",
+      }}
+    >
+      <div style={{ fontSize: 28, fontWeight: "bold" }}>{job.childNickname}</div>
+      <div style={{ fontSize: 24, margin: "12px 0" }}>{job.title}</div>
+      <div style={{ fontSize: 20 }}>{"★".repeat(job.stars) || "no stars"}</div>
+      {qr && <img src={qr} alt={`QR code ${job.code}`} width={256} height={256} style={{ imageRendering: "pixelated" }} />}
+      <div style={{ fontSize: 14 }}>{job.code}</div>
+    </article>
   );
 }
 

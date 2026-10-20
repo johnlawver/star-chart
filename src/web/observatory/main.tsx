@@ -86,15 +86,7 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
     })();
   }, [deviceToken]);
 
-  if (chosen) {
-    return (
-      <main>
-        <h1>Hi, {chosen.nickname}!</h1>
-        <p>Your stars and tasks will appear here soon.</p>
-        <button onClick={() => setChosen(undefined)}>Back</button>
-      </main>
-    );
-  }
+  if (chosen) return <ChildView child={chosen} deviceToken={deviceToken} onDone={() => setChosen(undefined)} />;
 
   const showPairingCode = async () => {
     const result = await api("POST", "/api/observatory/pairing-codes", undefined, deviceToken);
@@ -117,6 +109,63 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
             Pairing code: <strong>{pairingCode}</strong> (works once, for 10 minutes)
           </p>
         )}
+      </footer>
+    </main>
+  );
+}
+
+interface MenuCategory {
+  id: string;
+  name: string;
+  kind: "chore" | "quiz";
+  choices: { id: string; name: string; stars: number }[];
+}
+
+function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: string; onDone: () => void }) {
+  const [menu, setMenu] = useState<MenuCategory[] | undefined>();
+  const [category, setCategory] = useState<MenuCategory | undefined>();
+  const [message, setMessage] = useState<string | undefined>();
+
+  useEffect(() => {
+    void (async () => {
+      const result = await api("GET", `/api/observatory/children/${child.id}/menu`, undefined, deviceToken);
+      if (result.ok) setMenu(result.data.categories);
+    })();
+  }, [child.id]);
+
+  const print = async (choiceId: string) => {
+    if (!category) return;
+    const result = await api(
+      "POST",
+      `/api/observatory/children/${child.id}/tickets`,
+      { categoryId: category.id, choiceId },
+      deviceToken,
+    );
+    setMessage(result.ok ? "Printing your ticket!" : (result.data?.error ?? "That didn't work. Ask a grown-up."));
+    setTimeout(onDone, 3000);
+  };
+
+  if (message) return <main><h1>{message}</h1></main>;
+
+  return (
+    <main>
+      <h1>Hi, {child.nickname}!</h1>
+      {menu === undefined && <p>Loading…</p>}
+      {menu?.length === 0 && <p>Nothing to do right now.</p>}
+      {!category &&
+        menu?.map((c) => (
+          <button key={c.id} onClick={() => setCategory(c)}>
+            {c.name}
+          </button>
+        ))}
+      {category &&
+        category.choices.map((choice) => (
+          <button key={choice.id} onClick={() => print(choice.id)}>
+            {choice.name} ({choice.stars} ★)
+          </button>
+        ))}
+      <footer>
+        <button onClick={category ? () => setCategory(undefined) : onDone}>Back</button>
       </footer>
     </main>
   );

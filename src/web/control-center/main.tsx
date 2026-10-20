@@ -40,6 +40,7 @@ function ControlCenter() {
       </p>
       <button onClick={async () => (await api("POST", "/api/sign-out"), refresh())}>Sign out</button>
       <ChildrenSection />
+      <ChoresSection />
       {me.grownUp.role === "owner" && <ObservatoriesSection />}
     </main>
   );
@@ -223,6 +224,95 @@ function ObservatoriesSection() {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+interface CategoryWithChores {
+  id: string;
+  name: string;
+  kind: "chore" | "quiz";
+  chores: { id: string; name: string; stars: number; childIds: string[] }[];
+}
+
+function ChoresSection() {
+  const [categories, setCategories] = useState<CategoryWithChores[]>([]);
+  const [children, setChildren] = useState<Child[]>([]);
+  const [error, setError] = useState<string | undefined>();
+
+  const load = async () => {
+    const [categoryResult, childResult] = await Promise.all([api("GET", "/api/categories"), api("GET", "/api/children")]);
+    if (categoryResult.ok) setCategories(categoryResult.data.categories);
+    if (childResult.ok) setChildren(childResult.data.children);
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const nicknameOf = (id: string) => children.find((child) => child.id === id)?.nickname ?? "?";
+
+  const addCategory = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const { name } = Object.fromEntries(new FormData(form));
+    const result = await api("POST", "/api/categories", { name, kind: "chore" });
+    setError(result.ok ? undefined : result.data?.error);
+    form.reset();
+    await load();
+  };
+
+  const addChore = async (event: FormEvent<HTMLFormElement>, categoryId: string) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const result = await api("POST", "/api/chores", {
+      categoryId,
+      name: data.get("name"),
+      stars: Number(data.get("stars")),
+      childIds: data.getAll("childIds"),
+    });
+    setError(result.ok ? undefined : result.data?.error);
+    form.reset();
+    await load();
+  };
+
+  return (
+    <section>
+      <h2>Chores</h2>
+      {categories.map((category) => (
+        <div key={category.id}>
+          <h3>{category.name}</h3>
+          <ul>
+            {category.chores.map((chore) => (
+              <li key={chore.id}>
+                {chore.name}: {chore.stars} ★, for {chore.childIds.map(nicknameOf).join(", ") || "nobody yet"}
+              </li>
+            ))}
+          </ul>
+          <form onSubmit={(event) => addChore(event, category.id)}>
+            <label>
+              Chore <input name="name" maxLength={60} required />
+            </label>{" "}
+            <label>
+              Stars <input name="stars" type="number" min={0} max={100} defaultValue={1} required />
+            </label>{" "}
+            {children.map((child) => (
+              <label key={child.id}>
+                <input type="checkbox" name="childIds" value={child.id} /> {child.nickname}
+              </label>
+            ))}{" "}
+            <button type="submit">Add chore</button>
+          </form>
+        </div>
+      ))}
+      <form onSubmit={addCategory}>
+        <label>
+          New chore category <input name="name" placeholder="Chores" maxLength={60} required />
+        </label>{" "}
+        <button type="submit">Add category</button>
+      </form>
+      {error && <p role="alert">{error}</p>}
     </section>
   );
 }
