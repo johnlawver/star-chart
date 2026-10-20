@@ -206,3 +206,33 @@ describe("one open ticket per category", () => {
     printer.close();
   });
 });
+
+describe("who did what", () => {
+  test("a ticket's history records which grown-up rejected, then approved it", async () => {
+    const { chart, ticketId, scan, closeAll } = await novaWithAPrintedChore();
+    const { email } = (await chart.owner.get("/api/me")).body.grownUp;
+    await scan();
+    await chart.owner.post(`/api/tickets/${ticketId}/reject`, { note: "Try again" });
+    await scan();
+    await chart.owner.post(`/api/tickets/${ticketId}/approve`, { stars: 3 });
+
+    const history = (await chart.owner.get(`/api/tickets/${ticketId}/history`)).body.history;
+
+    expect(history).toEqual([
+      { action: "rejected", by: email, note: "Try again", stars: null, at: expect.any(String) },
+      { action: "approved", by: email, note: null, stars: 3, at: expect.any(String) },
+    ]);
+    closeAll();
+  });
+
+  test("a dismissal is recorded too", async () => {
+    const { chart, ticketId, closeAll } = await novaWithAPrintedChore();
+    const { email } = (await chart.owner.get("/api/me")).body.grownUp;
+    await chart.owner.post(`/api/tickets/${ticketId}/dismiss`, {});
+
+    const history = (await chart.owner.get(`/api/tickets/${ticketId}/history`)).body.history;
+
+    expect(history).toEqual([{ action: "dismissed", by: email, note: null, stars: null, at: expect.any(String) }]);
+    closeAll();
+  });
+});

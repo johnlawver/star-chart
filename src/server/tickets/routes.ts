@@ -68,7 +68,7 @@ export async function ticketRoutes(
     async (request, reply) => {
       const signedIn = await requireGrownUp(people, request, reply);
       if (!signedIn) return reply;
-      return sendDecision(reply, await tickets.approve(signedIn.chart.id, request.params.ticketId, request.body.stars));
+      return sendDecision(reply, await tickets.approve(signedIn.chart.id, { grownUpId: signedIn.grownUp.id }, request.params.ticketId, request.body.stars));
     },
   );
 
@@ -86,7 +86,7 @@ export async function ticketRoutes(
     async (request, reply) => {
       const signedIn = await requireGrownUp(people, request, reply);
       if (!signedIn) return reply;
-      return sendDecision(reply, await tickets.reject(signedIn.chart.id, request.params.ticketId, request.body.note));
+      return sendDecision(reply, await tickets.reject(signedIn.chart.id, { grownUpId: signedIn.grownUp.id }, request.params.ticketId, request.body.note));
     },
   );
 
@@ -96,9 +96,17 @@ export async function ticketRoutes(
     async (request, reply) => {
       const signedIn = await requireGrownUp(people, request, reply);
       if (!signedIn) return reply;
-      return sendDecision(reply, await tickets.dismiss(signedIn.chart.id, request.params.ticketId));
+      return sendDecision(reply, await tickets.dismiss(signedIn.chart.id, { grownUpId: signedIn.grownUp.id }, request.params.ticketId));
     },
   );
+
+  app.get<{ Params: { ticketId: string } }>("/api/tickets/:ticketId/history", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    const history = await tickets.history(signedIn.chart.id, request.params.ticketId);
+    if (!history) return reply.code(404).send({ error: "no such ticket" });
+    return { history };
+  });
 
   // A child at an observatory chooses something to print.
   app.post<{ Params: { childId: string }; Body: { categoryId: string; choiceId: string } }>(

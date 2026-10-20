@@ -81,6 +81,16 @@ export interface Tables {
     note: string | null;
     created_at: Date;
   };
+  ticket_events: {
+    id: Generated<string>;
+    ticket_id: string;
+    action: "approved" | "rejected" | "dismissed";
+    grown_up_id: string | null;
+    note: string | null;
+    stars: number | null;
+    created_at: Date;
+    seq: Generated<string>;
+  };
   star_movements: {
     id: Generated<string>;
     chart_id: string;

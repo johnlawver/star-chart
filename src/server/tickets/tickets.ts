@@ -34,6 +34,13 @@ export type Decision<T> = T | { refused: "not-found" } | { refused: "not-allowed
 
 type GrownUpAction = "approve" | "reject" | "dismiss";
 
+const recordedAs = { approve: "approved", reject: "rejected", dismiss: "dismissed" } as const;
+
+/** Who is acting on a ticket. Guests join in ticket 15. */
+export interface Actor {
+  grownUpId: string;
+}
+
 /**
  * The states each grown-up action can be taken from. Approved and Dismissed appear nowhere: they're final.
  * A rejection only makes sense once a child has handed a ticket in.
@@ -52,9 +59,13 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
    */
   async function decide<T>(
     chartId: string,
+    actor: Actor,
     ticketId: string,
     action: GrownUpAction,
-    apply: (trx: Database, ticket: { id: string; child_id: string; stars: number }) => Promise<T>,
+    apply: (
+      trx: Database,
+      ticket: { id: string; child_id: string; stars: number },
+    ) => Promise<{ result: T; note?: string | null; stars?: number }>,
   ): Promise<Decision<T>> {
     if (!isId(ticketId)) return { refused: "not-found" };
     return db.transaction().execute(async (trx) => {
@@ -67,7 +78,19 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
         .executeTakeFirst();
       if (!ticket) return { refused: "not-found" as const };
       if (!allowedFrom[action].includes(ticket.state)) return { refused: "not-allowed" as const, state: ticket.state };
-      return apply(trx, ticket);
+      const applied = await apply(trx, ticket);
+      await trx
+        .insertInto("ticket_events")
+        .values({
+          ticket_id: ticket.id,
+          action: recordedAs[action],
+          grown_up_id: actor.grownUpId,
+          note: applied.note ?? null,
+          stars: applied.stars ?? null,
+          created_at: clock.now(),
+        })
+        .execute();
+      return applied.result;
     });
   }
 
@@ -182,10 +205,11 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
      */
     async approve(
       chartId: string,
+      actor: Actor,
       ticketId: string,
       starsOverride?: number,
     ): Promise<Decision<{ id: string; state: TicketState; stars: number }>> {
-      return decide(chartId, ticketId, "approve", async (trx, ticket) => {
+      return decide(chartId, actor, ticketId, "approve", async (trx, ticket) => {
         const awarded = starsOverride ?? ticket.stars;
         await trx
           .updateTable("tickets")
@@ -193,39 +217,73 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
           .where("id", "=", ticket.id)
           .execute();
         await stars.earnFromTicket(trx, { chartId, childId: ticket.child_id, ticketId: ticket.id, amount: awarded });
-        return { id: ticket.id, state: "approved", stars: awarded };
+        return { result: { id: ticket.id, state: "approved" as const, stars: awarded }, stars: awarded };
       });
     },
 
     /** A grown-up decides a handed-in ticket isn't done yet: it goes back to Open, with an optional note, and earns no stars. */
     async reject(
       chartId: string,
+      actor: Actor,
       ticketId: string,
       note?: string,
     ): Promise<Decision<{ id: string; state: TicketState; note: string | null }>> {
-      return decide(chartId, ticketId, "reject", async (trx, ticket) =>
-        trx
+      return decide(chartId, actor, ticketId, "reject", async (trx, ticket) => {
+        const result = await trx
           .updateTable("tickets")
           .set({ state: "open", note: note?.trim() || null })
           .where("id", "=", ticket.id)
           .returning(["id", "state", "note"])
-          .executeTakeFirstOrThrow(),
-      );
+          .executeTakeFirstOrThrow();
+        return { result, note: result.note };
+      });
     },
 
     /**
      * A grown-up closes an open or handed-in ticket without stars, for example because it was lost or the chore
      * was already done by someone else.
      */
-    async dismiss(chartId: string, ticketId: string): Promise<Decision<{ id: string; state: TicketState }>> {
-      return decide(chartId, ticketId, "dismiss", async (trx, ticket) =>
-        trx
+    async dismiss(chartId: string, actor: Actor, ticketId: string): Promise<Decision<{ id: string; state: TicketState }>> {
+      return decide(chartId, actor, ticketId, "dismiss", async (trx, ticket) => ({
+        result: await trx
           .updateTable("tickets")
           .set({ state: "dismissed" })
           .where("id", "=", ticket.id)
           .returning(["id", "state"])
           .executeTakeFirstOrThrow(),
-      );
+      }));
+    },
+
+    /** What grown-ups have done to one of the chart's tickets, oldest first. Undefined if there's no such ticket. */
+    async history(chartId: string, ticketId: string) {
+      if (!isId(ticketId)) return undefined;
+      const ticket = await db
+        .selectFrom("tickets")
+        .select("id")
+        .where("chart_id", "=", chartId)
+        .where("id", "=", ticketId)
+        .executeTakeFirst();
+      if (!ticket) return undefined;
+      const events = await db
+        .selectFrom("ticket_events")
+        .leftJoin("grown_ups", "grown_ups.id", "ticket_events.grown_up_id")
+        .select([
+          "ticket_events.action",
+          "grown_ups.email",
+          "ticket_events.note",
+          "ticket_events.stars",
+          "ticket_events.created_at",
+        ])
+        .where("ticket_events.ticket_id", "=", ticket.id)
+        .orderBy("ticket_events.seq")
+        .execute();
+      return events.map((event) => ({
+        action: event.action,
+        by: event.email ?? "a former grown-up",
+        note: event.note,
+        stars: event.stars,
+        at: event.created_at.toISOString(),
+      }));
     },
 
     /** The chart's tickets in a given state, oldest first, for grown-ups to work through. */
