@@ -44,6 +44,26 @@ export async function ticketRoutes(
     },
   );
 
+  app.post<{ Params: { ticketId: string }; Body: { stars?: number } }>(
+    "/api/tickets/:ticketId/approve",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { stars: { type: "integer", minimum: 0, maximum: 100 } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      const ticket = await tickets.approve(signedIn.chart.id, request.params.ticketId, request.body.stars);
+      if (!ticket) return reply.code(404).send({ error: "no handed-in ticket like that" });
+      return { ticket };
+    },
+  );
+
   // A child at an observatory chooses something to print.
   app.post<{ Params: { childId: string }; Body: { categoryId: string; choiceId: string } }>(
     "/api/observatory/children/:childId/tickets",

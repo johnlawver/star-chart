@@ -77,6 +77,15 @@ export interface Tables {
     stars: number;
     state: TicketState;
     printed_by_observatory_id: string | null;
+    awarded_stars: number | null;
+    created_at: Date;
+  };
+  star_movements: {
+    id: Generated<string>;
+    chart_id: string;
+    child_id: string;
+    amount: number;
+    ticket_id: string | null;
     created_at: Date;
   };
   sessions: {

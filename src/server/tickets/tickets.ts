@@ -2,6 +2,7 @@ import { taskKind } from "../catalog/task-kinds.js";
 import type { Clock } from "../clock.js";
 import type { Database, DisplayStyle, TicketState } from "../database.js";
 import { isId } from "../ids.js";
+import type { Stars } from "../stars/stars.js";
 
 /** Everything a printer needs to print a ticket, independent of any printer's own format. */
 export interface PrintJob {
@@ -28,7 +29,7 @@ export interface TicketSummary {
 }
 
 /** The tickets module: printing tickets and their whole lifecycle. */
-export function createTickets(db: Database, clock: Clock) {
+export function createTickets(db: Database, clock: Clock, stars: Stars) {
   return {
     /**
      * Creates an open ticket for what a child chose at an observatory, and returns its print job.
@@ -102,6 +103,35 @@ export function createTickets(db: Database, clock: Clock) {
         .executeTakeFirst();
       if (!ticket) return { result: "not-recognised" };
       return { result: "handed-in", childNickname: ticket.nickname, title: ticket.title };
+    },
+
+    /**
+     * A grown-up approves a handed-in ticket: it becomes Approved (final) and its stars, or the grown-up's
+     * override, are added to the child's record. Undefined if there's no such handed-in ticket in this chart.
+     */
+    async approve(
+      chartId: string,
+      ticketId: string,
+      starsOverride?: number,
+    ): Promise<{ id: string; state: TicketState; stars: number } | undefined> {
+      if (!isId(ticketId)) return undefined;
+      return db.transaction().execute(async (trx) => {
+        const ticket = await trx
+          .updateTable("tickets")
+          .set((eb) => ({
+            state: "approved",
+            awarded_stars: starsOverride === undefined ? eb.ref("stars") : starsOverride,
+          }))
+          .where("chart_id", "=", chartId)
+          .where("id", "=", ticketId)
+          .where("state", "=", "handed-in")
+          .returning(["id", "state", "child_id", "awarded_stars"])
+          .executeTakeFirst();
+        if (!ticket) return undefined;
+        const awarded = ticket.awarded_stars ?? 0;
+        await stars.earnFromTicket(trx, { chartId, childId: ticket.child_id, ticketId: ticket.id, amount: awarded });
+        return { id: ticket.id, state: ticket.state, stars: awarded };
+      });
     },
 
     /** The chart's tickets in a given state, oldest first, for grown-ups to work through. */

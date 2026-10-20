@@ -5,6 +5,7 @@ import * as observatories from "./0003-observatories.js";
 import * as pairingCodes from "./0004-pairing-codes.js";
 import * as catalog from "./0005-catalog.js";
 import * as tickets from "./0006-tickets.js";
+import * as stars from "./0007-stars.js";
 
 // Every schema change is a migration, listed here in order. Never edit one that has shipped; add a new one.
 export const migrations: Record<string, Migration> = {
@@ -14,4 +15,5 @@ export const migrations: Record<string, Migration> = {
   "0004-pairing-codes": pairingCodes,
   "0005-catalog": catalog,
   "0006-tickets": tickets,
+  "0007-stars": stars,
 };

@@ -29,3 +29,34 @@ describe("handing in a ticket", () => {
     for (const connection of [printer, scanner, screen]) connection.close();
   });
 });
+
+describe("approving a ticket", () => {
+  async function handedInChore(stars = 2) {
+    const chart = await chartWithObservatory(harness);
+    const nova = await chart.addChild("Nova");
+    const chore = await chart.addChore("Feed the cat", stars, [nova]);
+    const printer = await chart.connectPrinter();
+    const scanner = await chart.connectScanner();
+    const screen = await chart.connectScreen();
+    const printed = await chart.print(nova, chore, printer);
+    scanner.send({ type: "scan", code: printed.code });
+    await screen.nextMessage();
+    for (const connection of [printer, scanner, screen]) connection.close();
+    return { chart, nova, ticketId: printed.ticketId };
+  }
+
+  const balanceOf = async (chart: Awaited<ReturnType<typeof handedInChore>>["chart"], childId: string) =>
+    (await chart.screen.get(`/api/observatory/children/${childId}`)).body.child.balance;
+
+  test("approving a handed-in ticket awards its stars, and the child's balance goes up on the observatory", async () => {
+    const { chart, nova, ticketId } = await handedInChore(2);
+    expect(await balanceOf(chart, nova)).toBe(0);
+
+    const approved = await chart.owner.post(`/api/tickets/${ticketId}/approve`, {});
+
+    expect(approved.status).toBe(200);
+    expect(approved.body.ticket).toMatchObject({ id: ticketId, state: "approved", stars: 2 });
+    expect(await balanceOf(chart, nova)).toBe(2);
+    expect((await chart.owner.get("/api/tickets?state=handed-in")).body.tickets).toEqual([]);
+  });
+});
