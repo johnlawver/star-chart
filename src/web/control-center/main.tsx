@@ -40,6 +40,7 @@ function ControlCenter() {
       </p>
       <button onClick={async () => (await api("POST", "/api/sign-out"), refresh())}>Sign out</button>
       <ChildrenSection />
+      {me.grownUp.role === "owner" && <ObservatoriesSection />}
     </main>
   );
 }
@@ -176,6 +177,53 @@ function SignedOut({ onSignedIn }: { onSignedIn: () => void }) {
         {mode === "sign-in" ? "New here? Create a chart" : "Already have an account? Sign in"}
       </button>
     </main>
+  );
+}
+
+
+interface ObservatorySummary {
+  id: string;
+  parts: { kind: "screen" | "printer" | "scanner" }[];
+}
+
+function ObservatoriesSection() {
+  const [observatories, setObservatories] = useState<ObservatorySummary[]>([]);
+
+  const load = async () => {
+    const result = await api("GET", "/api/observatories");
+    if (result.ok) setObservatories(result.data.observatories);
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  return (
+    <section>
+      <h2>Observatories</h2>
+      {observatories.length === 0 && (
+        <p>
+          None yet. Open <code>/observatory.html</code> on the observatory's screen and sign in there to pair it.
+        </p>
+      )}
+      <ul>
+        {observatories.map((observatory, index) => (
+          <li key={observatory.id}>
+            Observatory {index + 1}: {observatory.parts.map((part) => part.kind).join(", ")}{" "}
+            <button
+              onClick={async () => {
+                if (window.confirm("Unpair this observatory? Its screen, printer and scanner will all need pairing again.")) {
+                  await api("DELETE", `/api/observatories/${observatory.id}`);
+                  await load();
+                }
+              }}
+            >
+              Unpair
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
