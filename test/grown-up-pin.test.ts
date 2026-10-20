@@ -85,3 +85,16 @@ describe("guessing PINs", () => {
     expect(stillAllowed.status).toBe(200);
   });
 });
+
+describe("an unlocked observatory locks itself again", () => {
+  test("a Control Center unlocked on the observatory closes after 10 minutes, but a normal sign-in doesn't", async () => {
+    clock.set(new Date("2026-10-20T17:00:00Z"));
+    const { chart, unlock } = await ownerWithPin("2468");
+    await unlock("2468");
+
+    clock.advanceBy(10 * 60 * 1000 + 1000);
+
+    expect((await chart.screen.get("/api/me")).status).toBe(401);
+    expect((await chart.owner.get("/api/me")).status).toBe(200);
+  });
+});
