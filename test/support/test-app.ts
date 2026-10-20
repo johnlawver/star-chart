@@ -1,0 +1,64 @@
+import { afterAll } from "vitest";
+import { buildApp, type AppConfig } from "../../src/server/app.js";
+import { createTestDatabase } from "./database.js";
+import { FakeClock } from "./fake-clock.js";
+
+type Body = Record<string, unknown>;
+
+export interface ApiResponse {
+  status: number;
+  body: any;
+}
+
+/**
+ * A client that talks to the server only through its public HTTP API, keeping its own cookies,
+ * the way a browser or a device would.
+ */
+export class ApiClient {
+  private cookies = new Map<string, string>();
+
+  constructor(private readonly app: Awaited<ReturnType<typeof buildApp>>) {}
+
+  async request(method: "GET" | "POST" | "PATCH" | "DELETE", url: string, payload?: Body): Promise<ApiResponse> {
+    const response = await this.app.inject({
+      method,
+      url,
+      ...(payload === undefined ? {} : { payload }),
+      headers: this.cookieHeader(),
+    });
+    for (const cookie of response.cookies) {
+      if (cookie.value === "" || (cookie.maxAge !== undefined && cookie.maxAge <= 0)) this.cookies.delete(cookie.name);
+      else this.cookies.set(cookie.name, cookie.value);
+    }
+    return { status: response.statusCode, body: response.body === "" ? undefined : response.json() };
+  }
+
+  get = (url: string) => this.request("GET", url);
+  post = (url: string, payload?: Body) => this.request("POST", url, payload);
+
+  private cookieHeader(): Record<string, string> {
+    if (this.cookies.size === 0) return {};
+    return { cookie: [...this.cookies].map(([name, value]) => `${name}=${value}`).join("; ") };
+  }
+}
+
+const defaultConfig: AppConfig = { allowNewCharts: true };
+
+/** Starts the real server in-process against the test database, with a controllable clock. */
+export async function startTestApp(config: Partial<AppConfig> = {}) {
+  const db = createTestDatabase();
+  const clock = new FakeClock(new Date("2026-10-20T08:00:00Z"));
+  const app = await buildApp({ db, clock, config: { ...defaultConfig, ...config } });
+  afterAll(async () => {
+    await app.close();
+    await db.destroy();
+  });
+  return { clock, newClient: () => new ApiClient(app) };
+}
+
+let uniqueCounter = 0;
+/** An email address no other test uses, so tests never collide in the shared database. */
+export function uniqueEmail(name = "grown-up"): string {
+  uniqueCounter += 1;
+  return `${name}-${Date.now()}-${uniqueCounter}@example.test`;
+}
