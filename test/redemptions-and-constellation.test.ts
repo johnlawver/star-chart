@@ -48,14 +48,16 @@ describe("redemptions", () => {
     printer.close();
   });
 
-  test("two grown-ups spending at the same moment can't take a balance below zero", async () => {
+  test("grown-ups spending at the same moment can't take a balance below zero", async () => {
     const { earn, redeem, balance, printer } = await novaWithStars();
     await earn("Feed the cat", 5);
 
-    const results = await Promise.all([redeem(3, "Ice cream"), redeem(3, "Sticker")]);
+    // Ten one-star treats recorded all at once, against a balance of five.
+    const results = await Promise.all(Array.from({ length: 10 }, (_, i) => redeem(1, `Sticker ${i + 1}`)));
 
-    expect(results.map((result) => result.status).sort()).toEqual([201, 409]);
-    expect(await balance()).toBe(2);
+    expect(results.filter((result) => result.status === 201)).toHaveLength(5);
+    expect(results.filter((result) => result.status === 409)).toHaveLength(5);
+    expect(await balance()).toBe(0);
     printer.close();
   });
 });
