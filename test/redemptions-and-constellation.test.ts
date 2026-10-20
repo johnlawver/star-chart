@@ -35,4 +35,27 @@ describe("redemptions", () => {
     expect(await balance()).toBe(2);
     printer.close();
   });
+
+  test("spending more stars than the child has is refused, and the balance is unchanged", async () => {
+    const { earn, redeem, balance, printer } = await novaWithStars();
+    await earn("Feed the cat", 2);
+
+    const tooMuch = await redeem(3, "A new bike");
+
+    expect(tooMuch.status).toBe(409);
+    expect(tooMuch.body.balance).toBe(2);
+    expect(await balance()).toBe(2);
+    printer.close();
+  });
+
+  test("two grown-ups spending at the same moment can't take a balance below zero", async () => {
+    const { earn, redeem, balance, printer } = await novaWithStars();
+    await earn("Feed the cat", 5);
+
+    const results = await Promise.all([redeem(3, "Ice cream"), redeem(3, "Sticker")]);
+
+    expect(results.map((result) => result.status).sort()).toEqual([201, 409]);
+    expect(await balance()).toBe(2);
+    printer.close();
+  });
 });
