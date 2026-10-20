@@ -24,3 +24,36 @@ describe("creating a chart", () => {
     });
   });
 });
+
+describe("signing in and out", () => {
+  async function signUpNewOwner() {
+    const email = uniqueEmail("parent");
+    const password = "correct horse battery staple";
+    await newClient().post("/api/sign-up", { email, password, chartName: "Our House", timeZone: "America/Chicago" });
+    return { email, password };
+  }
+
+  test("a grown-up who signs out is no longer signed in", async () => {
+    const grownUp = newClient();
+    await grownUp.post("/api/sign-up", {
+      email: uniqueEmail("parent"),
+      password: "correct horse battery staple",
+      chartName: "Our House",
+      timeZone: "America/Chicago",
+    });
+
+    await grownUp.post("/api/sign-out");
+
+    expect((await grownUp.get("/api/me")).status).toBe(401);
+  });
+
+  test("a grown-up can sign in again with their email and password", async () => {
+    const { email, password } = await signUpNewOwner();
+    const laterVisit = newClient();
+
+    const signIn = await laterVisit.post("/api/sign-in", { email, password });
+
+    expect(signIn.status).toBe(200);
+    expect((await laterVisit.get("/api/me")).body).toMatchObject({ grownUp: { email, role: "owner" } });
+  });
+});

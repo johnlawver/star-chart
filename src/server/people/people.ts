@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
-import { hash } from "@node-rs/argon2";
+import { hash, verify } from "@node-rs/argon2";
+import { sql } from "kysely";
 import type { Clock } from "../clock.js";
 import type { Database, Role } from "../database.js";
 
@@ -32,13 +33,23 @@ export function createPeople(db: Database, clock: Clock) {
           })
           .returning("id")
           .executeTakeFirstOrThrow();
-        const token = randomBytes(32).toString("base64url");
-        await trx
-          .insertInto("sessions")
-          .values({ token_hash: hashToken(token), grown_up_id: grownUp.id, created_at: now })
-          .execute();
-        return token;
+        return startSession(trx, grownUp.id, now);
       });
+    },
+
+    /** Returns a new session token, or undefined if the email and password don't match a grown-up. */
+    async signIn(input: { email: string; password: string }): Promise<string | undefined> {
+      const grownUp = await db
+        .selectFrom("grown_ups")
+        .select(["id", "password_hash"])
+        .where(sql`lower(email)`, "=", input.email.toLowerCase())
+        .executeTakeFirst();
+      if (!grownUp || !(await verify(grownUp.password_hash, input.password))) return undefined;
+      return startSession(db, grownUp.id, clock.now());
+    },
+
+    async signOut(token: string): Promise<void> {
+      await db.deleteFrom("sessions").where("token_hash", "=", hashToken(token)).execute();
     },
 
     /** Who a session token belongs to, or undefined if it isn't a valid session. */
@@ -67,6 +78,12 @@ export function createPeople(db: Database, clock: Clock) {
 }
 
 export type People = ReturnType<typeof createPeople>;
+
+async function startSession(db: Database, grownUpId: string, now: Date): Promise<string> {
+  const token = randomBytes(32).toString("base64url");
+  await db.insertInto("sessions").values({ token_hash: hashToken(token), grown_up_id: grownUpId, created_at: now }).execute();
+  return token;
+}
 
 // Only a hash of each session token is stored, so a leaked database can't be used to sign in.
 function hashToken(token: string): string {
