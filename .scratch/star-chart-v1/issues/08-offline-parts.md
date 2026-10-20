@@ -10,3 +10,7 @@
 - [ ] Nothing printed while a Printer is offline appears later when it reconnects.
 - [ ] The screen indicates when the Scanner is offline.
 - [ ] The Control Center lists each Observatory's parts with their online status.
+
+## Notes from earlier tickets
+
+- Until this ticket, printing when the observatory has no printer connected still creates the Open ticket and silently drops the print job. This ticket must refuse instead, and create no ticket.
