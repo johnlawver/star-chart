@@ -104,3 +104,64 @@ describe("chore codes (ADR 0001)", () => {
     printer.close();
   });
 });
+
+describe("keeping chores to the right child and chart", () => {
+  async function homeWithChore() {
+    const chart = await chartWithObservatory(harness, "Our House");
+    const nova = await chart.addChild("Nova");
+    const pip = await chart.addChild("Pip", "pictures");
+    const { category } = (await chart.owner.post("/api/categories", { name: "Chores", kind: "chore" })).body;
+    const { chore } = (
+      await chart.owner.post("/api/chores", { categoryId: category.id, name: "Feed the cat", stars: 2, childIds: [nova] })
+    ).body;
+    return { chart, nova, pip, category, chore };
+  }
+
+  test("a child can't print a chore that isn't assigned to them", async () => {
+    const { chart, pip, category, chore } = await homeWithChore();
+
+    const printed = await chart.screen.post(`/api/observatory/children/${pip}/tickets`, {
+      categoryId: category.id,
+      choiceId: chore.id,
+    });
+
+    expect(printed.status).toBe(404);
+  });
+
+  test("another chart's observatory can't see our children's menus or print their chores", async () => {
+    const { nova, category, chore } = await homeWithChore();
+    const school = await chartWithObservatory(harness, "Room 12");
+
+    const menu = await school.screen.get(`/api/observatory/children/${nova}/menu`);
+    const printed = await school.screen.post(`/api/observatory/children/${nova}/tickets`, {
+      categoryId: category.id,
+      choiceId: chore.id,
+    });
+
+    expect(menu.status).toBe(404);
+    expect(printed.status).toBe(404);
+  });
+
+  test("a grown-up can't add a chore to another chart's category or assign it to another chart's child", async () => {
+    const { nova, category } = await homeWithChore();
+    const school = await chartWithObservatory(harness, "Room 12");
+    const ava = await school.addChild("Ava");
+    const { category: schoolCategory } = (await school.owner.post("/api/categories", { name: "Jobs", kind: "chore" })).body;
+
+    const intoOurCategory = await school.owner.post("/api/chores", {
+      categoryId: category.id,
+      name: "Sneaky",
+      stars: 1,
+      childIds: [ava],
+    });
+    const forOurChild = await school.owner.post("/api/chores", {
+      categoryId: schoolCategory.id,
+      name: "Sneaky",
+      stars: 1,
+      childIds: [nova],
+    });
+
+    expect(intoOurCategory.status).toBe(400);
+    expect(forOurChild.status).toBe(400);
+  });
+});
