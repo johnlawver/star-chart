@@ -102,6 +102,8 @@ export interface Tables {
     child_id: string;
     amount: number;
     ticket_id: string | null;
+    note: string | null;
+    recorded_by_grown_up_id: string | null;
     created_at: Date;
   };
   sessions: {

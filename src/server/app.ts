@@ -52,7 +52,7 @@ export async function buildApp({ db, clock, config }: AppDependencies) {
   await catalogRoutes(app, people, observatories, createCatalog(db, clock));
   const stars = createStars(db, clock);
   await ticketRoutes(app, people, observatories, liveParts, createTickets(db, clock, stars));
-  await starRoutes(app, observatories, children, stars);
+  await starRoutes(app, people, observatories, children, stars);
   await iconRoutes(app);
   // The built web front ends (`vite build`), if present. Tests drive the API directly and don't need them.
   if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot });
