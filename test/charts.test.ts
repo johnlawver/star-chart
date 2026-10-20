@@ -56,4 +56,14 @@ describe("signing in and out", () => {
     expect(signIn.status).toBe(200);
     expect((await laterVisit.get("/api/me")).body).toMatchObject({ grownUp: { email, role: "owner" } });
   });
+
+  test("signing in with the wrong password is refused", async () => {
+    const { email } = await signUpNewOwner();
+    const stranger = newClient();
+
+    const signIn = await stranger.post("/api/sign-in", { email, password: "not the password" });
+
+    expect(signIn.status).toBe(401);
+    expect((await stranger.get("/api/me")).status).toBe(401);
+  });
 });
