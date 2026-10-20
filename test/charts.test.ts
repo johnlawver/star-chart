@@ -23,6 +23,27 @@ describe("creating a chart", () => {
       chart: { name: "Our House", timeZone: "America/Chicago" },
     });
   });
+
+  test("an email address already used in a chart can't sign up for another chart, whatever its case", async () => {
+    const email = uniqueEmail("parent");
+    const details = { password: "correct horse battery staple", chartName: "Our House", timeZone: "America/Chicago" };
+    await newClient().post("/api/sign-up", { email, ...details });
+
+    const secondSignUp = await newClient().post("/api/sign-up", { email: email.toUpperCase(), ...details });
+
+    expect(secondSignUp.status).toBe(409);
+  });
+
+  test("a chart's time zone must be a real time zone", async () => {
+    const signUp = await newClient().post("/api/sign-up", {
+      email: uniqueEmail("parent"),
+      password: "correct horse battery staple",
+      chartName: "Our House",
+      timeZone: "Mars/Olympus_Mons",
+    });
+
+    expect(signUp.status).toBe(400);
+  });
 });
 
 describe("signing in and out", () => {

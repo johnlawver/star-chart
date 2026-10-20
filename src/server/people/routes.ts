@@ -10,8 +10,12 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
     "/api/sign-up",
     async (request, reply) => {
       if (!config.allowNewCharts) return reply.code(403).send({ error: "new charts can't be created on this server" });
-      const token = await people.signUp(request.body);
-      reply.setCookie(sessionCookie, token, cookieOptions);
+      const result = await people.signUp(request.body);
+      if ("refused" in result) {
+        if (result.refused === "email-in-use") return reply.code(409).send({ error: "that email is already in use" });
+        return reply.code(400).send({ error: "that isn't a time zone we recognise" });
+      }
+      reply.setCookie(sessionCookie, result.token, cookieOptions);
       return reply.code(201).send({});
     },
   );

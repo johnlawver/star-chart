@@ -13,9 +13,15 @@ export interface SignedInGrownUp {
 export function createPeople(db: Database, clock: Clock) {
   return {
     /** Creates a chart with the signing-up grown-up as its owner, and returns a new session token. */
-    async signUp(input: { email: string; password: string; chartName: string; timeZone: string }): Promise<string> {
+    async signUp(input: {
+      email: string;
+      password: string;
+      chartName: string;
+      timeZone: string;
+    }): Promise<{ token: string } | { refused: "email-in-use" | "unknown-time-zone" }> {
+      if (!isTimeZone(input.timeZone)) return { refused: "unknown-time-zone" };
       const passwordHash = await hash(input.password);
-      return db.transaction().execute(async (trx) => {
+      const token = await db.transaction().execute(async (trx) => {
         const now = clock.now();
         const chart = await trx
           .insertInto("charts")
@@ -34,7 +40,11 @@ export function createPeople(db: Database, clock: Clock) {
           .returning("id")
           .executeTakeFirstOrThrow();
         return startSession(trx, grownUp.id, now);
+      }).catch((error: unknown) => {
+        if (isUniqueViolation(error, "grown_ups_email_unique")) return undefined;
+        throw error;
       });
+      return token === undefined ? { refused: "email-in-use" } : { token };
     },
 
     /** Returns a new session token, or undefined if the email and password don't match a grown-up. */
@@ -83,6 +93,24 @@ async function startSession(db: Database, grownUpId: string, now: Date): Promise
   const token = randomBytes(32).toString("base64url");
   await db.insertInto("sessions").values({ token_hash: hashToken(token), grown_up_id: grownUpId, created_at: now }).execute();
   return token;
+}
+
+function isTimeZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isUniqueViolation(error: unknown, constraint: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "23505" &&
+    (error as { constraint?: unknown }).constraint === constraint
+  );
 }
 
 // Only a hash of each session token is stored, so a leaked database can't be used to sign in.
