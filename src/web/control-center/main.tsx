@@ -780,7 +780,15 @@ function keyBytes(base64Url: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
 }
 
-/** Turns push notifications on or off for this device. */
+/** The service worker, or undefined if it hasn't started within a few seconds. */
+async function serviceWorkerReady(): Promise<ServiceWorkerRegistration | undefined> {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 5000)),
+  ]);
+}
+
+/** Turns push notifications on or off for this device, says plainly why if that doesn't work, and can send a test. */
 function NotificationsSwitch() {
   const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
   const [on, setOn] = useState<boolean | undefined>();
@@ -788,46 +796,83 @@ function NotificationsSwitch() {
 
   useEffect(() => {
     if (!supported) return;
-    void navigator.serviceWorker.ready.then(async (registration) => {
+    void (async () => {
+      const registration = await serviceWorkerReady();
+      if (!registration) {
+        setOn(false);
+        setMessage("The app's background helper didn't start. Close Star Chart fully and open it again from the home screen.");
+        return;
+      }
       setOn((await registration.pushManager.getSubscription()) !== null);
-    });
+      if (Notification.permission === "denied") {
+        setMessage("Notifications are turned off for Star Chart in Settings → Notifications → Star Chart.");
+      }
+    })();
   }, []);
 
   if (!supported) {
-    return <p>To get notifications on an iPhone, add Star Chart to your home screen first (Share → Add to Home Screen), then open it from there.</p>;
+    return (
+      <p>
+        To get notifications on an iPhone, add Star Chart to your home screen first (Share → Add to Home Screen), then open
+        it from there.
+      </p>
+    );
   }
 
   const turnOn = async () => {
-    if ((await Notification.requestPermission()) !== "granted") {
-      setMessage("Notifications are blocked for Star Chart in this browser's settings.");
-      return;
+    setMessage("Turning on…");
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setMessage("Notifications are turned off for Star Chart in Settings → Notifications → Star Chart.");
+        return;
+      }
+      const registration = await serviceWorkerReady();
+      if (!registration) throw new Error("the app's background helper didn't start; close and reopen Star Chart");
+      const key = await api("GET", "/api/push/public-key");
+      if (!key.ok) throw new Error("couldn't get the server's key");
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: keyBytes(key.data.publicKey),
+      });
+      const saved = await api("POST", "/api/push/subscriptions", subscription.toJSON());
+      if (!saved.ok) throw new Error(saved.data?.error ?? `the server said ${saved.status}`);
+      setOn(true);
+      setMessage("On. Try “Send me a test” to check.");
+    } catch (error) {
+      setMessage(`Couldn't turn notifications on: ${error instanceof Error ? error.message : String(error)}`);
     }
-    const registration = await navigator.serviceWorker.ready;
-    const { publicKey } = (await api("GET", "/api/push/public-key")).data;
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: keyBytes(publicKey),
-    });
-    const result = await api("POST", "/api/push/subscriptions", subscription.toJSON());
-    setOn(result.ok);
-    setMessage(result.ok ? "You'll get a notification when a ticket needs you." : "Couldn't turn notifications on.");
   };
 
   const turnOff = async () => {
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
-    if (subscription) {
-      await api("DELETE", "/api/push/subscriptions", { endpoint: subscription.endpoint });
-      await subscription.unsubscribe();
+    try {
+      const registration = await serviceWorkerReady();
+      const subscription = await registration?.pushManager.getSubscription();
+      if (subscription) {
+        await api("DELETE", "/api/push/subscriptions", { endpoint: subscription.endpoint });
+        await subscription.unsubscribe();
+      }
+      setOn(false);
+      setMessage(undefined);
+    } catch (error) {
+      setMessage(`Couldn't turn notifications off: ${error instanceof Error ? error.message : String(error)}`);
     }
-    setOn(false);
-    setMessage(undefined);
+  };
+
+  const sendTest = async () => {
+    const result = await api("POST", "/api/push/test", {});
+    setMessage(
+      result.ok
+        ? `Sent to ${result.data.delivered} of your ${result.data.devices} device${result.data.devices === 1 ? "" : "s"}.`
+        : (result.data?.error ?? "Couldn't send a test."),
+    );
   };
 
   return (
     <p>
       Notifications on this device:{" "}
-      {on === undefined ? "…" : on ? <button onClick={turnOff}>On (turn off)</button> : <button onClick={turnOn}>Off (turn on)</button>}
+      {on === undefined ? "…" : on ? <button onClick={turnOff}>On (turn off)</button> : <button onClick={turnOn}>Off (turn on)</button>}{" "}
+      <button onClick={sendTest}>Send me a test</button>
       {message && <span role="status"> {message}</span>}
     </p>
   );
