@@ -119,6 +119,7 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
       | { ticket: { id: string; state: TicketState }; job: PrintJob }
       | { refused: "already-holding"; category: string }
       | { refused: "done-for-now"; title: string }
+      | { refused: "no-quizzes" }
       | { refused: "printer-offline" }
       | undefined
     > {
@@ -149,6 +150,7 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
         const issued = await taskKind(category.kind).issue(trx, context, input.categoryId, input.childId, input.choiceId);
         if (!issued) return undefined;
         if (issued === "done") return { refused: "done-for-now" as const, title: "" };
+        if (issued === "empty") return { refused: "no-quizzes" as const };
         const ticket = await trx
           .insertInto("tickets")
           .values({

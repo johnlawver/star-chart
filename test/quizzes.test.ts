@@ -121,3 +121,29 @@ describe("printing quizzes", () => {
     printer.close();
   });
 });
+
+describe("levels and empty pools", () => {
+  test("quizzes for a level the child has moved on from aren't printed", async () => {
+    const { nova, spelling, printer, writeQuiz, print, switchOn } = await novaWithSpelling();
+    await writeQuiz(["cat"]); // written for level 1
+    await switchOn(spelling.id, nova, 2);
+    await writeQuiz(["because"]); // written for level 2, Nova's level now
+
+    await print();
+
+    expect((await printer.nextMessage()).ticket.quiz.prompts).toEqual(["Spell: because"]);
+    printer.close();
+  });
+
+  test("with nothing in the pool and nothing to reuse, the child is told there are no quizzes yet", async () => {
+    const { chart, printer, print } = await novaWithSpelling();
+
+    const printed = await print();
+
+    expect(printed.status).toBe(409);
+    expect(printed.body.error).toMatch(/no quizzes yet/i);
+    expect((await chart.owner.get("/api/tickets?state=open")).body.tickets).toEqual([]);
+    await expect(printer.nextMessage()).rejects.toThrow(/no message/);
+    printer.close();
+  });
+});

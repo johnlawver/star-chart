@@ -136,6 +136,9 @@ export async function ticketRoutes(
         if (printed.refused === "printer-offline") {
           return reply.code(503).send({ reason: "printer-offline", error: "The printer is napping. Ask a grown-up!" });
         }
+        if (printed.refused === "no-quizzes") {
+          return reply.code(409).send({ error: "No quizzes yet. Ask a grown-up!" });
+        }
         if (printed.refused === "done-for-now") {
           return reply.code(409).send({ error: "That one's already done for now. Great job! ⭐" });
         }

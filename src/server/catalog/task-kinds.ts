@@ -42,8 +42,8 @@ export interface TaskKind {
   /** What this child can choose from this category right now. */
   choicesFor(db: Database, context: ChoosingContext, categoryId: string, childId: string): Promise<Choice[]>;
   /**
-   * The ticket's title, stars and code for a choice; "done" if the child can't do it again for now;
-   * or undefined if it isn't one this child can choose at all.
+   * The ticket's title, stars and code for a choice; "done" if the child can't do it again for now; "empty" if there's
+   * nothing to print for it yet (a quiz topic with no quizzes); or undefined if it isn't one this child can choose.
    */
   issue(
     db: Database,
@@ -51,7 +51,7 @@ export interface TaskKind {
     categoryId: string,
     childId: string,
     choiceId: string,
-  ): Promise<IssuedTask | "done" | undefined>;
+  ): Promise<IssuedTask | "done" | "empty" | undefined>;
 }
 
 export const choreKind: TaskKind = {
@@ -159,7 +159,7 @@ export const quizKind: TaskKind = {
       .forUpdate()
       .skipLocked()
       .executeTakeFirst();
-    if (!quiz) return undefined;
+    if (!quiz) return "empty";
     await db.updateTable("quizzes").set({ state: "printed", printed_at: context.now }).where("id", "=", quiz.id).execute();
     return {
       title: quiz.title,
