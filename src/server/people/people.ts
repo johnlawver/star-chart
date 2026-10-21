@@ -320,6 +320,11 @@ export function createPeople(db: Database, clock: Clock) {
       return { ok: true };
     },
 
+    /** Permanently deletes a chart and everything in it: grown-ups, children, tickets, stars, observatories, devices. */
+    async deleteChart(chartId: string): Promise<void> {
+      await db.deleteFrom("charts").where("id", "=", chartId).execute();
+    },
+
     async signOut(token: string): Promise<void> {
       await db.deleteFrom("sessions").where("token_hash", "=", hashToken(token)).execute();
     },

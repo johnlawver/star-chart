@@ -79,6 +79,34 @@ export async function observatoryRoutes(
     return { printer: statusOf("printer"), scanner: statusOf("scanner") };
   });
 
+  // The owner deletes the whole chart, typing its name to be sure. Lives here because its devices must be
+  // disconnected straight away too.
+  app.delete<{ Body: { confirmName: string } }>(
+    "/api/chart",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { confirmName: { type: "string", maxLength: 100 } },
+          required: ["confirmName"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      if (signedIn.grownUp.role !== "owner") return reply.code(403).send({ error: "Only the owner can delete the chart." });
+      if (request.body.confirmName.trim() !== signedIn.chart.name) {
+        return reply.code(400).send({ error: "Type the chart's name exactly to delete it." });
+      }
+      await people.deleteChart(signedIn.chart.id);
+      liveParts.disconnectChart(signedIn.chart.id);
+      reply.clearCookie(sessionCookie, sessionCookieOptions);
+      return reply.code(204).send();
+    },
+  );
+
   // The grown-ups a screen offers for unlocking the Control Center: only those who have set a PIN.
   app.get("/api/observatory/grown-ups", async (request, reply) => {
     const screen = await requireDevice(observatories, "screen", request, reply);

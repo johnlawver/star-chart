@@ -162,3 +162,51 @@ describe("deleting a child", () => {
     [printer, scanner, screen].forEach((connection) => connection.close());
   });
 });
+
+describe("deleting a chart", () => {
+  test("only the owner can delete the chart, and only by typing its name", async () => {
+    const { owner, admin } = await aChartOfThree("Our House");
+
+    const byAdmin = await admin.client.delete("/api/chart", { confirmName: "Our House" });
+    const wrongName = await owner.client.delete("/api/chart", { confirmName: "Our Hose" });
+
+    expect([byAdmin.status, wrongName.status]).toEqual([403, 400]);
+    expect((await owner.client.get("/api/me")).status).toBe(200);
+  });
+
+  test("deleting the chart removes all of it, disconnects its devices, and leaves other charts alone", async () => {
+    const { chartWithObservatory } = await import("./support/observatory.js");
+    const { rowsStillPointingAt } = await import("./support/database.js");
+    const home = await chartWithObservatory(harness, "Our House");
+    const nova = await home.addChild("Nova");
+    const printer = await home.connectPrinter();
+    const { ticketId } = await home.print(nova, await home.addChore("Feed the cat", 2, [nova]), printer);
+    await home.owner.post(`/api/tickets/${ticketId}/approve`, {});
+    const homeChartId = (await home.owner.get("/api/me")).body.chart.id;
+    const school = await chartWithObservatory(harness, "Room 12");
+    await school.addChild("Ava");
+
+    const deleted = await home.owner.delete("/api/chart", { confirmName: "Our House" });
+
+    expect(deleted.status).toBe(204);
+    expect((await home.owner.get("/api/me")).status).toBe(401);
+    expect((await home.screen.get("/api/observatory/children")).status).toBe(401);
+    expect(await printer.closed).toEqual({ code: 4401 });
+    expect(await rowsStillPointingAt("chart_id", [homeChartId])).toEqual({});
+    expect(await rowsStillPointingAt("child_id", [nova])).toEqual({});
+    expect((await school.owner.get("/api/children")).body.children.map((c: { nickname: string }) => c.nickname)).toEqual(["Ava"]);
+  });
+});
+
+describe("keeping charts apart", () => {
+  test("an owner of another chart can't remove our grown-ups or be handed our chart", async () => {
+    const home = await aChartOfThree("Our House");
+    const school = await aChartOfThree("Room 12");
+
+    const removed = await school.owner.client.delete(`/api/grown-ups/${home.grownUp.id}`);
+    const handedToOurs = await school.owner.client.post("/api/ownership", { grownUpId: home.admin.id });
+
+    expect([removed.status, handedToOurs.status]).toEqual([404, 404]);
+    expect((await home.grownUp.client.get("/api/me")).status).toBe(200);
+  });
+});

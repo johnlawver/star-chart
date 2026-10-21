@@ -90,6 +90,13 @@ export class LiveParts {
     }
   }
 
+  /** Closes the connections of every device in a chart, for example when the chart is deleted. */
+  disconnectChart(chartId: string): void {
+    for (const [socket, device] of this.connections) {
+      if (device.chartId === chartId) socket.close(notPairedCloseCode, "chart deleted");
+    }
+  }
+
   /** Closes the connections of every part of an observatory, for example when it's unpaired. */
   disconnectObservatory(observatoryId: string): void {
     for (const [socket, device] of this.connections) {
