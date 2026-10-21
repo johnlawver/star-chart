@@ -21,6 +21,10 @@ export interface IssuedTask {
   stars: number;
   code: string;
   choreId: string | null;
+  /** For a quiz: which quiz and topic, and what's printed (instructions and prompts, never the answers). */
+  quizId?: string;
+  topicId?: string;
+  quiz?: { instructions: string; prompts: string[] };
 }
 
 /** When a child is choosing: the moment, and the chart's time zone, which decides where days and weeks begin. */
@@ -130,8 +134,43 @@ export const quizKind: TaskKind = {
     return topics.map((topic) => ({ ...topic, done: false }));
   },
 
-  async issue() {
-    return undefined;
+  // The oldest quiz waiting in the child's pool for this topic, at their current level.
+  async issue(db, context, categoryId, childId, choiceId) {
+    if (!isId(choiceId)) return undefined;
+    const topic = await db
+      .selectFrom("topics")
+      .innerJoin("topic_children", "topic_children.topic_id", "topics.id")
+      .select(["topics.id", "topics.stars", "topics.icon", "topic_children.level"])
+      .where("topics.category_id", "=", categoryId)
+      .where("topics.id", "=", choiceId)
+      .where("topic_children.child_id", "=", childId)
+      .executeTakeFirst();
+    if (!topic) return undefined;
+    // SKIP LOCKED: two prints at once each take a different quiz, rather than the same one.
+    const quiz = await db
+      .selectFrom("quizzes")
+      .select(["id", "title", "instructions", "items"])
+      .where("child_id", "=", childId)
+      .where("topic_id", "=", topic.id)
+      .where("level", "=", topic.level)
+      .where("state", "=", "pooled")
+      .orderBy("seq")
+      .limit(1)
+      .forUpdate()
+      .skipLocked()
+      .executeTakeFirst();
+    if (!quiz) return undefined;
+    await db.updateTable("quizzes").set({ state: "printed", printed_at: context.now }).where("id", "=", quiz.id).execute();
+    return {
+      title: quiz.title,
+      icon: topic.icon,
+      stars: topic.stars,
+      code: newTicketCode(),
+      choreId: null,
+      quizId: quiz.id,
+      topicId: topic.id,
+      quiz: { instructions: quiz.instructions, prompts: quiz.items.map((item) => item.prompt) },
+    };
   },
 };
 

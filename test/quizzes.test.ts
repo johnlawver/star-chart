@@ -63,3 +63,61 @@ describe("topics", () => {
     ]);
   });
 });
+
+/** Nova with a Spelling topic switched on at level 1, a printer, and a way for a grown-up to write a quiz for him. */
+async function novaWithSpelling() {
+  const { chart, nova, pip, addTopic, switchOn } = await aChartWithMath();
+  const { category } = (await chart.owner.post("/api/categories", { name: "Spelling", kind: "quiz" })).body;
+  const spelling = (await chart.owner.post("/api/topics", { categoryId: category.id, name: "This week's words", stars: 4 })).body
+    .topic;
+  await switchOn(spelling.id, nova, 1);
+  const printer = await chart.connectPrinter();
+  const writeQuiz = (words: string[], extra: object = {}) =>
+    chart.owner.post("/api/quizzes", {
+      childId: nova,
+      topicId: spelling.id,
+      title: "Spelling",
+      instructions: "Write each word.",
+      items: words.map((word) => ({ prompt: `Spell: ${word}`, answer: word })),
+      ...extra,
+    });
+  const print = () => chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: spelling.id });
+  return { chart, nova, pip, category, spelling, printer, writeQuiz, print, addTopic, switchOn };
+}
+
+describe("printing quizzes", () => {
+  test("a grown-up writes a quiz for a child; when the child taps the topic, it prints, without the answers", async () => {
+    const { printer, writeQuiz, print } = await novaWithSpelling();
+    const written = await writeQuiz(["because", "friend", "said"]);
+
+    const printed = await print();
+    const job = (await printer.nextMessage()).ticket;
+
+    expect(written.status).toBe(201);
+    expect(printed.status).toBe(201);
+    expect(job).toMatchObject({
+      title: "Spelling",
+      stars: 4,
+      quiz: { instructions: "Write each word.", prompts: ["Spell: because", "Spell: friend", "Spell: said"] },
+    });
+    expect(JSON.stringify(job)).not.toMatch(/"answer"/);
+    printer.close();
+  });
+
+  test("each print takes the next quiz in the pool, with a new code", async () => {
+    const { chart, printer, writeQuiz, print } = await novaWithSpelling();
+    await writeQuiz(["cat"]);
+    await writeQuiz(["dog"]);
+
+    const first = await print();
+    const firstJob = (await printer.nextMessage()).ticket;
+    await chart.owner.post(`/api/tickets/${first.body.ticket.id}/approve`, {});
+    await print();
+    const secondJob = (await printer.nextMessage()).ticket;
+
+    expect(firstJob.quiz.prompts).toEqual(["Spell: cat"]);
+    expect(secondJob.quiz.prompts).toEqual(["Spell: dog"]);
+    expect(secondJob.code).not.toBe(firstJob.code);
+    printer.close();
+  });
+});

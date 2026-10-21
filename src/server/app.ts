@@ -25,6 +25,8 @@ import { ticketRoutes } from "./tickets/routes.js";
 import { createStars } from "./stars/stars.js";
 import { starRoutes } from "./stars/routes.js";
 import { iconRoutes } from "./icons/routes.js";
+import { createQuizPools } from "./quizzes/quiz-pools.js";
+import { quizRoutes } from "./quizzes/routes.js";
 import { createReprints } from "./tickets/reprints.js";
 import { reprintRoutes } from "./tickets/reprint-routes.js";
 
@@ -105,6 +107,7 @@ export async function buildApp({ db, clock, mailer, push, config }: AppDependenc
   await ticketRoutes(app, people, observatories, liveParts, createTickets(db, clock, stars), notifications);
   await starRoutes(app, people, observatories, children, stars);
   await iconRoutes(app);
+  await quizRoutes(app, people, createQuizPools(db, clock));
   await reprintRoutes(app, people, observatories, liveParts, createReprints(db, clock), notifications);
   // The built web front ends (`vite build`), if present. Tests drive the API directly and don't need them.
   if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot });

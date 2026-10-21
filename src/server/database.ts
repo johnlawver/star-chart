@@ -97,6 +97,7 @@ export interface Tables {
     state: "pooled" | "printed" | "withdrawn";
     created_at: Date;
     printed_at: Date | null;
+    seq: Generated<string>;
   };
   chore_codes: {
     child_id: string;

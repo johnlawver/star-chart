@@ -14,6 +14,8 @@ export interface PrintJob {
   title: string;
   /** An icon from the built-in library, printed large for a child whose display style is pictures. */
   icon: string | null;
+  /** For a quiz: the instructions and the prompts to print (never the answers). */
+  quiz?: { instructions: string; prompts: string[] };
   stars: number;
   code: string;
 }
@@ -154,6 +156,8 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
             child_id: input.childId,
             category_id: input.categoryId,
             chore_id: issued.choreId,
+            quiz_id: issued.quizId ?? null,
+            topic_id: issued.topicId ?? null,
             code: issued.code,
             title: issued.title,
             icon: issued.icon,
@@ -178,6 +182,7 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
           icon: issued.icon,
           stars: issued.stars,
           code: issued.code,
+          ...(issued.quiz ? { quiz: issued.quiz } : {}),
         };
         // No printer, no ticket: roll the whole print back rather than leave a ticket nobody can hold.
         if (!deliver(job)) throw new PrinterOffline();
