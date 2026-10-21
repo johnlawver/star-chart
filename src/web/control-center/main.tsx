@@ -836,7 +836,7 @@ function NotificationsSwitch() {
         applicationServerKey: keyBytes(key.data.publicKey),
       });
       const saved = await api("POST", "/api/push/subscriptions", subscription.toJSON());
-      if (!saved.ok) throw new Error(saved.data?.error ?? `the server said ${saved.status}`);
+      if (!saved.ok) throw new Error(saved.data?.error ?? "the server refused it");
       setOn(true);
       setMessage("On. Try “Send me a test” to check.");
     } catch (error) {
