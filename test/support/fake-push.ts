@@ -4,9 +4,11 @@ import type { PushMessage, PushSender, PushSubscription } from "../../src/server
 export class FakePushSender implements PushSender {
   readonly sent: { endpoint: string; message: PushMessage }[] = [];
   private readonly gone = new Set<string>();
+  private readonly broken = new Set<string>();
 
   async send(subscription: PushSubscription, message: PushMessage): Promise<"sent" | "gone"> {
     if (this.gone.has(subscription.endpoint)) return "gone";
+    if (this.broken.has(subscription.endpoint)) throw new Error("the push service refused this one");
     this.sent.push({ endpoint: subscription.endpoint, message });
     return "sent";
   }
@@ -14,6 +16,11 @@ export class FakePushSender implements PushSender {
   /** What one device has received, oldest first. */
   to(endpoint: string): PushMessage[] {
     return this.sent.filter((push) => push.endpoint === endpoint).map((push) => push.message);
+  }
+
+  /** From now on, sending to this device fails with an unexpected error (say, the push service rejects it). */
+  markBroken(endpoint: string): void {
+    this.broken.add(endpoint);
   }
 
   /** From now on, the push service says this device's subscription no longer exists. */

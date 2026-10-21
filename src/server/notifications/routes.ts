@@ -45,6 +45,16 @@ export async function notificationRoutes(
     },
   );
 
+  app.post("/api/push/test", { schema: { body: { type: "object", additionalProperties: false } } }, async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    const result = await notifications.test(signedIn.grownUp.id);
+    if (result.devices === 0) {
+      return reply.code(409).send({ error: "No devices have notifications turned on for you yet." });
+    }
+    return result;
+  });
+
   app.get("/api/push/subscriptions", async (request, reply) => {
     const signedIn = await requireGrownUp(people, request, reply);
     if (!signedIn) return reply;

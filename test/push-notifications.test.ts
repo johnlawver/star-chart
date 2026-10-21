@@ -122,3 +122,41 @@ describe("turning notifications off", () => {
     closeAll();
   });
 });
+
+describe("when sending goes wrong", () => {
+  test("a device whose push fails doesn't stop the others getting theirs, and the server carries on", async () => {
+    const { chart, phone, printer, nova, handIn, closeAll } = await novaWithAPrintedChore();
+    const brokenTablet = fakeSubscription();
+    await chart.owner.post("/api/push/subscriptions", brokenTablet);
+    push.markBroken(brokenTablet.endpoint);
+
+    await handIn();
+
+    await expect.poll(() => push.to(phone.endpoint).length).toBe(1);
+    const stillWorking = await chart.print(nova, await chart.addChore("Make your bed", 1, [nova]), printer);
+    expect(stillWorking.code).toEqual(expect.any(String));
+    closeAll();
+  });
+});
+
+describe("test notifications", () => {
+  test("a grown-up can send themselves a test notification, to check their devices", async () => {
+    const { chart, phone, closeAll } = await novaWithAPrintedChore();
+
+    const sent = await chart.owner.post("/api/push/test", {});
+
+    expect(sent.status).toBe(200);
+    expect(sent.body).toEqual({ devices: 1, delivered: 1 });
+    expect(push.to(phone.endpoint).at(-1)).toMatchObject({ title: "Star Chart notifications work!" });
+    closeAll();
+  });
+
+  test("with no devices turned on, the test says so", async () => {
+    const chart = await chartWithObservatory(harness);
+
+    const sent = await chart.owner.post("/api/push/test", {});
+
+    expect(sent.status).toBe(409);
+    expect(sent.body.error).toMatch(/no devices/i);
+  });
+});

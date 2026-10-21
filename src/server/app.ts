@@ -74,10 +74,13 @@ export async function buildApp({ db, clock, mailer, push, config }: AppDependenc
   const children = createChildren(db, clock);
   await childrenRoutes(app, people, children);
   const observatories = createObservatories(db, clock);
-  const notifications = createNotifications(db, clock, push, {
-    appUrl: config.appUrl,
-    handInGroupingMs: config.handInGroupingMs ?? 60_000,
-  });
+  const notifications = createNotifications(
+    db,
+    clock,
+    push,
+    { appUrl: config.appUrl, handInGroupingMs: config.handInGroupingMs ?? 60_000 },
+    ({ endpoint, error }) => app.log.warn({ endpoint: new URL(endpoint).host, error }, "couldn't send a push notification"),
+  );
   await notificationRoutes(app, people, notifications, config.vapidPublicKey);
 
   // Jobs that run on their own, every so often: whatever is due, they do.

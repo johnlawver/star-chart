@@ -9,26 +9,46 @@ export function createNotifications(
   clock: Clock,
   push: PushSender,
   settings: { appUrl: string; handInGroupingMs: number },
+  /** Where to report a device that couldn't be reached, without stopping anything else. */
+  logFailure: (details: { endpoint: string; error: unknown }) => void,
 ) {
-  /** Sends a notification to every subscribed device of every grown-up in a chart, forgetting devices that are gone. */
-  async function toChart(chartId: string, message: PushMessage): Promise<void> {
-    const subscriptions = await db
-      .selectFrom("push_subscriptions")
-      .innerJoin("grown_ups", "grown_ups.id", "push_subscriptions.grown_up_id")
-      .select(["push_subscriptions.endpoint", "push_subscriptions.p256dh", "push_subscriptions.auth"])
-      .where("grown_ups.chart_id", "=", chartId)
-      .execute();
-    await Promise.all(
+  /**
+   * Sends a notification to each of some devices separately: one failing (the push service refusing it, say) is
+   * logged and never stops the others, or the server. Devices the push service says are gone are forgotten.
+   */
+  async function sendTo(
+    subscriptions: { endpoint: string; p256dh: string; auth: string }[],
+    message: PushMessage,
+  ): Promise<{ devices: number; delivered: number }> {
+    const results = await Promise.all(
       subscriptions.map(async (subscription) => {
-        const result = await push.send(
-          { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
-          message,
-        );
-        if (result === "gone") {
-          await db.deleteFrom("push_subscriptions").where("endpoint", "=", subscription.endpoint).execute();
+        try {
+          const result = await push.send(
+            { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
+            message,
+          );
+          if (result === "gone") {
+            await db.deleteFrom("push_subscriptions").where("endpoint", "=", subscription.endpoint).execute();
+          }
+          return result === "sent";
+        } catch (error) {
+          logFailure({ endpoint: subscription.endpoint, error });
+          return false;
         }
       }),
     );
+    return { devices: subscriptions.length, delivered: results.filter(Boolean).length };
+  }
+
+  const subscriptionsWhere = () =>
+    db
+      .selectFrom("push_subscriptions")
+      .innerJoin("grown_ups", "grown_ups.id", "push_subscriptions.grown_up_id")
+      .select(["push_subscriptions.endpoint", "push_subscriptions.p256dh", "push_subscriptions.auth"]);
+
+  /** Sends a notification to every subscribed device of every grown-up in a chart. */
+  async function toChart(chartId: string, message: PushMessage): Promise<void> {
+    await sendTo(await subscriptionsWhere().where("grown_ups.chart_id", "=", chartId).execute(), message);
   }
 
   const controlCenter = () => `${settings.appUrl}/`;
@@ -117,6 +137,16 @@ export function createNotifications(
           tag: "hand-ins",
         });
       }
+    },
+
+    /** A test notification to one grown-up's own devices, so they can check notifications reach them. */
+    async test(grownUpId: string): Promise<{ devices: number; delivered: number }> {
+      return sendTo(await subscriptionsWhere().where("grown_ups.id", "=", grownUpId).execute(), {
+        title: "Star Chart notifications work!",
+        body: "You'll get one like this when a ticket needs you.",
+        url: controlCenter(),
+        tag: "test",
+      });
     },
 
     /** The devices where a grown-up has turned on notifications. */
