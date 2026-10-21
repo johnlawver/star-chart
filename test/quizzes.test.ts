@@ -192,3 +192,57 @@ describe("when a pool is empty", () => {
     printer.close();
   });
 });
+
+describe("checking a quiz", () => {
+  /** Nova prints a sample addition quiz and hands it in. */
+  async function novaHandsInAnAdditionQuiz() {
+    const { chart, nova, category, addTopic, switchOn } = await aChartWithMath();
+    const addition = await addTopic("Addition", { samples: "addition" });
+    await switchOn(addition.id, nova, 1);
+    const printer = await chart.connectPrinter();
+    const scanner = await chart.connectScanner();
+    const screen = await chart.connectScreen();
+    const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: addition.id });
+    const { code } = (await printer.nextMessage()).ticket;
+    scanner.send({ type: "scan", code });
+    await screen.nextMessage();
+    const closeAll = () => [printer, scanner, screen].forEach((connection) => connection.close());
+    return { chart, nova, printer, ticketId: printed.body.ticket.id as string, closeAll };
+  }
+
+  test("grown-ups see a handed-in quiz's answer key, and the answers are right", async () => {
+    const { chart, ticketId, closeAll } = await novaHandsInAnAdditionQuiz();
+
+    const [waiting] = (await chart.owner.get("/api/tickets?state=handed-in")).body.tickets;
+
+    expect(waiting.id).toBe(ticketId);
+    expect(waiting.answerKey).toHaveLength(10);
+    for (const { prompt, answer } of waiting.answerKey as { prompt: string; answer: string }[]) {
+      const [, a, b] = prompt.match(/^(\d+) \+ (\d+) =$/) ?? [];
+      expect(Number(answer), prompt).toBe(Number(a) + Number(b));
+    }
+    closeAll();
+  });
+
+  test("approving a quiz can record a score, which grown-ups then see", async () => {
+    const { chart, ticketId, closeAll } = await novaHandsInAnAdditionQuiz();
+
+    const approved = await chart.owner.post(`/api/tickets/${ticketId}/approve`, { score: { correct: 7, outOf: 10 } });
+
+    expect(approved.status).toBe(200);
+    const [done] = (await chart.owner.get("/api/tickets?state=approved")).body.tickets;
+    expect(done).toMatchObject({ id: ticketId, score: { correct: 7, outOf: 10 } });
+    closeAll();
+  });
+
+  test("a score can't be more than the quiz's items, and chores don't have scores", async () => {
+    const { chart, nova, printer, ticketId, closeAll } = await novaHandsInAnAdditionQuiz();
+    const choreTicket = await chart.print(nova, await chart.addChore("Feed the cat", 1, [nova]), printer);
+
+    const tooHigh = await chart.owner.post(`/api/tickets/${ticketId}/approve`, { score: { correct: 11, outOf: 10 } });
+    const onAChore = await chart.owner.post(`/api/tickets/${choreTicket.ticketId}/approve`, { score: { correct: 1, outOf: 1 } });
+
+    expect([tooHigh.status, onAChore.status]).toEqual([400, 400]);
+    closeAll();
+  });
+});

@@ -1,7 +1,7 @@
 import { timeZoneOf } from "../catalog/catalog.js";
 import { taskKind } from "../catalog/task-kinds.js";
 import type { Clock } from "../clock.js";
-import type { Database, DisplayStyle, TicketState } from "../database.js";
+import type { Database, DisplayStyle, QuizItem, TicketState } from "../database.js";
 import { isId } from "../ids.js";
 import { isUniqueViolation } from "../database-errors.js";
 import type { Stars } from "../stars/stars.js";
@@ -32,12 +32,20 @@ export interface TicketSummary {
   title: string;
   stars: number;
   state: TicketState;
+  /** For a quiz: its items with their answers, for grown-ups checking it. */
+  answerKey: QuizItem[] | null;
+  score: { correct: number; outOf: number } | null;
 }
 
 class PrinterOffline extends Error {}
+class BadScore extends Error {}
 
 /** The outcome of a grown-up's decision on a ticket. */
-export type Decision<T> = T | { refused: "not-found" } | { refused: "not-allowed"; state: TicketState };
+export type Decision<T> =
+  | T
+  | { refused: "not-found" }
+  | { refused: "not-allowed"; state: TicketState }
+  | { refused: "bad-score"; reason: string };
 
 type GrownUpAction = "approve" | "reject" | "dismiss";
 
@@ -69,14 +77,14 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
     action: GrownUpAction,
     apply: (
       trx: Database,
-      ticket: { id: string; child_id: string; stars: number },
+      ticket: { id: string; child_id: string; stars: number; quiz_id: string | null },
     ) => Promise<{ result: T; note?: string | null; stars?: number }>,
   ): Promise<Decision<T>> {
     if (!isId(ticketId)) return { refused: "not-found" };
     return db.transaction().execute(async (trx) => {
       const ticket = await trx
         .selectFrom("tickets")
-        .select(["id", "child_id", "stars", "state"])
+        .select(["id", "child_id", "stars", "state", "quiz_id"])
         .where("chart_id", "=", chartId)
         .where("id", "=", ticketId)
         .forUpdate()
@@ -97,6 +105,9 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
         })
         .execute();
       return applied.result;
+    }).catch((error: unknown) => {
+      if (error instanceof BadScore) return { refused: "bad-score" as const, reason: error.message };
+      throw error;
     });
   }
 
@@ -239,12 +250,22 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
       actor: Actor,
       ticketId: string,
       starsOverride?: number,
+      score?: { correct: number; outOf: number },
     ): Promise<Decision<{ id: string; state: TicketState; stars: number }>> {
       return decide(chartId, actor, ticketId, "approve", async (trx, ticket) => {
+        if (score) {
+          if (!ticket.quiz_id) throw new BadScore("only quizzes have a score");
+          if (score.correct > score.outOf) throw new BadScore("a score can't be more than the number of items");
+        }
         const awarded = starsOverride ?? ticket.stars;
         await trx
           .updateTable("tickets")
-          .set({ state: "approved", awarded_stars: awarded })
+          .set({
+            state: "approved",
+            awarded_stars: awarded,
+            score_correct: score?.correct ?? null,
+            score_out_of: score?.outOf ?? null,
+          })
           .where("id", "=", ticket.id)
           .execute();
         await stars.earnFromTicket(trx, { chartId, childId: ticket.child_id, ticketId: ticket.id, amount: awarded });
@@ -320,9 +341,10 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
 
     /** The chart's tickets in a given state, oldest first, for grown-ups to work through. */
     async list(chartId: string, state: TicketState): Promise<TicketSummary[]> {
-      return db
+      const rows = await db
         .selectFrom("tickets")
         .innerJoin("children", "children.id", "tickets.child_id")
+        .leftJoin("quizzes", "quizzes.id", "tickets.quiz_id")
         .select([
           "tickets.id",
           "tickets.child_id as childId",
@@ -330,11 +352,19 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
           "tickets.title",
           "tickets.stars",
           "tickets.state",
+          "quizzes.items",
+          "tickets.score_correct",
+          "tickets.score_out_of",
         ])
         .where("tickets.chart_id", "=", chartId)
         .where("tickets.state", "=", state)
         .orderBy("tickets.created_at")
         .execute();
+      return rows.map(({ items, score_correct, score_out_of, ...ticket }) => ({
+        ...ticket,
+        answerKey: items ?? null,
+        score: score_correct === null || score_out_of === null ? null : { correct: score_correct, outOf: score_out_of },
+      }));
     },
   };
 }

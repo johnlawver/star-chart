@@ -24,7 +24,16 @@ describe("handing in a ticket", () => {
     });
     const waiting = (await chart.owner.get("/api/tickets?state=handed-in")).body.tickets;
     expect(waiting).toEqual([
-      { id: ticketId, childId: nova, childNickname: "Nova", title: "Feed the cat", stars: 2, state: "handed-in" },
+      {
+        id: ticketId,
+        childId: nova,
+        childNickname: "Nova",
+        title: "Feed the cat",
+        stars: 2,
+        state: "handed-in",
+        answerKey: null,
+        score: null,
+      },
     ]);
     for (const connection of [printer, scanner, screen]) connection.close();
   });

@@ -13,6 +13,7 @@ import type { Notifications } from "../notifications/notifications.js";
 function sendDecision<T>(reply: FastifyReply, decision: Decision<T>) {
   if (typeof decision === "object" && decision !== null && "refused" in decision) {
     if (decision.refused === "not-found") return reply.code(404).send({ error: "no such ticket" });
+    if (decision.refused === "bad-score") return reply.code(400).send({ error: decision.reason });
     return reply.code(409).send({ error: `that can't be done to a ticket that is ${decision.state}` });
   }
   return reply.send({ ticket: decision });
@@ -57,13 +58,24 @@ export async function ticketRoutes(
     },
   );
 
-  app.post<{ Params: { ticketId: string }; Body: { stars?: number } }>(
+  app.post<{ Params: { ticketId: string }; Body: { stars?: number; score?: { correct: number; outOf: number } } }>(
     "/api/tickets/:ticketId/approve",
     {
       schema: {
         body: {
           type: "object",
-          properties: { stars: { type: "integer", minimum: 0, maximum: 100 } },
+          properties: {
+            stars: { type: "integer", minimum: 0, maximum: 100 },
+            score: {
+              type: "object",
+              properties: {
+                correct: { type: "integer", minimum: 0, maximum: 100 },
+                outOf: { type: "integer", minimum: 1, maximum: 100 },
+              },
+              required: ["correct", "outOf"],
+              additionalProperties: false,
+            },
+          },
           additionalProperties: false,
         },
       },
@@ -71,7 +83,7 @@ export async function ticketRoutes(
     async (request, reply) => {
       const signedIn = await requireActor(people, request, reply);
       if (!signedIn) return reply;
-      return sendDecision(reply, await tickets.approve(signedIn.chart.id, decidedBy(signedIn), request.params.ticketId, request.body.stars));
+      return sendDecision(reply, await tickets.approve(signedIn.chart.id, decidedBy(signedIn), request.params.ticketId, request.body.stars, request.body.score));
     },
   );
 
