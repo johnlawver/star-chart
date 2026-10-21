@@ -23,6 +23,7 @@ import * as reprintRequests from "./0021-reprint-requests.js";
 import * as pushNotifications from "./0022-push-notifications.js";
 import * as dailySummary from "./0023-daily-summary.js";
 import * as guestPins from "./0024-guest-pins.js";
+import * as quizzes from "./0025-quizzes.js";
 
 // Every schema change is a migration, listed here in order. Never edit one that has shipped; add a new one.
 export const migrations: Record<string, Migration> = {
@@ -50,4 +51,5 @@ export const migrations: Record<string, Migration> = {
   "0022-push-notifications": pushNotifications,
   "0023-daily-summary": dailySummary,
   "0024-guest-pins": guestPins,
+  "0025-quizzes": quizzes,
 };

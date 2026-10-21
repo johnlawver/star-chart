@@ -114,10 +114,29 @@ export const choreKind: TaskKind = {
   },
 };
 
-const kinds: Partial<Record<TaskKindName, TaskKind>> = { chore: choreKind };
+export const quizKind: TaskKind = {
+  name: "quiz",
+
+  // A child can choose any topic in the category that's switched on for them.
+  async choicesFor(db, _context, categoryId, childId) {
+    const topics = await db
+      .selectFrom("topics")
+      .innerJoin("topic_children", "topic_children.topic_id", "topics.id")
+      .select(["topics.id", "topics.name", "topics.stars", "topics.icon"])
+      .where("topics.category_id", "=", categoryId)
+      .where("topic_children.child_id", "=", childId)
+      .orderBy("topics.name")
+      .execute();
+    return topics.map((topic) => ({ ...topic, done: false }));
+  },
+
+  async issue() {
+    return undefined;
+  },
+};
+
+const kinds: Record<TaskKindName, TaskKind> = { chore: choreKind, quiz: quizKind };
 
 export function taskKind(name: TaskKindName): TaskKind {
-  const kind = kinds[name];
-  if (!kind) throw new Error(`The ${name} task kind isn't available yet`);
-  return kind;
+  return kinds[name];
 }

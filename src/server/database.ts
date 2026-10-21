@@ -1,4 +1,4 @@
-import { Kysely, PostgresDialect, type Generated } from "kysely";
+import { Kysely, PostgresDialect, type Generated, type JSONColumnType } from "kysely";
 import { Migrator, type Migration, type MigrationProvider } from "kysely/migration";
 import pg from "pg";
 import { migrations } from "./migrations/index.js";
@@ -10,6 +10,7 @@ export interface Tables {
     name: string;
     time_zone: string;
     daily_summary_sent_on: string | null;
+    quiz_pool_target: Generated<number>;
     created_at: Date;
   };
   grown_ups: {
@@ -69,6 +70,34 @@ export interface Tables {
     chore_id: string;
     child_id: string;
   };
+  topics: {
+    id: Generated<string>;
+    category_id: string;
+    name: string;
+    stars: number;
+    icon: string | null;
+    samples: SampleSet | null;
+    created_at: Date;
+  };
+  topic_children: {
+    topic_id: string;
+    child_id: string;
+    level: number;
+  };
+  quizzes: {
+    id: Generated<string>;
+    chart_id: string;
+    child_id: string;
+    topic_id: string;
+    level: number;
+    external_id: string | null;
+    title: string;
+    instructions: string;
+    items: JSONColumnType<QuizItem[]>;
+    state: "pooled" | "printed" | "withdrawn";
+    created_at: Date;
+    printed_at: Date | null;
+  };
   chore_codes: {
     child_id: string;
     chore_id: string;
@@ -88,6 +117,10 @@ export interface Tables {
     awarded_stars: number | null;
     note: string | null;
     icon: string | null;
+    quiz_id: string | null;
+    topic_id: string | null;
+    score_correct: number | null;
+    score_out_of: number | null;
     created_at: Date;
   };
   ticket_events: {
@@ -182,6 +215,13 @@ export type DisplayStyle = "pictures" | "words";
 export type DeviceKind = "screen" | "printer" | "scanner";
 export type TaskKindName = "chore" | "quiz";
 export type TicketState = "open" | "handed-in" | "approved" | "dismissed";
+export type SampleSet = "addition" | "subtraction" | "letters" | "numbers" | "spelling";
+
+/** One question in a quiz: what's printed, and the answer grown-ups see when checking. */
+export interface QuizItem {
+  prompt: string;
+  answer: string;
+}
 
 export type Database = Kysely<Tables>;
 

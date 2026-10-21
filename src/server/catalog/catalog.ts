@@ -1,5 +1,5 @@
 import type { Clock } from "../clock.js";
-import type { Database, TaskKindName } from "../database.js";
+import type { Database, SampleSet, TaskKindName } from "../database.js";
 import { isId } from "../ids.js";
 import { taskKind, type Choice } from "./task-kinds.js";
 
@@ -105,7 +105,50 @@ export function createCatalog(db: Database, clock: Clock) {
         .where("task_categories.chart_id", "=", chartId)
         .orderBy("chores.name")
         .execute();
+      const topics = await db
+        .selectFrom("topics")
+        .innerJoin("task_categories", "task_categories.id", "topics.category_id")
+        .leftJoin("topic_children", "topic_children.topic_id", "topics.id")
+        .select([
+          "topics.id",
+          "topics.category_id",
+          "topics.name",
+          "topics.stars",
+          "topics.icon",
+          "topics.samples",
+          "topic_children.child_id",
+          "topic_children.level",
+        ])
+        .where("task_categories.chart_id", "=", chartId)
+        .orderBy("topics.name")
+        .execute();
       return categories.map((category) => {
+        if (category.kind === "quiz") {
+          const byId = new Map<
+            string,
+            {
+              id: string;
+              name: string;
+              stars: number;
+              icon: string | null;
+              samples: SampleSet | null;
+              children: { childId: string; level: number }[];
+            }
+          >();
+          for (const row of topics.filter((topic) => topic.category_id === category.id)) {
+            const topic = byId.get(row.id) ?? {
+              id: row.id,
+              name: row.name,
+              stars: row.stars,
+              icon: row.icon,
+              samples: row.samples,
+              children: [],
+            };
+            if (row.child_id && row.level !== null) topic.children.push({ childId: row.child_id, level: row.level });
+            byId.set(row.id, topic);
+          }
+          return { ...category, topics: [...byId.values()] };
+        }
         const byId = new Map<
           string,
           { id: string; name: string; stars: number; icon: string | null; frequency: Frequency; childIds: string[] }
@@ -124,6 +167,74 @@ export function createCatalog(db: Database, clock: Clock) {
         }
         return { ...category, chores: [...byId.values()] };
       });
+    },
+
+    /**
+     * Adds a topic to a quiz category, optionally with a built-in sample set. Refused if the category isn't one of
+     * this chart's quiz categories.
+     */
+    async addTopic(
+      chartId: string,
+      input: { categoryId: string; name: string; stars: number; icon?: string; samples?: SampleSet },
+    ): Promise<{ id: string; name: string; stars: number; icon: string | null; samples: SampleSet | null } | { refused: string }> {
+      if (!isId(input.categoryId)) return { refused: "unknown category" };
+      const category = await db
+        .selectFrom("task_categories")
+        .select("kind")
+        .where("chart_id", "=", chartId)
+        .where("id", "=", input.categoryId)
+        .executeTakeFirst();
+      if (!category) return { refused: "unknown category" };
+      if (category.kind !== "quiz") return { refused: "that category isn't for quizzes" };
+      return db
+        .insertInto("topics")
+        .values({
+          category_id: input.categoryId,
+          name: input.name.trim(),
+          stars: input.stars,
+          icon: input.icon ?? null,
+          samples: input.samples ?? null,
+          created_at: clock.now(),
+        })
+        .returning(["id", "name", "stars", "icon", "samples"])
+        .executeTakeFirstOrThrow();
+    },
+
+    /** Switches a topic on for a child at a level, or moves them to a new level. Refused if either isn't in this chart. */
+    async setTopicLevel(chartId: string, topicId: string, childId: string, level: number): Promise<boolean> {
+      if (!isId(topicId) || !isId(childId)) return false;
+      const topic = await db
+        .selectFrom("topics")
+        .innerJoin("task_categories", "task_categories.id", "topics.category_id")
+        .select("topics.id")
+        .where("task_categories.chart_id", "=", chartId)
+        .where("topics.id", "=", topicId)
+        .executeTakeFirst();
+      const child = await db
+        .selectFrom("children")
+        .select("id")
+        .where("chart_id", "=", chartId)
+        .where("id", "=", childId)
+        .executeTakeFirst();
+      if (!topic || !child) return false;
+      await db
+        .insertInto("topic_children")
+        .values({ topic_id: topicId, child_id: childId, level })
+        .onConflict((oc) => oc.columns(["topic_id", "child_id"]).doUpdateSet({ level }))
+        .execute();
+      return true;
+    },
+
+    /** Switches a topic off for a child. */
+    async switchTopicOff(chartId: string, topicId: string, childId: string): Promise<boolean> {
+      if (!isId(topicId) || !isId(childId)) return false;
+      const result = await db
+        .deleteFrom("topic_children")
+        .where("topic_id", "=", topicId)
+        .where("child_id", "=", childId)
+        .where("child_id", "in", db.selectFrom("children").select("id").where("chart_id", "=", chartId))
+        .executeTakeFirst();
+      return result.numDeletedRows > 0n;
     },
 
     /** The categories a child sees at the observatory: only those with something they can choose. */
