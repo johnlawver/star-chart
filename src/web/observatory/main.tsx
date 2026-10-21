@@ -163,6 +163,9 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
   );
 }
 
+/** The "Guest" button on the unlock screen, for someone with a Guest PIN. */
+const guestChoice = { id: "guest", name: "guest" };
+
 /** A grown-up taps themselves and enters their PIN to open the Control Center here. */
 function Unlock({ deviceToken, onCancel }: { deviceToken: string; onCancel: () => void }) {
   const [grownUps, setGrownUps] = useState<{ id: string; name: string }[] | undefined>();
@@ -179,7 +182,10 @@ function Unlock({ deviceToken, onCancel }: { deviceToken: string; onCancel: () =
 
   const submit = async () => {
     if (!chosen) return;
-    const result = await api("POST", "/api/observatory/unlock", { grownUpId: chosen.id, pin }, deviceToken);
+    const result =
+      chosen.id === guestChoice.id
+        ? await api("POST", "/api/observatory/unlock-guest", { pin }, deviceToken)
+        : await api("POST", "/api/observatory/unlock", { grownUpId: chosen.id, pin }, deviceToken);
     if (result.ok) {
       location.href = "/?on=observatory";
       return;
@@ -193,11 +199,13 @@ function Unlock({ deviceToken, onCancel }: { deviceToken: string; onCancel: () =
       <main>
         <h1>Which grown-up are you?</h1>
         {grownUps?.length === 0 && <p>No grown-up has set a PIN yet. Set one in the Control Center on your phone.</p>}
+        {/* Guests (babysitters) have a Guest PIN instead. */}
         {grownUps?.map((grownUp) => (
           <button key={grownUp.id} onClick={() => setChosen(grownUp)}>
             {grownUp.name}
           </button>
         ))}
+        <button onClick={() => setChosen(guestChoice)}>Guest</button>
         <footer>
           <button onClick={onCancel}>Back</button>
         </footer>

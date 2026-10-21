@@ -12,6 +12,12 @@ interface Me {
   chart: { name: string; timeZone: string };
 }
 
+/** A guest (a babysitter) with a Guest PIN, who can only handle tickets. */
+interface GuestMe {
+  guest: true;
+  chart: { name: string; timeZone: string };
+}
+
 async function api(method: string, url: string, body?: unknown) {
   const response = await fetch(url, {
     method,
@@ -34,7 +40,7 @@ async function lockObservatory() {
 }
 
 function ControlCenter() {
-  const [me, setMe] = useState<Me | null | undefined>(undefined);
+  const [me, setMe] = useState<Me | GuestMe | null | undefined>(undefined);
 
   // On the observatory, the Control Center locks itself after a short while untouched.
   useEffect(() => {
@@ -68,6 +74,16 @@ function ControlCenter() {
     }
     return <SignedOut onSignedIn={refresh} />;
   }
+  if ("guest" in me) {
+    return (
+      <main>
+        <h1>{me.chart.name}</h1>
+        <p>You're helping out as a guest: you can check and approve tickets.</p>
+        <button onClick={lockObservatory}>Lock</button>
+        <WaitingSection />
+      </main>
+    );
+  }
   return (
     <main>
       <h1>{me.chart.name}</h1>
@@ -85,6 +101,7 @@ function ControlCenter() {
       <StarsSection />
       <ChildrenSection />
       <PinSection />
+      {!onObservatory && <GuestPinsSection />}
       {me.grownUp.role === "owner" && !onObservatory && <DeleteChartSection me={me} />}
       <ChoresSection />
       <GrownUpsSection me={me} />
@@ -778,6 +795,73 @@ function NotificationsSwitch() {
       {on === undefined ? "…" : on ? <button onClick={turnOff}>On (turn off)</button> : <button onClick={turnOn}>Off (turn on)</button>}
       {message && <span role="status"> {message}</span>}
     </p>
+  );
+}
+
+function GuestPinsSection() {
+  const [pins, setPins] = useState<{ id: string; label: string | null; expiresAt: string }[]>([]);
+  const [madePin, setMadePin] = useState<string | undefined>();
+
+  const load = async () => {
+    const result = await api("GET", "/api/guest-pins");
+    if (result.ok) setPins(result.data.guestPins);
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const make = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const label = String(data.get("label") ?? "").trim();
+    const result = await api("POST", "/api/guest-pins", { ...(label ? { label } : {}), hours: Number(data.get("hours")) });
+    if (result.ok) setMadePin(result.data.pin);
+    form.reset();
+    await load();
+  };
+
+  const cancel = async (id: string) => {
+    await api("DELETE", `/api/guest-pins/${id}`);
+    await load();
+  };
+
+  return (
+    <section>
+      <h2>Guest PINs</h2>
+      <p>For a babysitter: a PIN that opens just the tickets on the observatory, for a few hours.</p>
+      <form onSubmit={make}>
+        <label>
+          Who's it for? <input name="label" placeholder="Saturday sitter" maxLength={60} />
+        </label>{" "}
+        <label>
+          Lasts{" "}
+          <select name="hours" defaultValue="12">
+            {[3, 6, 12, 24, 48].map((hours) => (
+              <option key={hours} value={hours}>
+                {hours} hours
+              </option>
+            ))}
+          </select>
+        </label>{" "}
+        <button type="submit">Make a Guest PIN</button>
+      </form>
+      {madePin && (
+        <p role="status">
+          Their PIN is <strong style={{ fontSize: "2em", letterSpacing: "0.2em" }}>{madePin}</strong>. Write it down now;
+          it won't be shown again.
+        </p>
+      )}
+      <ul>
+        {pins.map((pin) => (
+          <li key={pin.id}>
+            {pin.label ?? "Guest"}, until {new Date(pin.expiresAt).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}{" "}
+            <button onClick={() => cancel(pin.id)}>Cancel</button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
