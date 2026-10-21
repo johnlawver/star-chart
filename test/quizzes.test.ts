@@ -246,3 +246,20 @@ describe("checking a quiz", () => {
     closeAll();
   });
 });
+
+describe("lost quizzes (ticket 16)", () => {
+  test("a reprinted quiz is the very same quiz: same code, instructions and prompts", async () => {
+    const { chart, nova, category, printer, writeQuiz, print } = await novaWithSpelling();
+    await writeQuiz(["because", "friend"]);
+    await print();
+    const original = (await printer.nextMessage()).ticket;
+    await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, { categoryId: category.id });
+    const [request] = (await chart.owner.get("/api/reprint-requests")).body.reprintRequests;
+
+    await chart.owner.post(`/api/reprint-requests/${request.id}/approve`, {});
+    const reprint = (await printer.nextMessage()).ticket;
+
+    expect(reprint).toEqual(original);
+    printer.close();
+  });
+});

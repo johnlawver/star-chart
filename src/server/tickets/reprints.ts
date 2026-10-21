@@ -99,9 +99,12 @@ export function createReprints(db: Database, clock: Clock) {
             .selectFrom("reprint_requests")
             .innerJoin("tickets", "tickets.id", "reprint_requests.ticket_id")
             .innerJoin("children", "children.id", "tickets.child_id")
+            .leftJoin("quizzes", "quizzes.id", "tickets.quiz_id")
             .select([
               "reprint_requests.id",
               "reprint_requests.observatory_id",
+              "quizzes.instructions",
+              "quizzes.items",
               "tickets.id as ticketId",
               "tickets.state as ticketState",
               "tickets.title",
@@ -131,6 +134,10 @@ export function createReprints(db: Database, clock: Clock) {
             icon: request.icon,
             stars: request.stars,
             code: request.code,
+            // A quiz prints exactly as it did the first time: its instructions and prompts (never the answers).
+            ...(request.items
+              ? { quiz: { instructions: request.instructions ?? "", prompts: request.items.map((item) => item.prompt) } }
+              : {}),
           };
           if (!deliver(request.observatory_id, job)) throw new PrinterOffline();
           return { id: request.id };
