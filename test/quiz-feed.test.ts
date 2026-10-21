@@ -124,3 +124,22 @@ describe("sending quizzes in", () => {
     expect(statuses).toEqual([400, 400, 400]);
   });
 });
+
+describe("withdrawing quizzes", () => {
+  test("the feed can withdraw a quiz that hasn't been printed, but not one that has", async () => {
+    const { chart, nova, category, topic, feed } = await aChartWithAFeed();
+    await feed.post("/api/feed/quizzes", aFeedQuiz(nova, topic.id, "will-print"));
+    await feed.post("/api/feed/quizzes", aFeedQuiz(nova, topic.id, "still-waiting"));
+    const printer = await chart.connectPrinter();
+    await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: topic.id });
+    await printer.nextMessage();
+
+    const waiting = await feed.delete("/api/feed/quizzes/still-waiting");
+    const printed = await feed.delete("/api/feed/quizzes/will-print");
+    const unknown = await feed.delete("/api/feed/quizzes/never-sent");
+
+    expect([waiting.status, printed.status, unknown.status]).toEqual([204, 409, 404]);
+    expect((await feed.get("/api/feed/pools")).body.pools[0].waiting).toBe(0);
+    printer.close();
+  });
+});

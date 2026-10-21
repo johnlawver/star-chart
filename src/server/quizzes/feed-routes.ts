@@ -87,4 +87,13 @@ export async function feedRoutes(app: FastifyInstance, people: People, feed: Qui
       return reply.code(result.duplicate ? 200 : 201).send({ quizId: result.id, ...(result.duplicate ? { duplicate: true } : {}) });
     },
   );
+
+  app.delete<{ Params: { externalId: string } }>("/api/feed/quizzes/:externalId", async (request, reply) => {
+    const feedFor = await requireFeed(feed, request, reply);
+    if (!feedFor) return reply;
+    const outcome = await feed.withdraw(feedFor.chartId, request.params.externalId);
+    if (outcome === "not-found") return reply.code(404).send({ error: "no quiz with that id" });
+    if (outcome === "printed") return reply.code(409).send({ error: "that quiz has already been printed" });
+    return reply.code(204).send();
+  });
 }

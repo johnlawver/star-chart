@@ -84,6 +84,23 @@ export function createQuizFeed(db: Database, clock: Clock) {
       };
     },
 
+    /** Withdraws a quiz the feed sent, by the feed's own id, as long as it hasn't been printed. */
+    async withdraw(chartId: string, externalId: string): Promise<"withdrawn" | "printed" | "not-found"> {
+      return db.transaction().execute(async (trx) => {
+        const quiz = await trx
+          .selectFrom("quizzes")
+          .select(["id", "state"])
+          .where("chart_id", "=", chartId)
+          .where("external_id", "=", externalId)
+          .forUpdate()
+          .executeTakeFirst();
+        if (!quiz) return "not-found";
+        if (quiz.state === "printed") return "printed";
+        await trx.updateTable("quizzes").set({ state: "withdrawn" }).where("id", "=", quiz.id).execute();
+        return "withdrawn";
+      });
+    },
+
     /** The chart a Feed Key belongs to (noting that it was used), or undefined if it isn't a valid key. */
     async chartFor(key: string): Promise<string | undefined> {
       const found = await db
