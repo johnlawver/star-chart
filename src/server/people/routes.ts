@@ -246,6 +246,33 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
     },
   );
 
+  app.post<{ Body: { grownUpId: string } }>(
+    "/api/ownership",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { grownUpId: { type: "string", maxLength: 36 } },
+          required: ["grownUpId"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      if (signedIn.grownUp.role !== "owner") return reply.code(403).send({ error: "Only the owner can hand over the chart." });
+      const result = await people.transferOwnership(signedIn.chart.id, signedIn.grownUp.id, request.body.grownUpId);
+      if ("refused" in result) {
+        if (result.refused === "not-an-admin") {
+          return reply.code(409).send({ error: "Make them an admin first; ownership goes to an admin." });
+        }
+        return reply.code(404).send({ error: "no such grown-up" });
+      }
+      return {};
+    },
+  );
+
   app.post("/api/sign-out", async (request, reply) => {
     const token = request.cookies[sessionCookie];
     if (token) await people.signOut(token);

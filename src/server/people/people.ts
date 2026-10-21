@@ -260,6 +260,29 @@ export function createPeople(db: Database, clock: Clock) {
       });
     },
 
+    /** The owner hands the chart to one of its admins, and becomes an admin. */
+    async transferOwnership(
+      chartId: string,
+      ownerId: string,
+      newOwnerId: string,
+    ): Promise<{ ok: true } | { refused: "no-such-grown-up" | "not-an-admin" }> {
+      if (!isId(newOwnerId)) return { refused: "no-such-grown-up" };
+      return db.transaction().execute(async (trx) => {
+        const newOwner = await trx
+          .selectFrom("grown_ups")
+          .select("role")
+          .where("chart_id", "=", chartId)
+          .where("id", "=", newOwnerId)
+          .forUpdate()
+          .executeTakeFirst();
+        if (!newOwner) return { refused: "no-such-grown-up" as const };
+        if (newOwner.role !== "admin") return { refused: "not-an-admin" as const };
+        await trx.updateTable("grown_ups").set({ role: "admin" }).where("id", "=", ownerId).execute();
+        await trx.updateTable("grown_ups").set({ role: "owner" }).where("id", "=", newOwnerId).execute();
+        return { ok: true as const };
+      });
+    },
+
     async signOut(token: string): Promise<void> {
       await db.deleteFrom("sessions").where("token_hash", "=", hashToken(token)).execute();
     },
