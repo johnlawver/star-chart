@@ -4,7 +4,7 @@ import QRCode from "qrcode";
 import { stored } from "../shared/api.js";
 import { Icon, IconPicker } from "../shared/icons.js";
 import { ConstellationList, type Constellation } from "../shared/constellation.js";
-import { AnswerKey, QuizCategory, QuizSettings, WriteQuiz, type Topic } from "./quizzes.js";
+import { AnswerKey, FeedKeys, QuizCategory, QuizSettings, WriteQuiz, type Topic } from "./quizzes.js";
 
 // The Control Center, deliberately plain for now: sign up, sign in, and see your chart.
 
@@ -109,6 +109,7 @@ function ControlCenter() {
         <section>
           <h2>Quiz settings</h2>
           <QuizSettings quizPoolTarget={me.chart.quizPoolTarget} />
+          {!onObservatory && <FeedKeys />}
         </section>
       )}
       <GrownUpsSection me={me} />

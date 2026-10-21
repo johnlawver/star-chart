@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../shared/api.js";
 import { Icon, IconPicker } from "../shared/icons.js";
 
@@ -250,5 +250,61 @@ export function AnswerKey({ items }: { items: { prompt: string; answer: string }
         ))}
       </ol>
     </details>
+  );
+}
+
+/** Feed Keys, which let an outside quiz feed fill this chart's quiz pools (owners and admins). */
+export function FeedKeys() {
+  const [keys, setKeys] = useState<{ id: string; label: string | null; lastUsedAt: string | null }[]>([]);
+  const [madeKey, setMadeKey] = useState<string | undefined>();
+
+  const load = async () => {
+    const result = await api("GET", "/api/feed-keys");
+    if (result.ok) setKeys(result.data.feedKeys);
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const make = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const label = String(new FormData(form).get("label") ?? "").trim();
+    const result = await api("POST", "/api/feed-keys", label ? { label } : {});
+    if (result.ok) setMadeKey(result.data.key);
+    form.reset();
+    await load();
+  };
+
+  const revoke = async (id: string) => {
+    await api("DELETE", `/api/feed-keys/${id}`);
+    await load();
+  };
+
+  return (
+    <div>
+      <h3>Quiz feed keys</h3>
+      <p>A key lets an outside quiz service fill this chart's quiz pools. It never sees children's names.</p>
+      <form onSubmit={make}>
+        <label>
+          Name <input name="label" placeholder="Quiz writer" maxLength={60} />
+        </label>{" "}
+        <button type="submit">Make a key</button>
+      </form>
+      {madeKey && (
+        <p role="status">
+          The key is <code>{madeKey}</code>. Copy it into the quiz service now; it won't be shown again.
+        </p>
+      )}
+      <ul>
+        {keys.map((key) => (
+          <li key={key.id}>
+            {key.label ?? "Key"}: {key.lastUsedAt ? `last used ${new Date(key.lastUsedAt).toLocaleString()}` : "not used yet"}{" "}
+            <button onClick={() => revoke(key.id)}>Revoke</button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

@@ -2,6 +2,8 @@
 
 A reward system for households and classrooms. See `CONTEXT.md` for the words we use, `docs/adr/` for key decisions, and `.scratch/` for the spec and tickets.
 
+An outside quiz service can keep children's quiz pools filled: see [docs/quiz-feed-api.md](docs/quiz-feed-api.md).
+
 ## Running it locally
 
 You need Node 24+, Docker, the Doppler CLI and Tailscale.

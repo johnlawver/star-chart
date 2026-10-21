@@ -4,12 +4,20 @@
 
 **Blocked by:** 10 (Quizzes: Topics, Levels and Quiz Pools)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] An owner or admin can create a Feed Key (shown once, stored only as a hash), list them, and revoke one. Plain grown-ups and guests can't. A revoked key stops working at once.
-- [ ] The feed can list the chart's pools: for each child (by id only), topic and the child's current level, how many unprinted quizzes the pool holds and the chart's target pool size (default 5, set by grown-ups). Nothing in any feed response contains a child's nickname.
-- [ ] The feed can read finished quizzes since a cursor: which child (id), topic, level, the feed's own id for the quiz, the outcome (approved, or dismissed; with how many times it was rejected first), the stars offered and awarded, the score if one was recorded, and when. The cursor lets it fetch only what's new.
-- [ ] The feed can send a quiz into a pool: child id, topic, level, its own id for the quiz, a title, short instructions, and 1 to 20 items, each a prompt and an answer of limited length. The same feed id sent twice doesn't create a duplicate. A quiz for a child or topic that isn't in the chart, or a topic the child doesn't have switched on, is refused.
-- [ ] The feed can withdraw a quiz that hasn't been printed yet (for example after a level change). A printed quiz can't be withdrawn.
-- [ ] A Feed Key only ever reaches its own chart (API tests), and can't be used for anything but the feed endpoints.
-- [ ] The Control Center shows Feed Keys (with when each was last used) and the target pool size.
+- [x] An owner or admin can create a Feed Key (shown once, stored only as a hash), list them, and revoke one. Plain grown-ups and guests can't. A revoked key stops working at once.
+- [x] The feed can list the chart's pools: for each child (by id only), topic and the child's current level, how many unprinted quizzes the pool holds and the chart's target pool size (default 5, set by grown-ups). Nothing in any feed response contains a child's nickname.
+- [x] The feed can read finished quizzes since a cursor: which child (id), topic, level, the feed's own id for the quiz, the outcome (approved, or dismissed; with how many times it was rejected first), the stars offered and awarded, the score if one was recorded, and when. The cursor lets it fetch only what's new.
+- [x] The feed can send a quiz into a pool: child id, topic, level, its own id for the quiz, a title, short instructions, and 1 to 20 items, each a prompt and an answer of limited length. The same feed id sent twice doesn't create a duplicate. A quiz for a child or topic that isn't in the chart, or a topic the child doesn't have switched on, is refused.
+- [x] The feed can withdraw a quiz that hasn't been printed yet (for example after a level change). A printed quiz can't be withdrawn.
+- [x] A Feed Key only ever reaches its own chart (API tests), and can't be used for anything but the feed endpoints.
+- [x] The Control Center shows Feed Keys (with when each was last used) and the target pool size.
+
+## Notes
+
+- The reference for the feed's author is `docs/quiz-feed-api.md`. It was checked step by step against a real server over HTTP.
+- Feed Keys start with `feed_`, are shown once and stored only as a hash, record when they were last used, and are checked only by the `/api/feed/` endpoints (and those endpoints accept nothing else).
+- The feed sends quizzes through the same `addQuiz` as grown-ups and the built-in samples. `externalId` makes resends safe (200 with `duplicate: true`).
+- "What's done" reads approvals and dismissals of quiz tickets, ordered by the ticket history's sequence number, which is also the cursor (`next` / `after`), 100 at a time. A reused quiz finishing again appears again (it's a separate attempt).
+- Polling only, per ADR 0004; webhooks or a service-wide key can be added later without changing this.
