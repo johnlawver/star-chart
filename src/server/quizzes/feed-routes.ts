@@ -1,9 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { requireGrownUp } from "../people/authenticate.js";
 import type { People } from "../people/people.js";
+import type { QuizItem } from "../database.js";
 import { requireFeed, type QuizFeed } from "./feed.js";
+import type { QuizPools } from "./quiz-pools.js";
+import { quizBodyProperties } from "./routes.js";
 
-export async function feedRoutes(app: FastifyInstance, people: People, feed: QuizFeed) {
+export async function feedRoutes(app: FastifyInstance, people: People, feed: QuizFeed, quizPools: QuizPools) {
   // ----- Grown-ups manage Feed Keys (owners and admins only) -----
 
   app.post<{ Body: { label?: string } }>(
@@ -48,4 +51,40 @@ export async function feedRoutes(app: FastifyInstance, people: People, feed: Qui
     if (!feedFor) return reply;
     return feed.pools(feedFor.chartId);
   });
+
+  // A quiz from the feed, for one child, topic and level. Its externalId (the feed's own id) makes resending safe.
+  app.post<{
+    Body: {
+      childId: string;
+      topicId: string;
+      level: number;
+      externalId: string;
+      title: string;
+      instructions: string;
+      items: QuizItem[];
+    };
+  }>(
+    "/api/feed/quizzes",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            ...quizBodyProperties,
+            level: { type: "integer", minimum: 1, maximum: 20 },
+            externalId: { type: "string", minLength: 1, maxLength: 100 },
+          },
+          required: ["childId", "topicId", "level", "externalId", "title", "instructions", "items"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const feedFor = await requireFeed(feed, request, reply);
+      if (!feedFor) return reply;
+      const result = await quizPools.add(feedFor.chartId, request.body);
+      if ("refused" in result) return reply.code(400).send({ error: result.refused });
+      return reply.code(result.duplicate ? 200 : 201).send({ quizId: result.id, ...(result.duplicate ? { duplicate: true } : {}) });
+    },
+  );
 }

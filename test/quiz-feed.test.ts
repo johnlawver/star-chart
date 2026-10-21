@@ -69,3 +69,58 @@ describe("what the feed can see", () => {
     expect(statuses).toEqual([403, 403]);
   });
 });
+
+/** A quiz as the feed would send it. */
+const aFeedQuiz = (childId: string, topicId: string, externalId: string, extra: object = {}) => ({
+  childId,
+  topicId,
+  level: 2,
+  externalId,
+  title: "Addition",
+  instructions: "Write the answer.",
+  items: [
+    { prompt: "6 + 4 =", answer: "10" },
+    { prompt: "3 + 5 =", answer: "8" },
+  ],
+  ...extra,
+});
+
+describe("sending quizzes in", () => {
+  test("a quiz the feed sends goes into the child's pool, and is what the child prints next", async () => {
+    const { chart, nova, category, topic, feed } = await aChartWithAFeed();
+
+    const sent = await feed.post("/api/feed/quizzes", aFeedQuiz(nova, topic.id, "quiz-001"));
+    const pools = (await feed.get("/api/feed/pools")).body.pools;
+    const printer = await chart.connectPrinter();
+    await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: topic.id });
+
+    expect(sent.status).toBe(201);
+    expect(pools[0].waiting).toBe(1);
+    expect((await printer.nextMessage()).ticket.quiz.prompts).toEqual(["6 + 4 =", "3 + 5 ="]);
+    printer.close();
+  });
+
+  test("sending the same quiz twice doesn't add it twice", async () => {
+    const { nova, topic, feed } = await aChartWithAFeed();
+    const first = await feed.post("/api/feed/quizzes", aFeedQuiz(nova, topic.id, "quiz-001"));
+
+    const again = await feed.post("/api/feed/quizzes", aFeedQuiz(nova, topic.id, "quiz-001"));
+
+    expect(again.status).toBe(200);
+    expect(again.body).toEqual({ quizId: first.body.quizId, duplicate: true });
+    expect((await feed.get("/api/feed/pools")).body.pools[0].waiting).toBe(1);
+  });
+
+  test("a quiz for an unknown child, or a topic the child doesn't have, or that's too long, is refused", async () => {
+    const { pip, topic, feed } = await aChartWithAFeed();
+    const tooMany = Array.from({ length: 21 }, (_, i) => ({ prompt: `${i} + 1 =`, answer: String(i + 1) }));
+
+    const statuses = [
+      (await feed.post("/api/feed/quizzes", aFeedQuiz("00000000-0000-4000-8000-000000000000", topic.id, "a"))).status,
+      (await feed.post("/api/feed/quizzes", aFeedQuiz(pip, topic.id, "b"))).status,
+      (await feed.post("/api/feed/quizzes", aFeedQuiz(pip, topic.id, "c", { items: tooMany }))).status,
+    ];
+
+    expect(statuses).toEqual([400, 400, 400]);
+  });
+});
