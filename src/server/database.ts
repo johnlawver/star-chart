@@ -99,6 +99,15 @@ export interface Tables {
     printed_at: Date | null;
     seq: Generated<string>;
   };
+  feed_keys: {
+    id: Generated<string>;
+    chart_id: string;
+    key_hash: string;
+    label: string | null;
+    created_by_grown_up_id: string | null;
+    created_at: Date;
+    last_used_at: Date | null;
+  };
   chore_codes: {
     child_id: string;
     chore_id: string;
