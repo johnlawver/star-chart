@@ -160,3 +160,24 @@ describe("test notifications", () => {
     expect(sent.body.error).toMatch(/no devices/i);
   });
 });
+
+describe("delayed test notifications", () => {
+  test("a test can be sent after a delay, so the grown-up can close the app first", async () => {
+    clock.set(new Date("2026-10-21T20:00:00Z"));
+    const { chart, phone, closeAll } = await novaWithAPrintedChore();
+    const before = push.to(phone.endpoint).length;
+
+    const scheduled = await chart.owner.post("/api/push/test", { delaySeconds: 30 });
+    await harness.runScheduledJobs();
+    const straightAway = push.to(phone.endpoint).length;
+    clock.advanceBy(30_000);
+    await harness.runScheduledJobs();
+    await harness.runScheduledJobs();
+
+    expect(scheduled.status).toBe(202);
+    expect(scheduled.body).toEqual({ devices: 1, sendsAt: "2026-10-21T20:00:30.000Z" });
+    expect(straightAway).toBe(before);
+    expect(push.to(phone.endpoint).slice(before)).toEqual([expect.objectContaining({ title: "Star Chart notifications work!" })]);
+    closeAll();
+  });
+});

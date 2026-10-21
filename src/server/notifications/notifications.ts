@@ -53,6 +53,10 @@ export function createNotifications(
 
   const controlCenter = () => `${settings.appUrl}/`;
 
+  // Test notifications asked for with a delay, so the grown-up can close the app first. Kept in memory: a test that's
+  // lost to a server restart doesn't matter.
+  const delayedTests: { grownUpId: string; sendsAt: Date }[] = [];
+
   return {
     toChart,
 
@@ -147,6 +151,22 @@ export function createNotifications(
         url: controlCenter(),
         tag: "test",
       });
+    },
+
+    /** Sends a test notification to a grown-up's devices after a delay; returns how many devices and when. */
+    async testLater(grownUpId: string, delayMs: number): Promise<{ devices: number; sendsAt: Date }> {
+      const devices = (await subscriptionsWhere().where("grown_ups.id", "=", grownUpId).execute()).length;
+      const sendsAt = new Date(clock.now().getTime() + delayMs);
+      if (devices > 0) delayedTests.push({ grownUpId, sendsAt });
+      return { devices, sendsAt };
+    },
+
+    /** Scheduled job: sends the delayed test notifications whose time has come. */
+    async sendDueTests(): Promise<void> {
+      const now = clock.now();
+      const due = delayedTests.filter((test) => test.sendsAt <= now);
+      for (const test of due) delayedTests.splice(delayedTests.indexOf(test), 1);
+      for (const test of due) await this.test(test.grownUpId);
     },
 
     /** The devices where a grown-up has turned on notifications. */

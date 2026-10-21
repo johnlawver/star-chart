@@ -95,6 +95,7 @@ export async function buildApp({ db, clock, mailer, push, config }: AppDependenc
     }
   });
   scheduledJobs.push(() => notifications.sendHeldBackHandIns());
+  scheduledJobs.push(() => notifications.sendDueTests());
   const dailySummary = createDailySummary(db, clock, notifications, config.appUrl);
   scheduledJobs.push(() => dailySummary.sendDue());
   const jobsEveryMs = config.scheduledJobsEveryMs === undefined ? 30_000 : config.scheduledJobsEveryMs;

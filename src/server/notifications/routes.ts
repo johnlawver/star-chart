@@ -45,15 +45,32 @@ export async function notificationRoutes(
     },
   );
 
-  app.post("/api/push/test", { schema: { body: { type: "object", additionalProperties: false } } }, async (request, reply) => {
-    const signedIn = await requireGrownUp(people, request, reply);
-    if (!signedIn) return reply;
-    const result = await notifications.test(signedIn.grownUp.id);
-    if (result.devices === 0) {
-      return reply.code(409).send({ error: "No devices have notifications turned on for you yet." });
-    }
-    return result;
-  });
+  app.post<{ Body: { delaySeconds?: number } }>(
+    "/api/push/test",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { delaySeconds: { type: "integer", minimum: 1, maximum: 300 } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      const noDevices = { error: "No devices have notifications turned on for you yet." };
+      if (request.body.delaySeconds) {
+        // Later, so the grown-up can close the app first: phones often don't show a notification for the open app.
+        const later = await notifications.testLater(signedIn.grownUp.id, request.body.delaySeconds * 1000);
+        if (later.devices === 0) return reply.code(409).send(noDevices);
+        return reply.code(202).send({ devices: later.devices, sendsAt: later.sendsAt.toISOString() });
+      }
+      const result = await notifications.test(signedIn.grownUp.id);
+      if (result.devices === 0) return reply.code(409).send(noDevices);
+      return result;
+    },
+  );
 
   app.get("/api/push/subscriptions", async (request, reply) => {
     const signedIn = await requireGrownUp(people, request, reply);

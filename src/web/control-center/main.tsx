@@ -859,11 +859,12 @@ function NotificationsSwitch() {
     }
   };
 
+  // Sent half a minute later: phones often don't show a notification for the app you're looking at.
   const sendTest = async () => {
-    const result = await api("POST", "/api/push/test", {});
+    const result = await api("POST", "/api/push/test", { delaySeconds: 30 });
     setMessage(
       result.ok
-        ? `Sent to ${result.data.delivered} of your ${result.data.devices} device${result.data.devices === 1 ? "" : "s"}.`
+        ? "Now close Star Chart (swipe it away, or go to your home screen) and wait about 30 seconds. A test notification is on its way."
         : (result.data?.error ?? "Couldn't send a test."),
     );
   };
@@ -872,7 +873,7 @@ function NotificationsSwitch() {
     <p>
       Notifications on this device:{" "}
       {on === undefined ? "…" : on ? <button onClick={turnOff}>On (turn off)</button> : <button onClick={turnOn}>Off (turn on)</button>}{" "}
-      <button onClick={sendTest}>Send me a test</button>
+      <button onClick={sendTest}>Send me a test in 30 seconds</button>
       {message && <span role="status"> {message}</span>}
     </p>
   );
