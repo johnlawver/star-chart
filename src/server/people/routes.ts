@@ -341,6 +341,29 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
     return reply.code(204).send();
   });
 
+  app.patch<{ Body: { quizPoolTarget?: number } }>(
+    "/api/chart",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { quizPoolTarget: { type: "integer", minimum: 1, maximum: 50 } },
+          minProperties: 1,
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      if (signedIn.grownUp.role === "grown-up") {
+        return reply.code(403).send({ error: "Only the chart's owner and admins can change its settings." });
+      }
+      await people.changeChart(signedIn.chart.id, request.body);
+      return {};
+    },
+  );
+
   app.post("/api/sign-out", async (request, reply) => {
     const token = request.cookies[sessionCookie];
     if (token) {

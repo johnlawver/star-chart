@@ -263,3 +263,63 @@ describe("lost quizzes (ticket 16)", () => {
     printer.close();
   });
 });
+
+describe("rules and settings", () => {
+  test("a child holding an open quiz in a category can't print another one there", async () => {
+    const { printer, writeQuiz, print } = await novaWithSpelling();
+    await writeQuiz(["cat"]);
+    await writeQuiz(["dog"]);
+    await print();
+
+    const second = await print();
+
+    expect(second.status).toBe(409);
+    printer.close();
+  });
+
+  test("grown-ups set how many quizzes the quiz feed keeps in each pool (5 unless they change it)", async () => {
+    const { chart } = await aChartWithMath();
+    const before = (await chart.owner.get("/api/me")).body.chart.quizPoolTarget;
+
+    const changed = await chart.owner.patch("/api/chart", { quizPoolTarget: 8 });
+
+    expect(before).toBe(5);
+    expect(changed.status).toBe(200);
+    expect((await chart.owner.get("/api/me")).body.chart.quizPoolTarget).toBe(8);
+  });
+
+  test("topics only go in quiz categories", async () => {
+    const { chart } = await aChartWithMath();
+    const { category } = (await chart.owner.post("/api/categories", { name: "Chores", kind: "chore" })).body;
+
+    const topic = await chart.owner.post("/api/topics", { categoryId: category.id, name: "Sneaky", stars: 1 });
+
+    expect(topic.status).toBe(400);
+  });
+});
+
+describe("keeping charts apart", () => {
+  test("a grown-up can't add topics to, switch topics on in, or write quizzes for another chart", async () => {
+    const home = await novaWithSpelling();
+    const school = await aChartWithMath();
+    const schoolTopic = await school.addTopic("Addition");
+
+    const statuses = [
+      (await school.chart.owner.post("/api/topics", { categoryId: home.category.id, name: "Sneaky", stars: 1 })).status,
+      (await school.chart.owner.put(`/api/topics/${home.spelling.id}/children/${school.nova}`, { level: 1 })).status,
+      (await school.chart.owner.put(`/api/topics/${schoolTopic.id}/children/${home.nova}`, { level: 1 })).status,
+      (
+        await school.chart.owner.post("/api/quizzes", {
+          childId: home.nova,
+          topicId: home.spelling.id,
+          title: "Sneaky",
+          instructions: "",
+          items: [{ prompt: "x", answer: "y" }],
+        })
+      ).status,
+    ];
+
+    expect(statuses).toEqual([400, 404, 404, 400]);
+    home.printer.close();
+  });
+});

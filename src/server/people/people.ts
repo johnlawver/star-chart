@@ -21,7 +21,7 @@ const passwordResetLifetimeMs = 60 * 60 * 1000;
 /** The charts-and-people module: charts, grown-ups and their sessions. */
 export interface SignedInGrownUp {
   grownUp: { id: string; email: string; role: Role };
-  chart: { id: string; name: string; timeZone: string };
+  chart: { id: string; name: string; timeZone: string; quizPoolTarget: number };
 }
 
 export function createPeople(db: Database, clock: Clock) {
@@ -324,6 +324,12 @@ export function createPeople(db: Database, clock: Clock) {
       return { ok: true };
     },
 
+    /** Changes a chart's settings: for now, how many quizzes the quiz feed keeps in each pool. */
+    async changeChart(chartId: string, changes: { quizPoolTarget?: number }): Promise<void> {
+      if (changes.quizPoolTarget === undefined) return;
+      await db.updateTable("charts").set({ quiz_pool_target: changes.quizPoolTarget }).where("id", "=", chartId).execute();
+    },
+
     /** Permanently deletes a chart and everything in it: grown-ups, children, tickets, stars, observatories, devices. */
     async deleteChart(chartId: string): Promise<void> {
       await db.deleteFrom("charts").where("id", "=", chartId).execute();
@@ -346,6 +352,7 @@ export function createPeople(db: Database, clock: Clock) {
           "charts.id as chartId",
           "charts.name as chartName",
           "charts.time_zone as timeZone",
+          "charts.quiz_pool_target as quizPoolTarget",
         ])
         .where("sessions.token_hash", "=", hashToken(token))
         .where((eb) => eb.or([eb("sessions.expires_at", "is", null), eb("sessions.expires_at", ">", clock.now())]))
@@ -353,7 +360,7 @@ export function createPeople(db: Database, clock: Clock) {
       if (!row) return undefined;
       return {
         grownUp: { id: row.grownUpId, email: row.email, role: row.role },
-        chart: { id: row.chartId, name: row.chartName, timeZone: row.timeZone },
+        chart: { id: row.chartId, name: row.chartName, timeZone: row.timeZone, quizPoolTarget: row.quizPoolTarget },
       };
     },
   };
