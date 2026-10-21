@@ -323,3 +323,36 @@ describe("keeping charts apart", () => {
     home.printer.close();
   });
 });
+
+describe("the built-in sample sets", () => {
+  test("every sample set makes a sensible quiz with a correct answer key", async () => {
+    const { chart, nova, category, addTopic, switchOn } = await aChartWithMath();
+    const printer = await chart.connectPrinter();
+    const check: Record<string, (prompt: string, answer: string) => boolean> = {
+      addition: (p, a) => {
+        const [, x, y] = p.match(/^(\d+) \+ (\d+) =$/) ?? [];
+        return x !== undefined && Number(a) === Number(x) + Number(y);
+      },
+      subtraction: (p, a) => {
+        const [, x, y] = p.match(/^(\d+) - (\d+) =$/) ?? [];
+        return x !== undefined && Number(a) === Number(x) - Number(y) && Number(a) >= 0;
+      },
+      letters: (p, a) => p === `Find the letter ${a}` && /^[A-Za-z]$/.test(a),
+      numbers: (p, a) => p === `Find the number ${a}` && /^\d+$/.test(a),
+      spelling: (p, a) => p === `Spell: ${a}` && /^[a-z]+$/.test(a),
+    };
+
+    for (const set of Object.keys(check)) {
+      const topic = await addTopic(set, { samples: set });
+      await switchOn(topic.id, nova, 2);
+      const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: topic.id });
+      await printer.nextMessage();
+      const [ticket] = (await chart.owner.get("/api/tickets?state=open")).body.tickets;
+      for (const { prompt, answer } of ticket.answerKey as { prompt: string; answer: string }[]) {
+        expect(check[set]!(prompt, answer), `${set}: ${prompt} -> ${answer}`).toBe(true);
+      }
+      await chart.owner.post(`/api/tickets/${printed.body.ticket.id}/dismiss`, {});
+    }
+    printer.close();
+  });
+});
