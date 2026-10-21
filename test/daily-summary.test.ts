@@ -39,6 +39,7 @@ describe("the daily summary", () => {
         body: "Pip: 0 ★, nothing open. Nova: 5 ★, 1 open ticket.",
         url: "https://star-chart.test/",
         tag: "daily-summary",
+        badge: 0,
       },
     ]);
     printer.close();

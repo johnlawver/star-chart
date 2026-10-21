@@ -615,18 +615,29 @@ function LostTickets({ onChange }: { onChange: () => void }) {
   );
 }
 
+/** Shows how many things are waiting on the app's home-screen badge (where the browser supports it). */
+function showOnAppBadge(count: number) {
+  if (onObservatory || !("setAppBadge" in navigator)) return;
+  const update = count > 0 ? navigator.setAppBadge(count) : navigator.clearAppBadge();
+  update.catch(() => {
+    // Badges are a nice extra; ignore browsers that refuse.
+  });
+}
+
 function WaitingSection() {
   const [waiting, setWaiting] = useState<WaitingTicket[]>([]);
   const [open, setOpen] = useState<WaitingTicket[]>([]);
   const [error, setError] = useState<string | undefined>();
 
   const load = async () => {
-    const [handedIn, stillOpen] = await Promise.all([
+    const [handedIn, stillOpen, lost] = await Promise.all([
       api("GET", "/api/tickets?state=handed-in"),
       api("GET", "/api/tickets?state=open"),
+      api("GET", "/api/reprint-requests"),
     ]);
     if (handedIn.ok) setWaiting(handedIn.data.tickets);
     if (stillOpen.ok) setOpen(stillOpen.data.tickets);
+    if (handedIn.ok && lost.ok) showOnAppBadge(handedIn.data.tickets.length + lost.data.reprintRequests.length);
   };
 
   useEffect(() => {

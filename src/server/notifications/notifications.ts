@@ -46,9 +46,31 @@ export function createNotifications(
       .innerJoin("grown_ups", "grown_ups.id", "push_subscriptions.grown_up_id")
       .select(["push_subscriptions.endpoint", "push_subscriptions.p256dh", "push_subscriptions.auth"]);
 
-  /** Sends a notification to every subscribed device of every grown-up in a chart. */
+  /** How many things are waiting for a chart's grown-ups: handed-in tickets and lost-ticket requests. */
+  async function waitingFor(chartId: string): Promise<number> {
+    const { waiting } = await db
+      .selectNoFrom((eb) => [
+        sql<string>`(${eb
+          .selectFrom("tickets")
+          .select(sql`count(*)`.as("n"))
+          .where("chart_id", "=", chartId)
+          .where("state", "=", "handed-in")}) + (${eb
+          .selectFrom("reprint_requests")
+          .select(sql`count(*)`.as("n"))
+          .where("chart_id", "=", chartId)
+          .where("state", "=", "pending")})`.as("waiting"),
+      ])
+      .executeTakeFirstOrThrow();
+    return Number(waiting);
+  }
+
+  /**
+   * Sends a notification to every subscribed device of every grown-up in a chart, with the number of things waiting
+   * for them as the app's badge (worked out now, so it's always the real number).
+   */
   async function toChart(chartId: string, message: PushMessage): Promise<void> {
-    await sendTo(await subscriptionsWhere().where("grown_ups.chart_id", "=", chartId).execute(), message);
+    const badge = await waitingFor(chartId);
+    await sendTo(await subscriptionsWhere().where("grown_ups.chart_id", "=", chartId).execute(), { ...message, badge });
   }
 
   const controlCenter = () => `${settings.appUrl}/`;
@@ -145,11 +167,13 @@ export function createNotifications(
 
     /** A test notification to one grown-up's own devices, so they can check notifications reach them. */
     async test(grownUpId: string): Promise<{ devices: number; delivered: number }> {
+      const grownUp = await db.selectFrom("grown_ups").select("chart_id").where("id", "=", grownUpId).executeTakeFirst();
       return sendTo(await subscriptionsWhere().where("grown_ups.id", "=", grownUpId).execute(), {
         title: "Star Chart notifications work!",
         body: "You'll get one like this when a ticket needs you.",
         url: controlCenter(),
         tag: "test",
+        badge: grownUp ? await waitingFor(grownUp.chart_id) : 0,
       });
     },
 

@@ -7,16 +7,30 @@ self.addEventListener("fetch", () => {});
 self.addEventListener("push", (event) => {
   const message = event.data ? event.data.json() : { title: "Star Chart", body: "", url: "/", tag: "star-chart" };
   event.waitUntil(
-    self.registration.showNotification(message.title, {
+    Promise.all([
+      updateBadge(message.badge),
+      self.registration.showNotification(message.title, {
       body: message.body,
       tag: message.tag,
       // Replacing a notification with the same tag should still buzz the phone.
       renotify: true,
       icon: "/app-icon-192.png",
       data: { url: message.url },
-    }),
+      }),
+    ]),
   );
 });
+
+// The app's badge: how many things are waiting for the grown-ups (handed-in tickets and lost tickets).
+async function updateBadge(count) {
+  if (typeof count !== "number" || !("setAppBadge" in self.navigator)) return;
+  try {
+    if (count > 0) await self.navigator.setAppBadge(count);
+    else await self.navigator.clearAppBadge();
+  } catch {
+    // Badges are a nice extra; never let one stop a notification.
+  }
+}
 
 // Tapping a notification opens the Control Center, reusing an open window if there is one.
 self.addEventListener("notificationclick", (event) => {

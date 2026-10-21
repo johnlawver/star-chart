@@ -13,6 +13,8 @@ export interface PushMessage {
   url: string;
   /** Notifications with the same tag replace each other on the device, instead of piling up. */
   tag: string;
+  /** How many things are waiting for the grown-ups, shown as the app's badge. */
+  badge?: number;
 }
 
 /**

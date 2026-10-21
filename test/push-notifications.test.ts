@@ -181,3 +181,24 @@ describe("delayed test notifications", () => {
     closeAll();
   });
 });
+
+describe("app badges", () => {
+  test("every notification carries how many things are waiting for the grown-ups, for the app's badge", async () => {
+    const { chart, nova, phone, printer, handIn, closeAll } = await novaWithAPrintedChore();
+
+    await handIn();
+    await expect.poll(() => push.to(phone.endpoint).length).toBe(1);
+    const afterOneHandIn = push.to(phone.endpoint).at(-1)?.badge;
+    await chart.print(nova, await chart.addChore("Make your bed", 1, [nova]), printer);
+    const otherCategory = (await chart.owner.get("/api/categories")).body.categories.find(
+      (c: { chores: { name: string }[] }) => c.chores[0]?.name === "Make your bed",
+    ).id;
+    await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, { categoryId: otherCategory });
+    await expect.poll(() => push.to(phone.endpoint).length).toBe(2);
+    const afterALostTicket = push.to(phone.endpoint).at(-1)?.badge;
+
+    expect(afterOneHandIn).toBe(1);
+    expect(afterALostTicket).toBe(2);
+    closeAll();
+  });
+});
