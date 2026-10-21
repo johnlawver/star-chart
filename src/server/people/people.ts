@@ -7,6 +7,13 @@ import { isId } from "../ids.js";
 import { isUniqueViolation } from "../database-errors.js";
 
 const phoneSetupCodeLifetimeMs = 5 * 60 * 1000;
+
+/** Who each role may remove from a chart. Nobody removes the owner; the owner hands the chart over instead. */
+const mayRemove: Record<Role, Role[]> = {
+  owner: ["admin", "grown-up"],
+  admin: ["grown-up"],
+  "grown-up": [],
+};
 const invitationLifetimeMs = 7 * 24 * 60 * 60 * 1000;
 const passwordResetLifetimeMs = 60 * 60 * 1000;
 
@@ -281,6 +288,36 @@ export function createPeople(db: Database, clock: Clock) {
         await trx.updateTable("grown_ups").set({ role: "owner" }).where("id", "=", newOwnerId).execute();
         return { ok: true as const };
       });
+    },
+
+    /**
+     * Removes a grown-up from the chart, deleting their login (and with it their sessions, devices and codes).
+     * What they did stays on record, shown as "a former grown-up".
+     */
+    async remove(
+      chartId: string,
+      by: { id: string; role: Role },
+      grownUpId: string,
+    ): Promise<{ ok: true } | { refused: "no-such-grown-up" | "not-allowed" | "is-yourself" }> {
+      if (!isId(grownUpId)) return { refused: "no-such-grown-up" };
+      if (grownUpId === by.id) return { refused: "is-yourself" };
+      const target = await db
+        .selectFrom("grown_ups")
+        .select("role")
+        .where("chart_id", "=", chartId)
+        .where("id", "=", grownUpId)
+        .executeTakeFirst();
+      if (!target) return { refused: "no-such-grown-up" };
+      if (!mayRemove[by.role].includes(target.role)) return { refused: "not-allowed" };
+      await db.deleteFrom("grown_ups").where("id", "=", grownUpId).execute();
+      return { ok: true };
+    },
+
+    /** A grown-up leaves their chart, deleting their login. The owner must hand the chart over first. */
+    async leave(grownUp: { id: string; role: Role }): Promise<{ ok: true } | { refused: "is-owner" }> {
+      if (grownUp.role === "owner") return { refused: "is-owner" };
+      await db.deleteFrom("grown_ups").where("id", "=", grownUp.id).execute();
+      return { ok: true };
     },
 
     async signOut(token: string): Promise<void> {

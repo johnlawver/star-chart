@@ -273,6 +273,36 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
     },
   );
 
+  app.delete<{ Params: { grownUpId: string } }>("/api/grown-ups/:grownUpId", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    const result = await people.remove(signedIn.chart.id, signedIn.grownUp, request.params.grownUpId);
+    if ("refused" in result) {
+      if (result.refused === "no-such-grown-up") return reply.code(404).send({ error: "no such grown-up" });
+      if (result.refused === "is-yourself") {
+        return reply.code(409).send({ error: "To leave the chart yourself, use Leave (the owner hands it over first)." });
+      }
+      return reply.code(403).send({
+        error:
+          signedIn.grownUp.role === "admin"
+            ? "Admins can remove grown-ups, but only the owner can remove an admin."
+            : "Only the owner and admins can remove grown-ups.",
+      });
+    }
+    return reply.code(204).send();
+  });
+
+  app.delete("/api/me", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    const result = await people.leave(signedIn.grownUp);
+    if ("refused" in result) {
+      return reply.code(409).send({ error: "Hand the chart to an admin before leaving it." });
+    }
+    reply.clearCookie(sessionCookie, cookieOptions);
+    return reply.code(204).send();
+  });
+
   app.post("/api/sign-out", async (request, reply) => {
     const token = request.cookies[sessionCookie];
     if (token) await people.signOut(token);

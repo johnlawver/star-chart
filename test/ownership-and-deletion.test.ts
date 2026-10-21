@@ -46,3 +46,85 @@ describe("handing over ownership", () => {
     expect(await roleOf(owner.client)).toBe("owner");
   });
 });
+
+describe("leaving a chart", () => {
+  test("the owner can't leave until they've handed the chart over", async () => {
+    const { owner, roleOf } = await aChartOfThree();
+
+    const left = await owner.client.delete("/api/me");
+
+    expect(left.status).toBe(409);
+    expect(await roleOf(owner.client)).toBe("owner");
+  });
+
+  test("anyone else can leave, which deletes their login", async () => {
+    const { admin } = await aChartOfThree();
+
+    const left = await admin.client.delete("/api/me");
+    const signInAgain = await harness.newClient().post("/api/sign-in", { email: admin.email, password: "a good long password" });
+
+    expect(left.status).toBe(204);
+    expect((await admin.client.get("/api/me")).status).toBe(401);
+    expect(signInAgain.status).toBe(401);
+  });
+});
+
+describe("removing grown-ups", () => {
+  test("the owner can remove an admin or a grown-up, who are signed out at once", async () => {
+    const { owner, admin, grownUp } = await aChartOfThree();
+
+    const removedAdmin = await owner.client.delete(`/api/grown-ups/${admin.id}`);
+    const removedGrownUp = await owner.client.delete(`/api/grown-ups/${grownUp.id}`);
+
+    expect([removedAdmin.status, removedGrownUp.status]).toEqual([204, 204]);
+    expect((await admin.client.get("/api/me")).status).toBe(401);
+    expect((await grownUp.client.get("/api/me")).status).toBe(401);
+  });
+
+  test("an admin can remove grown-ups, but not other admins or the owner; grown-ups can't remove anyone", async () => {
+    const { owner, admin, grownUp } = await aChartOfThree();
+    const secondAdmin = await (async () => {
+      const email = uniqueEmail("admin");
+      await owner.client.post("/api/invitations", { email });
+      const token = FakeMailer.linkParameter(harness.mailer.lastTo(email)!, "token");
+      const client = harness.newClient();
+      await client.post("/api/invitations/accept", { token, password: "a good long password" });
+      const id = (await client.get("/api/me")).body.grownUp.id;
+      await owner.client.patch(`/api/grown-ups/${id}`, { role: "admin" });
+      return id;
+    })();
+
+    const statuses = [
+      (await grownUp.client.delete(`/api/grown-ups/${admin.id}`)).status,
+      (await admin.client.delete(`/api/grown-ups/${secondAdmin}`)).status,
+      (await admin.client.delete(`/api/grown-ups/${owner.id}`)).status,
+      (await owner.client.delete(`/api/grown-ups/${owner.id}`)).status,
+      (await admin.client.delete(`/api/grown-ups/${grownUp.id}`)).status,
+    ];
+
+    expect(statuses).toEqual([403, 403, 403, 409, 204]);
+  });
+
+  test("a removed grown-up's past decisions show as by a former grown-up", async () => {
+    const { chartWithObservatory } = await import("./support/observatory.js");
+    const chart = await chartWithObservatory(harness);
+    const nova = await chart.addChild("Nova");
+    const printer = await chart.connectPrinter();
+    const { ticketId } = await chart.print(nova, await chart.addChore("Feed the cat", 2, [nova]), printer);
+    const email = uniqueEmail("babysitter");
+    await chart.owner.post("/api/invitations", { email });
+    const helper = harness.newClient();
+    await helper.post("/api/invitations/accept", {
+      token: FakeMailer.linkParameter(harness.mailer.lastTo(email)!, "token"),
+      password: "a good long password",
+    });
+    await helper.post(`/api/tickets/${ticketId}/approve`, {});
+    const helperId = (await helper.get("/api/me")).body.grownUp.id;
+
+    await chart.owner.delete(`/api/grown-ups/${helperId}`);
+
+    const history = (await chart.owner.get(`/api/tickets/${ticketId}/history`)).body.history;
+    expect(history).toEqual([expect.objectContaining({ action: "approved", by: "a former grown-up" })]);
+    printer.close();
+  });
+});
