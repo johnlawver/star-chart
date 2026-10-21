@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { requireDevice } from "../observatories/authenticate-device.js";
 import type { LiveParts } from "../observatories/live-parts.js";
 import type { Observatories } from "../observatories/observatories.js";
-import { requireGrownUp } from "../people/authenticate.js";
+import { decidedBy, requireActor } from "../people/authenticate.js";
 import type { People } from "../people/people.js";
 import type { Reprints } from "./reprints.js";
 import type { Notifications } from "../notifications/notifications.js";
@@ -53,7 +53,7 @@ export async function reprintRoutes(
   );
 
   app.get("/api/reprint-requests", async (request, reply) => {
-    const signedIn = await requireGrownUp(people, request, reply);
+    const signedIn = await requireActor(people, request, reply);
     if (!signedIn) return reply;
     return { reprintRequests: await reprints.pending(signedIn.chart.id) };
   });
@@ -62,9 +62,9 @@ export async function reprintRoutes(
     "/api/reprint-requests/:requestId/approve",
     { schema: { body: { type: "object", additionalProperties: false } } },
     async (request, reply) => {
-      const signedIn = await requireGrownUp(people, request, reply);
+      const signedIn = await requireActor(people, request, reply);
       if (!signedIn) return reply;
-      const result = await reprints.approve(signedIn.chart.id, signedIn.grownUp.id, request.params.requestId, (observatoryId, job) =>
+      const result = await reprints.approve(signedIn.chart.id, decidedBy(signedIn), request.params.requestId, (observatoryId, job) =>
         liveParts.sendToPrinter(observatoryId, { type: "print", ticket: job }),
       );
       if ("refused" in result) {
@@ -84,9 +84,9 @@ export async function reprintRoutes(
     "/api/reprint-requests/:requestId/decline",
     { schema: { body: { type: "object", additionalProperties: false } } },
     async (request, reply) => {
-      const signedIn = await requireGrownUp(people, request, reply);
+      const signedIn = await requireActor(people, request, reply);
       if (!signedIn) return reply;
-      if (!(await reprints.decline(signedIn.chart.id, signedIn.grownUp.id, request.params.requestId))) {
+      if (!(await reprints.decline(signedIn.chart.id, decidedBy(signedIn), request.params.requestId))) {
         return reply.code(404).send({ error: "no such reprint request waiting" });
       }
       return reply.code(204).send();

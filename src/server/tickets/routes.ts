@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { requireDevice } from "../observatories/authenticate-device.js";
 import type { LiveParts } from "../observatories/live-parts.js";
 import type { Observatories } from "../observatories/observatories.js";
-import { requireGrownUp } from "../people/authenticate.js";
+import { decidedBy, requireActor } from "../people/authenticate.js";
 import type { People } from "../people/people.js";
 import type { TicketState } from "../database.js";
 import type { FastifyReply } from "fastify";
@@ -51,7 +51,7 @@ export async function ticketRoutes(
       },
     },
     async (request, reply) => {
-      const signedIn = await requireGrownUp(people, request, reply);
+      const signedIn = await requireActor(people, request, reply);
       if (!signedIn) return reply;
       return { tickets: await tickets.list(signedIn.chart.id, request.query.state) };
     },
@@ -69,9 +69,9 @@ export async function ticketRoutes(
       },
     },
     async (request, reply) => {
-      const signedIn = await requireGrownUp(people, request, reply);
+      const signedIn = await requireActor(people, request, reply);
       if (!signedIn) return reply;
-      return sendDecision(reply, await tickets.approve(signedIn.chart.id, { grownUpId: signedIn.grownUp.id }, request.params.ticketId, request.body.stars));
+      return sendDecision(reply, await tickets.approve(signedIn.chart.id, decidedBy(signedIn), request.params.ticketId, request.body.stars));
     },
   );
 
@@ -87,9 +87,9 @@ export async function ticketRoutes(
       },
     },
     async (request, reply) => {
-      const signedIn = await requireGrownUp(people, request, reply);
+      const signedIn = await requireActor(people, request, reply);
       if (!signedIn) return reply;
-      return sendDecision(reply, await tickets.reject(signedIn.chart.id, { grownUpId: signedIn.grownUp.id }, request.params.ticketId, request.body.note));
+      return sendDecision(reply, await tickets.reject(signedIn.chart.id, decidedBy(signedIn), request.params.ticketId, request.body.note));
     },
   );
 
@@ -97,14 +97,14 @@ export async function ticketRoutes(
     "/api/tickets/:ticketId/dismiss",
     { schema: { body: { type: "object", additionalProperties: false } } },
     async (request, reply) => {
-      const signedIn = await requireGrownUp(people, request, reply);
+      const signedIn = await requireActor(people, request, reply);
       if (!signedIn) return reply;
-      return sendDecision(reply, await tickets.dismiss(signedIn.chart.id, { grownUpId: signedIn.grownUp.id }, request.params.ticketId));
+      return sendDecision(reply, await tickets.dismiss(signedIn.chart.id, decidedBy(signedIn), request.params.ticketId));
     },
   );
 
   app.get<{ Params: { ticketId: string } }>("/api/tickets/:ticketId/history", async (request, reply) => {
-    const signedIn = await requireGrownUp(people, request, reply);
+    const signedIn = await requireActor(people, request, reply);
     if (!signedIn) return reply;
     const history = await tickets.history(signedIn.chart.id, request.params.ticketId);
     if (!history) return reply.code(404).send({ error: "no such ticket" });

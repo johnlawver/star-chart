@@ -41,10 +41,8 @@ type GrownUpAction = "approve" | "reject" | "dismiss";
 
 const recordedAs = { approve: "approved", reject: "rejected", dismiss: "dismissed" } as const;
 
-/** Who is acting on a ticket. Guests join in ticket 15. */
-export interface Actor {
-  grownUpId: string;
-}
+/** Who is acting on a ticket: a grown-up, or a guest (whose decisions are recorded as by a guest). */
+export type Actor = { grownUpId: string } | { guest: true };
 
 /**
  * The states each grown-up action can be taken from. Approved and Dismissed appear nowhere: they're final.
@@ -89,7 +87,8 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
         .values({
           ticket_id: ticket.id,
           action: recordedAs[action],
-          grown_up_id: actor.grownUpId,
+          grown_up_id: "grownUpId" in actor ? actor.grownUpId : null,
+          by_guest: "guest" in actor,
           note: applied.note ?? null,
           stars: applied.stars ?? null,
           created_at: clock.now(),
@@ -293,13 +292,14 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
           "ticket_events.note",
           "ticket_events.stars",
           "ticket_events.created_at",
+          "ticket_events.by_guest",
         ])
         .where("ticket_events.ticket_id", "=", ticket.id)
         .orderBy("ticket_events.seq")
         .execute();
       return events.map((event) => ({
         action: event.action,
-        by: event.email ?? "a former grown-up",
+        by: event.by_guest ? "a guest" : (event.email ?? "a former grown-up"),
         note: event.note,
         stars: event.stars,
         at: event.created_at.toISOString(),

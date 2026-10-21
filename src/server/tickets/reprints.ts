@@ -2,7 +2,7 @@ import type { Clock } from "../clock.js";
 import type { Database } from "../database.js";
 import { isUniqueViolation } from "../database-errors.js";
 import { isId } from "../ids.js";
-import type { PrintJob } from "./tickets.js";
+import type { Actor, PrintJob } from "./tickets.js";
 
 class PrinterOffline extends Error {}
 
@@ -16,6 +16,13 @@ export interface PendingReprint {
 
 /** Reprint requests: a child asks for a lost ticket again; a grown-up says yes (it prints) or no. */
 export function createReprints(db: Database, clock: Clock) {
+  /** Who answered a request, and when. */
+  const decision = (actor: Actor) => ({
+    decided_by_grown_up_id: "grownUpId" in actor ? actor.grownUpId : null,
+    decided_by_guest: "guest" in actor,
+    decided_at: clock.now(),
+  });
+
   return {
     /** A child at an observatory asks for their open ticket in a category to be printed again. */
     async request(input: {
@@ -80,7 +87,7 @@ export function createReprints(db: Database, clock: Clock) {
      */
     async approve(
       chartId: string,
-      grownUpId: string,
+      actor: Actor,
       requestId: string,
       deliver: (observatoryId: string, job: PrintJob) => boolean,
     ): Promise<{ id: string } | { refused: "not-found" | "ticket-finished" | "printer-offline" }> {
@@ -110,7 +117,7 @@ export function createReprints(db: Database, clock: Clock) {
             .forUpdate("reprint_requests")
             .executeTakeFirst();
           if (!request) return { refused: "not-found" as const };
-          const decided = { decided_by_grown_up_id: grownUpId, decided_at: clock.now() };
+          const decided = decision(actor);
           if (request.ticketState !== "open" || !request.observatory_id) {
             await trx.updateTable("reprint_requests").set({ state: "declined", ...decided }).where("id", "=", request.id).execute();
             return { refused: "ticket-finished" as const };
@@ -135,11 +142,11 @@ export function createReprints(db: Database, clock: Clock) {
     },
 
     /** A grown-up says no: nothing prints. */
-    async decline(chartId: string, grownUpId: string, requestId: string): Promise<boolean> {
+    async decline(chartId: string, actor: Actor, requestId: string): Promise<boolean> {
       if (!isId(requestId)) return false;
       const result = await db
         .updateTable("reprint_requests")
-        .set({ state: "declined", decided_by_grown_up_id: grownUpId, decided_at: clock.now() })
+        .set({ state: "declined", ...decision(actor) })
         .where("chart_id", "=", chartId)
         .where("id", "=", requestId)
         .where("state", "=", "pending")

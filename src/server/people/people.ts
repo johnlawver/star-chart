@@ -4,6 +4,7 @@ import type { Clock } from "../clock.js";
 import type { Database, Role } from "../database.js";
 import { hashToken, newToken } from "../tokens.js";
 import { isId } from "../ids.js";
+import { createGuests } from "./guests.js";
 import { isUniqueViolation } from "../database-errors.js";
 
 const phoneSetupCodeLifetimeMs = 5 * 60 * 1000;
@@ -25,6 +26,9 @@ export interface SignedInGrownUp {
 
 export function createPeople(db: Database, clock: Clock) {
   return {
+    /** Guest PINs, and the guests signed in with them. */
+    guests: createGuests(db, clock),
+
     /** Creates a chart with the signing-up grown-up as its owner, and returns a new session token. */
     async signUp(input: {
       email: string;

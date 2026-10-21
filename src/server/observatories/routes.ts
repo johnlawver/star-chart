@@ -151,6 +151,37 @@ export async function observatoryRoutes(
   );
 
   // A printer or scanner pairing code: the observatory's screen asks, with an admin or the owner unlocked on it.
+  // A guest (a babysitter) unlocks the ticket-handling part of the Control Center with a Guest PIN. Wrong Guest PINs
+  // count towards the same lockout as grown-up PINs.
+  app.post<{ Body: { pin: string } }>(
+    "/api/observatory/unlock-guest",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { pin: { type: "string", maxLength: 8 } },
+          required: ["pin"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const screen = await requireDevice(observatories, "screen", request, reply);
+      if (!screen) return reply;
+      if (await observatories.isPinLocked(screen.observatoryId)) {
+        return reply.code(429).send({ error: "Too many wrong PINs. Try again in a few minutes." });
+      }
+      const token = await people.guests.unlock(screen.chartId, request.body.pin, unlockedSessionMs);
+      if (!token) {
+        await observatories.wrongPin(screen.observatoryId);
+        return reply.code(401).send({ error: "That Guest PIN isn't right, or has expired." });
+      }
+      await observatories.rightPin(screen.observatoryId);
+      reply.setCookie(sessionCookie, token, sessionCookieOptions);
+      return {};
+    },
+  );
+
   app.post("/api/observatory/pairing-codes", async (request, reply) => {
     const screen = await requireDevice(observatories, "screen", request, reply);
     if (!screen) return reply;

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../app.js";
-import { requireGrownUp, sessionCookie, sessionCookieOptions as cookieOptions } from "./authenticate.js";
+import { requireActor, requireGrownUp, sessionCookie, sessionCookieOptions as cookieOptions } from "./authenticate.js";
 import type { People } from "./people.js";
 import type { Mailer } from "../email.js";
 
@@ -303,16 +303,58 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
     return reply.code(204).send();
   });
 
+  // Any grown-up can make a Guest PIN for a babysitter. The PIN is shown in this reply only.
+  app.post<{ Body: { label?: string; hours?: number } }>(
+    "/api/guest-pins",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            label: { type: "string", maxLength: 60 },
+            hours: { type: "integer", minimum: 1, maximum: 72 },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      const made = await people.guests.create({ chartId: signedIn.chart.id, createdBy: signedIn.grownUp.id, ...request.body });
+      return reply.code(201).send({ id: made.id, pin: made.pin, expiresAt: made.expiresAt.toISOString() });
+    },
+  );
+
+  app.get("/api/guest-pins", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    return { guestPins: await people.guests.list(signedIn.chart.id) };
+  });
+
+  app.delete<{ Params: { pinId: string } }>("/api/guest-pins/:pinId", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    if (!(await people.guests.cancel(signedIn.chart.id, request.params.pinId))) {
+      return reply.code(404).send({ error: "no such Guest PIN" });
+    }
+    return reply.code(204).send();
+  });
+
   app.post("/api/sign-out", async (request, reply) => {
     const token = request.cookies[sessionCookie];
-    if (token) await people.signOut(token);
+    if (token) {
+      await people.signOut(token);
+      await people.guests.signOut(token);
+    }
     reply.clearCookie(sessionCookie, cookieOptions);
     return reply.code(204).send();
   });
 
   app.get("/api/me", async (request, reply) => {
-    const signedIn = await requireGrownUp(people, request, reply);
+    const signedIn = await requireActor(people, request, reply);
     if (!signedIn) return reply;
+    if (signedIn.kind === "guest") return { guest: true, chart: signedIn.chart };
     const { grownUp, chart } = signedIn;
     return { grownUp: { id: grownUp.id, email: grownUp.email, role: grownUp.role }, chart };
   });

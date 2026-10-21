@@ -99,6 +99,7 @@ export interface Tables {
     stars: number | null;
     created_at: Date;
     seq: Generated<string>;
+    by_guest: Generated<boolean>;
   };
   reprint_requests: {
     id: Generated<string>;
@@ -107,6 +108,7 @@ export interface Tables {
     observatory_id: string | null;
     state: "pending" | "approved" | "declined";
     decided_by_grown_up_id: string | null;
+    decided_by_guest: Generated<boolean>;
     created_at: Date;
     decided_at: Date | null;
   };
@@ -150,6 +152,21 @@ export interface Tables {
   phone_setup_codes: {
     code_hash: string;
     grown_up_id: string;
+    expires_at: Date;
+  };
+  guest_pins: {
+    id: Generated<string>;
+    chart_id: string;
+    pin_hash: string;
+    label: string | null;
+    created_by_grown_up_id: string | null;
+    expires_at: Date;
+    cancelled_at: Date | null;
+    created_at: Date;
+  };
+  guest_sessions: {
+    token_hash: string;
+    guest_pin_id: string;
     expires_at: Date;
   };
   sessions: {
