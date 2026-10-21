@@ -85,6 +85,7 @@ function ControlCenter() {
       <StarsSection />
       <ChildrenSection />
       <PinSection />
+      {me.grownUp.role === "owner" && !onObservatory && <DeleteChartSection me={me} />}
       <ChoresSection />
       <GrownUpsSection me={me} />
       {me.grownUp.role !== "grown-up" && <ObservatoriesSection />}
@@ -150,7 +151,7 @@ function ChildrenSection() {
             </button>{" "}
             <button
               onClick={() => {
-                if (window.confirm(`Remove ${child.nickname}? This can't be undone.`)) {
+                if (window.confirm(`Remove ${child.nickname}? This permanently deletes their stars, tickets and history. It can't be undone.`)) {
                   void run(api("DELETE", `/api/children/${child.id}`));
                 }
               }}
@@ -221,6 +222,30 @@ function GrownUpsSection({ me }: { me: Me }) {
     await load();
   };
 
+  const mayRemove = (mine: string, theirs: string) =>
+    (mine === "owner" && theirs !== "owner") || (mine === "admin" && theirs === "grown-up");
+
+  const remove = async (grownUp: { id: string; email: string }) => {
+    if (!window.confirm(`Remove ${grownUp.email}? Their login is deleted.`)) return;
+    const result = await api("DELETE", `/api/grown-ups/${grownUp.id}`);
+    setMessage(result.ok ? undefined : result.data?.error);
+    await load();
+  };
+
+  const handOver = async (grownUp: { id: string; email: string }) => {
+    if (!window.confirm(`Make ${grownUp.email} the owner? You'll become an admin.`)) return;
+    const result = await api("POST", "/api/ownership", { grownUpId: grownUp.id });
+    if (result.ok) location.reload();
+    else setMessage(result.data?.error);
+  };
+
+  const leave = async () => {
+    if (!window.confirm("Leave this chart? Your login is deleted.")) return;
+    const result = await api("DELETE", "/api/me");
+    if (result.ok) location.reload();
+    else setMessage(result.data?.error);
+  };
+
   const invite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -241,7 +266,13 @@ function GrownUpsSection({ me }: { me: Me }) {
               <button onClick={() => setRole(grownUp.id, "admin")}>Make admin</button>
             )}
             {me.grownUp.role === "owner" && grownUp.role === "admin" && (
-              <button onClick={() => setRole(grownUp.id, "grown-up")}>Make grown-up</button>
+              <>
+                <button onClick={() => setRole(grownUp.id, "grown-up")}>Make grown-up</button>{" "}
+                <button onClick={() => handOver(grownUp)}>Hand over the chart</button>
+              </>
+            )}{" "}
+            {grownUp.id !== me.grownUp.id && mayRemove(me.grownUp.role, grownUp.role) && (
+              <button onClick={() => remove(grownUp)}>Remove</button>
             )}
           </li>
         ))}
@@ -254,7 +285,37 @@ function GrownUpsSection({ me }: { me: Me }) {
           <button type="submit">Send invitation</button>
         </form>
       )}
+      {me.grownUp.role !== "owner" && <button onClick={leave}>Leave this chart</button>}
       {message && <p role="status">{message}</p>}
+    </section>
+  );
+}
+
+function DeleteChartSection({ me }: { me: Me }) {
+  const [error, setError] = useState<string | undefined>();
+
+  const deleteChart = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const { confirmName } = Object.fromEntries(new FormData(event.currentTarget));
+    const result = await api("DELETE", "/api/chart", { confirmName });
+    if (result.ok) location.reload();
+    else setError(result.data?.error);
+  };
+
+  return (
+    <section>
+      <h2>Delete this chart</h2>
+      <p>
+        This permanently deletes {me.chart.name}: every child, star, ticket and grown-up login, and unpairs its observatories.
+        It can't be undone.
+      </p>
+      <form onSubmit={deleteChart}>
+        <label>
+          Type <strong>{me.chart.name}</strong> to confirm <input name="confirmName" autoComplete="off" required />
+        </label>{" "}
+        <button type="submit">Delete everything</button>
+      </form>
+      {error && <p role="alert">{error}</p>}
     </section>
   );
 }
