@@ -281,7 +281,10 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
   }, [child.id]);
 
   const print = async (choiceId: string) => {
-    if (!category) return;
+    if (category) await printIn(category, choiceId);
+  };
+
+  const printIn = async (category: MenuCategory, choiceId: string) => {
     const result = await api(
       "POST",
       `/api/observatory/children/${child.id}/tickets`,
@@ -295,6 +298,13 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
       return;
     }
     setTimeout(onDone, 3000);
+  };
+
+  // A quiz category with just one topic for this child prints straight away; otherwise the child picks a topic.
+  const chooseCategory = (chosen: MenuCategory) => {
+    const only = chosen.choices[0];
+    if (chosen.kind === "quiz" && chosen.choices.length === 1 && only) void printIn(chosen, only.id);
+    else setCategory(chosen);
   };
 
   const askForReprint = async () => {
@@ -349,7 +359,7 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
       {menu?.length === 0 && <p>Nothing to do right now.</p>}
       {!category &&
         menu?.map((c) => (
-          <button key={c.id} onClick={() => setCategory(c)} aria-label={c.name}>
+          <button key={c.id} onClick={() => chooseCategory(c)} aria-label={c.name}>
             {pictures && c.icon ? <Icon id={c.icon} size={96} /> : c.name}
           </button>
         ))}

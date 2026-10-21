@@ -4,12 +4,13 @@ import QRCode from "qrcode";
 import { stored } from "../shared/api.js";
 import { Icon, IconPicker } from "../shared/icons.js";
 import { ConstellationList, type Constellation } from "../shared/constellation.js";
+import { AnswerKey, QuizCategory, QuizSettings, WriteQuiz, type Topic } from "./quizzes.js";
 
 // The Control Center, deliberately plain for now: sign up, sign in, and see your chart.
 
 interface Me {
   grownUp: { id: string; email: string; role: "owner" | "admin" | "grown-up" };
-  chart: { name: string; timeZone: string };
+  chart: { name: string; timeZone: string; quizPoolTarget: number };
 }
 
 /** A guest (a babysitter) with a Guest PIN, who can only handle tickets. */
@@ -104,6 +105,12 @@ function ControlCenter() {
       {!onObservatory && <GuestPinsSection />}
       {me.grownUp.role === "owner" && !onObservatory && <DeleteChartSection me={me} />}
       <ChoresSection />
+      {me.grownUp.role !== "grown-up" && (
+        <section>
+          <h2>Quiz settings</h2>
+          <QuizSettings quizPoolTarget={me.chart.quizPoolTarget} />
+        </section>
+      )}
       <GrownUpsSection me={me} />
       {me.grownUp.role !== "grown-up" && <ObservatoriesSection />}
     </main>
@@ -440,7 +447,8 @@ interface CategoryWithChores {
   name: string;
   kind: "chore" | "quiz";
   icon: string | null;
-  chores: {
+  topics?: Topic[];
+  chores?: {
     id: string;
     name: string;
     stars: number;
@@ -470,8 +478,8 @@ function ChoresSection() {
   const addCategory = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
-    const { name, icon } = Object.fromEntries(new FormData(form));
-    const result = await api("POST", "/api/categories", { name, kind: "chore", ...(icon ? { icon } : {}) });
+    const { name, icon, kind } = Object.fromEntries(new FormData(form));
+    const result = await api("POST", "/api/categories", { name, kind, ...(icon ? { icon } : {}) });
     setError(result.ok ? undefined : result.data?.error);
     form.reset();
     await load();
@@ -496,14 +504,18 @@ function ChoresSection() {
 
   return (
     <section>
-      <h2>Chores</h2>
+      <h2>Tasks</h2>
       {categories.map((category) => (
         <div key={category.id}>
           <h3>
             <Icon id={category.icon} size={24} /> {category.name}
           </h3>
+          {category.kind === "quiz" ? (
+            <QuizCategory category={{ ...category, topics: category.topics ?? [] }} children={children} onChange={load} />
+          ) : (
+            <>
           <ul>
-            {category.chores.map((chore) => (
+            {(category.chores ?? []).map((chore) => (
               <li key={chore.id}>
                 <Icon id={chore.icon} size={20} /> {chore.name}: {chore.stars} ★, {chore.frequency.times === 1 ? "once" : `${chore.frequency.times} times`} a{" "}
                 {chore.frequency.per}, for {chore.childIds.map(nicknameOf).join(", ") || "nobody yet"}
@@ -533,16 +545,23 @@ function ChoresSection() {
             ))}{" "}
             <button type="submit">Add chore</button>
           </form>
+            </>
+          )}
         </div>
       ))}
       <form onSubmit={addCategory}>
         <label>
-          New chore category <input name="name" placeholder="Chores" maxLength={60} required />
+          New category <input name="name" placeholder="Chores" maxLength={60} required />
         </label>{" "}
+        <select name="kind" defaultValue="chore">
+          <option value="chore">of chores</option>
+          <option value="quiz">of quizzes</option>
+        </select>{" "}
         <IconPicker />{" "}
         <button type="submit">Add category</button>
       </form>
       {error && <p role="alert">{error}</p>}
+      <WriteQuiz topics={categories.flatMap((category) => category.topics ?? [])} children={children} />
     </section>
   );
 }
@@ -552,6 +571,7 @@ interface WaitingTicket {
   childNickname: string;
   title: string;
   stars: number;
+  answerKey: { prompt: string; answer: string }[] | null;
 }
 
 function LostTickets({ onChange }: { onChange: () => void }) {
@@ -622,8 +642,15 @@ function WaitingSection() {
 
   const approve = (event: FormEvent<HTMLFormElement>, ticket: WaitingTicket) => {
     event.preventDefault();
-    const stars = Number(new FormData(event.currentTarget).get("stars"));
-    return act(api("POST", `/api/tickets/${ticket.id}/approve`, stars === ticket.stars ? {} : { stars }));
+    const data = new FormData(event.currentTarget);
+    const stars = Number(data.get("stars"));
+    const correct = data.get("correct");
+    return act(
+      api("POST", `/api/tickets/${ticket.id}/approve`, {
+        ...(stars === ticket.stars ? {} : { stars }),
+        ...(ticket.answerKey && correct !== null && correct !== "" ? { score: { correct: Number(correct), outOf: ticket.answerKey.length } } : {}),
+      }),
+    );
   };
 
   const reject = (ticket: WaitingTicket) => {
@@ -642,6 +669,12 @@ function WaitingSection() {
       <form onSubmit={(event) => approve(event, ticket)}>
         <strong>{ticket.childNickname}</strong>: {ticket.title}{" "}
         <input name="stars" type="number" min={0} max={100} defaultValue={ticket.stars} style={{ width: "4em" }} /> ★{" "}
+        {ticket.answerKey && (
+          <label>
+            Score <input name="correct" type="number" min={0} max={ticket.answerKey.length} style={{ width: "3em" }} /> /{" "}
+            {ticket.answerKey.length}{" "}
+          </label>
+        )}
         <button type="submit">Approve</button>{" "}
         {handedIn && (
           <button type="button" onClick={() => reject(ticket)}>
@@ -652,6 +685,7 @@ function WaitingSection() {
           Dismiss
         </button>
       </form>
+      {ticket.answerKey && <AnswerKey items={ticket.answerKey} />}
     </li>
   );
 

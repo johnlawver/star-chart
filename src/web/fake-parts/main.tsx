@@ -20,6 +20,7 @@ interface PrintJob {
   icon: string | null;
   stars: number;
   code: string;
+  quiz?: { instructions: string; prompts: string[] };
 }
 
 function FakePart() {
@@ -133,6 +134,18 @@ function Receipt({ job }: { job: PrintJob }) {
         <div style={{ fontSize: 24, margin: "12px 0" }}>{job.title}</div>
       )}
       <div style={{ fontSize: 20 }}>{"★".repeat(job.stars) || "no stars"}</div>
+      {job.quiz && (
+        <div style={{ textAlign: "left", fontSize: 18, margin: "12px 0" }}>
+          <p>{job.quiz.instructions}</p>
+          <ol>
+            {job.quiz.prompts.map((prompt, index) => (
+              <li key={index} style={{ marginBottom: 12 }}>
+                {prompt} ____________
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
       {qr && <img src={qr} alt={`QR code ${job.code}`} width={256} height={256} style={{ imageRendering: "pixelated" }} />}
       <div style={{ fontSize: 14 }}>{job.code}</div>
     </article>

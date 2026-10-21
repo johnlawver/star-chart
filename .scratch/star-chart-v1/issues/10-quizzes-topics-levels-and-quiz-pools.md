@@ -4,17 +4,17 @@
 
 **Blocked by:** 05 (Hand in and approve)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Quiz is implemented as the second Task Kind behind the existing interface.
-- [ ] Grown-ups can create Topics in a quiz category with a star value, switch them on per child, and set a Level per child per Topic.
-- [ ] The quiz source port fills pools. The v1 source supplies the sample quizzes, each with an answer key.
-- [ ] One Topic switched on: tapping the category prints. Several: the child picks a Topic first.
-- [ ] Each quiz ticket gets a unique opaque code and prints the quiz's content.
-- [ ] The Control Center shows the answer key next to a handed-in quiz.
-- [ ] Printing from an empty pool reuses a quiz the child has done before in that Topic, on a new ticket, and records a recycled-quiz alert.
-- [ ] A pool falling below the configured threshold records a pool-low alert. Push delivery comes in ticket 17.
-- [ ] The one-open-ticket-per-category rule applies to quiz categories.
+- [x] Quiz is implemented as the second Task Kind behind the existing interface.
+- [x] Grown-ups can create Topics in a quiz category with a star value, switch them on per child, and set a Level per child per Topic.
+- [x] Pools are filled through one `addQuiz` function, used by grown-ups writing quizzes and by the built-in sample sets (and, in ticket 19, the quiz feed). Each quiz carries its answer key.
+- [x] One Topic switched on: tapping the category prints. Several: the child picks a Topic first.
+- [x] Each quiz ticket gets a unique opaque code and prints the quiz's content.
+- [x] The Control Center shows the answer key next to a handed-in quiz.
+- [x] Printing from an empty pool reuses a quiz the child has done before in that Topic, on a new ticket, and records a recycled-quiz alert.
+- [x] When a pool runs out, grown-ups are notified (see notes: "ran out" rather than "below the threshold").
+- [x] The one-open-ticket-per-category rule applies to quiz categories.
 
 ## Notes from earlier tickets
 
@@ -32,3 +32,14 @@ Build the pool so the quiz feed can plug in without rework:
 - **Load sample quizzes through the same internal function the feed will use**, so the format is proven on day one.
 - **A topic with no quizzes and nothing to recycle** shows "No quizzes yet — ask a grown-up" and prints nothing.
 - **Grown-ups set a target pool size per chart** (default 5). The pool-low alert (ticket 17) fires when a pool falls below it.
+
+## Notes
+
+- What prints when a child taps a topic, in order: the oldest quiz waiting in their pool (for their current level); a fresh quiz from the topic's built-in sample set, if it has one; the quiz they did least recently, reused (grown-ups are told); otherwise "No quizzes yet. Ask a grown-up!"
+- Built-in sample sets: addition and subtraction (numbers grow with the level; never negative), letters (lowercase from level 2), numbers, and spelling (word lists by level). A test checks every set's answer key.
+- Grown-ups can write quizzes themselves ("Write a quiz": one item per line as `prompt = answer`, or just a word to spell), which was the original "word lists" idea and goes through the same `addQuiz` the feed will use.
+- Pool alerts: one when a pool runs out, and one whenever a quiz is reused. This replaces "below the target size", which would have notified on every print below target; the target size is what the quiz feed fills to (ticket 19). Topics with a sample set never run out, so they don't alert.
+- Quizzes are ordered by a sequence number (migration 0026), since several can arrive at the same moment. Two prints at once take different quizzes (`FOR UPDATE SKIP LOCKED`).
+- Approving a quiz can record a score; the ticket list shows the answer key and score. Reprints of a quiz are identical (ticket 16's carried-over item).
+- On the observatory, a quiz category with one topic for the child prints straight away.
+- Walked through once in a browser: one tap on Math printed a 10-problem addition quiz on the fake printer; pasting three words into "Write a quiz" added a three-item spelling quiz.
