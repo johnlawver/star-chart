@@ -144,6 +144,11 @@ export async function ticketRoutes(
         }
         return reply.code(409).send({ error: `You already have a ${printed.category} ticket. Finish that one first!` });
       }
+      if (printed.quizAlerts) {
+        void notifications
+          .quizPoolAlerts(screen.chartId, { childNickname: printed.job.childNickname, ...printed.quizAlerts })
+          .catch((error: unknown) => request.log.error({ error }, "couldn't send a quiz pool alert"));
+      }
       return reply.code(201).send({ ticket: printed.ticket });
     },
   );

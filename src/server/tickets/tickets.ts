@@ -116,7 +116,11 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
       /** Hands the print job to the observatory's printer. Returns false if no printer is there to take it. */
       deliver: (job: PrintJob) => boolean,
     ): Promise<
-      | { ticket: { id: string; state: TicketState }; job: PrintJob }
+      | {
+          ticket: { id: string; state: TicketState };
+          job: PrintJob;
+          quizAlerts: { alerts: ("ran-out" | "recycled")[]; topicName: string } | undefined;
+        }
       | { refused: "already-holding"; category: string }
       | { refused: "done-for-now"; title: string }
       | { refused: "no-quizzes" }
@@ -188,7 +192,8 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
         };
         // No printer, no ticket: roll the whole print back rather than leave a ticket nobody can hold.
         if (!deliver(job)) throw new PrinterOffline();
-        return { ticket, job };
+        const quizAlerts = issued.alerts?.length ? { alerts: issued.alerts, topicName: issued.topicName ?? "" } : undefined;
+        return { ticket, job, quizAlerts };
       }).catch((error: unknown) => {
         if (error instanceof PrinterOffline) return { refused: "printer-offline" as const };
         throw error;

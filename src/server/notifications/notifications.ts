@@ -124,6 +124,27 @@ export function createNotifications(
       return db.selectFrom("push_subscriptions").select("endpoint").where("grown_up_id", "=", grownUpId).execute();
     },
 
+    /** A child's quiz pool for a topic ran out, or an old quiz had to be reused because it had. */
+    async quizPoolAlerts(
+      chartId: string,
+      about: { childNickname: string; topicName: string; alerts: ("ran-out" | "recycled")[] },
+    ): Promise<void> {
+      for (const alert of about.alerts) {
+        await toChart(chartId, {
+          title:
+            alert === "ran-out"
+              ? `${about.childNickname}'s ${about.topicName} quizzes ran out`
+              : `Reusing an old ${about.topicName} quiz for ${about.childNickname}`,
+          body:
+            alert === "ran-out"
+              ? "That was the last one waiting. New ones are needed."
+              : "There were no new ones waiting, so an old one was printed again.",
+          url: controlCenter(),
+          tag: `quiz-pool-${about.topicName}`,
+        });
+      }
+    },
+
     /** A child asked for a lost ticket to be printed again. */
     async reprintRequested(chartId: string, request: { childNickname: string; title: string }): Promise<void> {
       await toChart(chartId, {

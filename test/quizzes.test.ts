@@ -147,3 +147,48 @@ describe("levels and empty pools", () => {
     printer.close();
   });
 });
+
+describe("when a pool is empty", () => {
+  test("a topic with a built-in sample set prints a fresh sample quiz at the child's level", async () => {
+    const { chart, nova, category, addTopic, switchOn } = await aChartWithMath();
+    const addition = await addTopic("Addition", { samples: "addition" });
+    await switchOn(addition.id, nova, 2);
+    const printer = await chart.connectPrinter();
+
+    const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, {
+      categoryId: category.id,
+      choiceId: addition.id,
+    });
+    const job = (await printer.nextMessage()).ticket;
+
+    expect(printed.status).toBe(201);
+    expect(job.quiz.prompts).toHaveLength(10);
+    for (const prompt of job.quiz.prompts as string[]) {
+      const [, a, b] = prompt.match(/^(\d+) \+ (\d+) =$/) ?? [];
+      expect(Number(a) + Number(b), prompt).toBeLessThanOrEqual(10); // level 2: sums up to 10
+    }
+    printer.close();
+  });
+
+  test("a topic without samples reuses a quiz the child has done before, with a new code, and tells the grown-ups", async () => {
+    const { fakeSubscription } = await import("./support/fake-push.js");
+    const { chart, printer, writeQuiz, print } = await novaWithSpelling();
+    const phone = fakeSubscription();
+    await chart.owner.post("/api/push/subscriptions", phone);
+    await writeQuiz(["cat", "dog"]);
+    const first = await print();
+    const firstJob = (await printer.nextMessage()).ticket;
+    await chart.owner.post(`/api/tickets/${first.body.ticket.id}/approve`, {});
+
+    const again = await print();
+    const againJob = (await printer.nextMessage()).ticket;
+
+    expect(again.status).toBe(201);
+    expect(againJob.quiz.prompts).toEqual(firstJob.quiz.prompts);
+    expect(againJob.code).not.toBe(firstJob.code);
+    await expect
+      .poll(() => harness.push.to(phone.endpoint).map((message) => message.title))
+      .toEqual(expect.arrayContaining(["Nova's This week's words quizzes ran out", "Reusing an old This week's words quiz for Nova"]));
+    printer.close();
+  });
+});

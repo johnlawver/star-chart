@@ -3,6 +3,8 @@ import type { Database, TaskKindName } from "../database.js";
 import { isId } from "../ids.js";
 import { startOfPeriod } from "../time.js";
 import { newTicketCode } from "../tokens.js";
+import { addQuiz } from "../quizzes/quiz-pools.js";
+import { sampleQuiz } from "../quizzes/samples.js";
 
 /** Something a child can pick at the observatory within a category, such as one chore. */
 export interface Choice {
@@ -25,6 +27,9 @@ export interface IssuedTask {
   quizId?: string;
   topicId?: string;
   quiz?: { instructions: string; prompts: string[] };
+  /** For a quiz: the topic's name, and anything grown-ups should hear about the pool it came from. */
+  topicName?: string;
+  alerts?: ("ran-out" | "recycled")[];
 }
 
 /** When a child is choosing: the moment, and the chart's time zone, which decides where days and weeks begin. */
@@ -134,33 +139,68 @@ export const quizKind: TaskKind = {
     return topics.map((topic) => ({ ...topic, done: false }));
   },
 
-  // The oldest quiz waiting in the child's pool for this topic, at their current level.
+  /**
+   * What to print, in order: the oldest quiz waiting in the child's pool for this topic at their current level; if the
+   * pool is empty, a fresh quiz from the topic's built-in sample set; failing that, the quiz the child did least
+   * recently, reused (and grown-ups are told); and if there's nothing at all, "empty".
+   */
   async issue(db, context, categoryId, childId, choiceId) {
     if (!isId(choiceId)) return undefined;
     const topic = await db
       .selectFrom("topics")
       .innerJoin("topic_children", "topic_children.topic_id", "topics.id")
-      .select(["topics.id", "topics.stars", "topics.icon", "topic_children.level"])
+      .innerJoin("children", "children.id", "topic_children.child_id")
+      .select(["topics.id", "topics.name", "topics.stars", "topics.icon", "topics.samples", "topic_children.level", "children.chart_id"])
       .where("topics.category_id", "=", categoryId)
       .where("topics.id", "=", choiceId)
       .where("topic_children.child_id", "=", childId)
       .executeTakeFirst();
     if (!topic) return undefined;
-    // SKIP LOCKED: two prints at once each take a different quiz, rather than the same one.
-    const quiz = await db
-      .selectFrom("quizzes")
-      .select(["id", "title", "instructions", "items"])
-      .where("child_id", "=", childId)
-      .where("topic_id", "=", topic.id)
-      .where("level", "=", topic.level)
-      .where("state", "=", "pooled")
-      .orderBy("seq")
-      .limit(1)
-      .forUpdate()
-      .skipLocked()
-      .executeTakeFirst();
+
+    const takeOldest = (state: "pooled" | "printed") =>
+      db
+        .selectFrom("quizzes")
+        .select(["id", "title", "instructions", "items"])
+        .where("child_id", "=", childId)
+        .where("topic_id", "=", topic.id)
+        .where("level", "=", topic.level)
+        .where("state", "=", state)
+        // Pooled quizzes go in the order they arrived; reused ones, least recently printed first.
+        .orderBy(state === "pooled" ? "seq" : "printed_at")
+        .limit(1)
+        // SKIP LOCKED: two prints at once each take a different quiz, rather than the same one.
+        .forUpdate()
+        .skipLocked()
+        .executeTakeFirst();
+
+    const alerts: ("ran-out" | "recycled")[] = [];
+    let quiz = await takeOldest("pooled");
+    if (!quiz && topic.samples) {
+      const added = await addQuiz(db, context.now, topic.chart_id, {
+        childId,
+        topicId: topic.id,
+        ...sampleQuiz(topic.samples, topic.level),
+      });
+      if (!("refused" in added)) quiz = await takeOldest("pooled");
+    }
+    if (!quiz) {
+      quiz = await takeOldest("printed");
+      if (quiz) alerts.push("recycled");
+    }
     if (!quiz) return "empty";
     await db.updateTable("quizzes").set({ state: "printed", printed_at: context.now }).where("id", "=", quiz.id).execute();
+
+    if (!topic.samples && !alerts.includes("recycled")) {
+      const { left } = await db
+        .selectFrom("quizzes")
+        .select(sql<string>`count(*)`.as("left"))
+        .where("child_id", "=", childId)
+        .where("topic_id", "=", topic.id)
+        .where("level", "=", topic.level)
+        .where("state", "=", "pooled")
+        .executeTakeFirstOrThrow();
+      if (Number(left) === 0) alerts.push("ran-out");
+    }
     return {
       title: quiz.title,
       icon: topic.icon,
@@ -169,7 +209,9 @@ export const quizKind: TaskKind = {
       choreId: null,
       quizId: quiz.id,
       topicId: topic.id,
+      topicName: topic.name,
       quiz: { instructions: quiz.instructions, prompts: quiz.items.map((item) => item.prompt) },
+      alerts,
     };
   },
 };
