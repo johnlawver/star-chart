@@ -46,6 +46,6 @@ export async function feedRoutes(app: FastifyInstance, people: People, feed: Qui
   app.get("/api/feed/pools", async (request, reply) => {
     const feedFor = await requireFeed(feed, request, reply);
     if (!feedFor) return reply;
-    return { pools: [] };
+    return feed.pools(feedFor.chartId);
   });
 }

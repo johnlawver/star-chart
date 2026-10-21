@@ -36,3 +36,36 @@ describe("feed keys", () => {
     expect(afterRevoking.status).toBe(401);
   });
 });
+
+describe("what the feed can see", () => {
+  test("the feed lists every pool to fill, with children known only by id", async () => {
+    const { nova, topic, feed } = await aChartWithAFeed();
+
+    const response = await feed.get("/api/feed/pools");
+
+    expect(response.body).toEqual({
+      targetSize: 5,
+      pools: [{ childId: nova, topicId: topic.id, topicName: "Addition", categoryName: "Math", level: 2, waiting: 0 }],
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(/Nova|Pip/);
+  });
+
+  test("plain grown-ups and guests can't make Feed Keys", async () => {
+    const { FakeMailer } = await import("./support/fake-mailer.js");
+    const { uniqueEmail } = await import("./support/test-app.js");
+    const { chart } = await aChartWithAFeed();
+    const email = uniqueEmail("grown-up");
+    await chart.owner.post("/api/invitations", { email });
+    const grownUp = harness.newClient();
+    await grownUp.post("/api/invitations/accept", {
+      token: FakeMailer.linkParameter(harness.mailer.lastTo(email)!, "token"),
+      password: "a good long password",
+    });
+    const { pin } = (await chart.owner.post("/api/guest-pins", {})).body;
+    await chart.screen.post("/api/observatory/unlock-guest", { pin });
+
+    const statuses = [(await grownUp.post("/api/feed-keys", {})).status, (await chart.screen.post("/api/feed-keys", {})).status];
+
+    expect(statuses).toEqual([403, 403]);
+  });
+});

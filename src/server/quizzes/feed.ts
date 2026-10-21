@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { sql } from "kysely";
 import type { Clock } from "../clock.js";
 import type { Database } from "../database.js";
 import { isId } from "../ids.js";
@@ -44,6 +45,43 @@ export function createQuizFeed(db: Database, clock: Clock) {
       if (!isId(keyId)) return false;
       const result = await db.deleteFrom("feed_keys").where("chart_id", "=", chartId).where("id", "=", keyId).executeTakeFirst();
       return result.numDeletedRows > 0n;
+    },
+
+    /**
+     * Every pool the feed could fill: each child (by id only, never by nickname) and each topic switched on for them,
+     * at the child's current level, with how many quizzes are waiting and the chart's target size.
+     */
+    async pools(chartId: string) {
+      const chart = await db.selectFrom("charts").select("quiz_pool_target").where("id", "=", chartId).executeTakeFirstOrThrow();
+      const pools = await db
+        .selectFrom("topic_children")
+        .innerJoin("topics", "topics.id", "topic_children.topic_id")
+        .innerJoin("task_categories", "task_categories.id", "topics.category_id")
+        .innerJoin("children", "children.id", "topic_children.child_id")
+        .select((eb) => [
+          "topic_children.child_id as childId",
+          "topics.id as topicId",
+          "topics.name as topicName",
+          "task_categories.name as categoryName",
+          "topic_children.level",
+          eb
+            .selectFrom("quizzes")
+            .select(sql<string>`count(*)`.as("waiting"))
+            .whereRef("quizzes.child_id", "=", "topic_children.child_id")
+            .whereRef("quizzes.topic_id", "=", "topic_children.topic_id")
+            .whereRef("quizzes.level", "=", "topic_children.level")
+            .where("quizzes.state", "=", "pooled")
+            .as("waiting"),
+        ])
+        .where("task_categories.chart_id", "=", chartId)
+        .where("children.chart_id", "=", chartId)
+        .orderBy("topics.name")
+        .orderBy("topic_children.child_id")
+        .execute();
+      return {
+        targetSize: chart.quiz_pool_target,
+        pools: pools.map((pool) => ({ ...pool, waiting: Number(pool.waiting) })),
+      };
     },
 
     /** The chart a Feed Key belongs to (noting that it was used), or undefined if it isn't a valid key. */
