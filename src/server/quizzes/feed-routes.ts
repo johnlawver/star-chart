@@ -88,6 +88,24 @@ export async function feedRoutes(app: FastifyInstance, people: People, feed: Qui
     },
   );
 
+  app.get<{ Querystring: { after?: string } }>(
+    "/api/feed/finished",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          properties: { after: { type: "string", pattern: "^[0-9]{1,18}$" } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const feedFor = await requireFeed(feed, request, reply);
+      if (!feedFor) return reply;
+      return feed.finished(feedFor.chartId, request.query.after);
+    },
+  );
+
   app.delete<{ Params: { externalId: string } }>("/api/feed/quizzes/:externalId", async (request, reply) => {
     const feedFor = await requireFeed(feed, request, reply);
     if (!feedFor) return reply;

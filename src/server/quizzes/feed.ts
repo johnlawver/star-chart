@@ -84,6 +84,60 @@ export function createQuizFeed(db: Database, clock: Clock) {
       };
     },
 
+    /**
+     * Quizzes finished (approved or dismissed) after a cursor, oldest first, with how they went. The cursor is the
+     * position of the finishing decision in the ticket history, so the feed only ever reads what's new.
+     */
+    async finished(chartId: string, after: string | undefined, limit = 100) {
+      const finishing = await db
+        .selectFrom("ticket_events")
+        .innerJoin("tickets", "tickets.id", "ticket_events.ticket_id")
+        .innerJoin("quizzes", "quizzes.id", "tickets.quiz_id")
+        .select((eb) => [
+          "ticket_events.seq",
+          "ticket_events.action",
+          "ticket_events.created_at",
+          "quizzes.external_id as externalId",
+          "tickets.child_id as childId",
+          "quizzes.topic_id as topicId",
+          "quizzes.level",
+          "tickets.stars as starsOffered",
+          "tickets.awarded_stars",
+          "tickets.score_correct",
+          "tickets.score_out_of",
+          eb
+            .selectFrom("ticket_events as rejected")
+            .select(sql<string>`count(*)`.as("rejections"))
+            .whereRef("rejected.ticket_id", "=", "tickets.id")
+            .where("rejected.action", "=", "rejected")
+            .as("rejections"),
+        ])
+        .where("tickets.chart_id", "=", chartId)
+        .where("ticket_events.action", "in", ["approved", "dismissed"])
+        .$if(after !== undefined, (query) => query.where("ticket_events.seq", ">", after!))
+        .orderBy("ticket_events.seq")
+        .limit(limit)
+        .execute();
+      return {
+        quizzes: finishing.map((row) => ({
+          externalId: row.externalId,
+          childId: row.childId,
+          topicId: row.topicId,
+          level: row.level,
+          outcome: row.action as "approved" | "dismissed",
+          rejections: Number(row.rejections),
+          starsOffered: row.starsOffered,
+          starsAwarded: row.action === "approved" ? (row.awarded_stars ?? 0) : 0,
+          score:
+            row.score_correct === null || row.score_out_of === null
+              ? null
+              : { correct: row.score_correct, outOf: row.score_out_of },
+          finishedAt: row.created_at.toISOString(),
+        })),
+        next: finishing.at(-1)?.seq ?? after ?? "0",
+      };
+    },
+
     /** Withdraws a quiz the feed sent, by the feed's own id, as long as it hasn't been printed. */
     async withdraw(chartId: string, externalId: string): Promise<"withdrawn" | "printed" | "not-found"> {
       return db.transaction().execute(async (trx) => {

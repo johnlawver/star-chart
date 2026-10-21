@@ -143,3 +143,49 @@ describe("withdrawing quizzes", () => {
     printer.close();
   });
 });
+
+describe("what's done", () => {
+  test("the feed reads finished quizzes since its last look: outcome, rejections, stars and score", async () => {
+    const { chart, nova, category, topic, feed } = await aChartWithAFeed();
+    for (const id of ["q1", "q2", "q3"]) await feed.post("/api/feed/quizzes", aFeedQuiz(nova, topic.id, id));
+    const printer = await chart.connectPrinter();
+    const scanner = await chart.connectScanner();
+    const screen = await chart.connectScreen();
+    const printAndHandIn = async () => {
+      const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: topic.id });
+      scanner.send({ type: "scan", code: (await printer.nextMessage()).ticket.code });
+      await screen.nextMessage();
+      return printed.body.ticket.id as string;
+    };
+    const first = await printAndHandIn();
+    await chart.owner.post(`/api/tickets/${first}/reject`, { note: "Check number 2" });
+    await chart.owner.post(`/api/tickets/${first}/approve`, { score: { correct: 1, outOf: 2 } });
+    const second = await printAndHandIn();
+    await chart.owner.post(`/api/tickets/${second}/dismiss`, {});
+
+    const firstLook = (await feed.get("/api/feed/finished")).body;
+    const secondLook = (await feed.get(`/api/feed/finished?after=${firstLook.next}`)).body;
+    const third = await printAndHandIn();
+    await chart.owner.post(`/api/tickets/${third}/approve`, { stars: 5 });
+    const thirdLook = (await feed.get(`/api/feed/finished?after=${secondLook.next}`)).body;
+
+    expect(firstLook.quizzes).toEqual([
+      {
+        externalId: "q1",
+        childId: nova,
+        topicId: topic.id,
+        level: 2,
+        outcome: "approved",
+        rejections: 1,
+        starsOffered: 3,
+        starsAwarded: 3,
+        score: { correct: 1, outOf: 2 },
+        finishedAt: expect.any(String),
+      },
+      expect.objectContaining({ externalId: "q2", outcome: "dismissed", rejections: 0, starsAwarded: 0, score: null }),
+    ]);
+    expect(secondLook.quizzes).toEqual([]);
+    expect(thirdLook.quizzes).toEqual([expect.objectContaining({ externalId: "q3", outcome: "approved", starsAwarded: 5 })]);
+    [printer, scanner, screen].forEach((connection) => connection.close());
+  });
+});
