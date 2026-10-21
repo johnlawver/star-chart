@@ -189,3 +189,36 @@ describe("what's done", () => {
     [printer, scanner, screen].forEach((connection) => connection.close());
   });
 });
+
+describe("keeping the feed in its lane", () => {
+  test("a Feed Key only sees and fills its own chart's pools", async () => {
+    const home = await aChartWithAFeed();
+    const school = await aChartWithAFeed();
+
+    const homeSees = (await home.feed.get("/api/feed/pools")).body.pools.map((pool: { childId: string }) => pool.childId);
+    const intoTheirs = await home.feed.post("/api/feed/quizzes", aFeedQuiz(school.nova, school.topic.id, "sneaky"));
+    const withdrawTheirs = await (async () => {
+      await school.feed.post("/api/feed/quizzes", aFeedQuiz(school.nova, school.topic.id, "theirs"));
+      return home.feed.delete("/api/feed/quizzes/theirs");
+    })();
+
+    expect(homeSees).toEqual([home.nova]);
+    expect(intoTheirs.status).toBe(400);
+    expect(withdrawTheirs.status).toBe(404);
+    expect((await school.feed.get("/api/feed/pools")).body.pools[0].waiting).toBe(1);
+  });
+
+  test("a Feed Key opens nothing but the feed, and nothing else opens the feed", async () => {
+    const { nova, chart, feed } = await aChartWithAFeed();
+
+    const feedElsewhere = [
+      (await feed.get("/api/children")).status,
+      (await feed.get(`/api/observatory/children/${nova}/menu`)).status,
+      (await feed.get("/api/me")).status,
+    ];
+    const screenOnTheFeed = (await chart.screen.get("/api/feed/pools")).status;
+
+    expect(feedElsewhere).toEqual([401, 401, 401]);
+    expect(screenOnTheFeed).toBe(401);
+  });
+});
