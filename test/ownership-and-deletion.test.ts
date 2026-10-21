@@ -128,3 +128,37 @@ describe("removing grown-ups", () => {
     printer.close();
   });
 });
+
+describe("deleting a child", () => {
+  test("deleting a child permanently removes everything about them, and leaves other children alone", async () => {
+    const { chartWithObservatory } = await import("./support/observatory.js");
+    const { rowsStillPointingAt } = await import("./support/database.js");
+    const chart = await chartWithObservatory(harness);
+    const nova = await chart.addChild("Nova");
+    const pip = await chart.addChild("Pip", "pictures");
+    const printer = await chart.connectPrinter();
+    const scanner = await chart.connectScanner();
+    const screen = await chart.connectScreen();
+    const approved = await chart.print(nova, await chart.addChore("Feed the cat", 5, [nova]), printer);
+    await chart.owner.post(`/api/tickets/${approved.ticketId}/approve`, {});
+    await chart.owner.post(`/api/children/${nova}/redemptions`, { amount: 2, note: "Sticker" });
+    const stillOpen = await chart.print(nova, await chart.addChore("Make your bed", 1, [nova, pip]), printer);
+    await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, {
+      categoryId: (await chart.owner.get("/api/categories")).body.categories.find((c: any) => c.chores[0].name === "Make your bed").id,
+    });
+    const pipsTicket = await chart.print(pip, await chart.addChore("Tidy toys", 1, [pip]), printer);
+    await chart.owner.post(`/api/tickets/${pipsTicket.ticketId}/approve`, {});
+
+    const deleted = await chart.owner.delete(`/api/children/${nova}`);
+
+    expect(deleted.status).toBe(204);
+    scanner.send({ type: "scan", code: stillOpen.code });
+    expect(await screen.nextMessage()).toEqual({ type: "scan-result", result: "not-recognised" });
+    expect((await chart.owner.get("/api/reprint-requests")).body.reprintRequests).toEqual([]);
+    expect((await chart.owner.get(`/api/children/${nova}/constellation`)).status).toBe(404);
+    expect(await rowsStillPointingAt("child_id", [nova])).toEqual({});
+    expect(await rowsStillPointingAt("ticket_id", [approved.ticketId, stillOpen.ticketId])).toEqual({});
+    expect((await chart.owner.get(`/api/children/${pip}/constellation`)).body.balance).toBe(1);
+    [printer, scanner, screen].forEach((connection) => connection.close());
+  });
+});
