@@ -20,3 +20,15 @@
 
 - Reprint requests (ticket 16) already exist and reprint a ticket exactly as stored on the ticket row (code, title, icon, stars). A quiz's printed content (its questions) must be stored on, or reachable from, the ticket, and included in the print job built for a reprint (`createReprints().approve` in `src/server/tickets/reprints.ts`), with a test that a reprinted quiz has the same questions.
 - Push notifications (ticket 17) exist: `createNotifications().toChart(chartId, message)` sends to every subscribed grown-up in a chart. The pool-low and recycled-quiz alerts from ticket 17's criteria should be sent through it, with tests reading the fake push outbox.
+
+## Shaped by the quiz feed (ticket 19, ADR 0004)
+
+Build the pool so the quiz feed can plug in without rework:
+
+- **Quiz content is structured:** a title, short instructions, and 1 to 20 Quiz Items, each a prompt and an answer. The print job carries the items (prompts only); the answer key is shown to grown-ups when approving. Sample quizzes use exactly this format.
+- **Each quiz has an optional external id** (the feed's own id), unique within the chart, so a quiz sent twice isn't duplicated. Sample quizzes can leave it empty.
+- **A pool is one child, one topic, one level.** Quizzes for a level the child isn't on stay in their pool but aren't printed.
+- **Approving a quiz can record an optional Score** ("7 of 10"), shown next to the answer key, and kept for the feed's "what's done" list.
+- **Load sample quizzes through the same internal function the feed will use**, so the format is proven on day one.
+- **A topic with no quizzes and nothing to recycle** shows "No quizzes yet — ask a grown-up" and prints nothing.
+- **Grown-ups set a target pool size per chart** (default 5). The pool-low alert (ticket 17) fires when a pool falls below it.

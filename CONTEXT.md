@@ -91,8 +91,24 @@ How hard a child's quizzes are in one topic. It is set per child, per topic.
 _Avoid_: Grade, difficulty, tier
 
 **Quiz Pool**:
-The ready-made quizzes waiting to be printed for one child, in one topic, at their current level. Each quiz in the pool carries its answer key. If the pool runs empty, a quiz the child has done before in that topic is printed again on a new ticket, and grown-ups are alerted.
+The ready-made quizzes waiting to be printed for one child, in one topic, at their current level. Each quiz in the pool carries its answer key. The quiz feed keeps each pool topped up to the chart's target size. If the pool runs empty, a quiz the child has done before in that topic is printed again on a new ticket, and grown-ups are alerted.
 _Avoid_: Queue, bank, backlog
+
+**Quiz Item**:
+One question in a quiz: a prompt (such as "7 + 5" or "Spell: because") and its answer.
+_Avoid_: Question, problem, exercise
+
+**Score**:
+How many of a quiz's items a child got right, which a grown-up may record when approving it.
+_Avoid_: Mark, grade, result
+
+**Quiz Feed**:
+An outside service that fills a chart's quiz pools and reads how finished quizzes went, so it can pitch the next ones at the right level. It knows children only by an id, never by nickname.
+_Avoid_: Generator, agent, quiz source, AI
+
+**Feed Key**:
+The credential an admin creates so a quiz feed can reach one chart's quiz pools. It can be revoked at any time.
+_Avoid_: API key, token, secret
 
 ### Tickets
 

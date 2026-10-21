@@ -222,6 +222,12 @@ The server is organised as a few deep modules, each with a small public interfac
 
 8. **Clock**: a port that provides the current time. The real clock is used in production, and a controllable one in tests.
 
+### Quiz feed (added after ticket 15; see ADR 0004 and ticket 19)
+
+- Quizzes are written by an outside **Quiz Feed** service, which reaches one chart with a revocable **Feed Key** an admin creates. It polls: which pools are below the chart's target size, and what happened to finished quizzes since its last look (outcome, stars, and an optional **Score** a grown-up records when approving). It sends new quizzes in as structured content (a title, instructions, and **Quiz Items**, each a prompt and an answer), each with its own id so a resend isn't duplicated, and can withdraw quizzes that haven't been printed.
+- The feed knows children only by id, never by nickname.
+- This replaces the earlier "quiz source port" idea: sample quizzes are loaded through the same path the feed uses.
+
 ### Front ends
 
 - **Observatory screen**: kiosk-mode web pages over the observatory part of the API. It is deliberately plain (see Project conventions in `CLAUDE.md`). The flow is: pick a child → balance and Constellation → categories → topic or chore choice → print, plus scan feedback states. It switches into the Control Center behind a Grown-up PIN or Guest PIN, and drops back to the children's view after a short idle period.
