@@ -42,7 +42,8 @@ describe("icons on categories and chores", () => {
     const { category } = (await chart.owner.post("/api/categories", { name: "Chores", kind: "chore", icon: "home" })).body;
     await chart.owner.post("/api/chores", { categoryId: category.id, name: "Feed the cat", stars: 1, childIds: [pip], icon: "cat" });
 
-    const listed = (await chart.owner.get("/api/categories")).body.categories[0];
+    const listing = (await chart.owner.get("/api/categories")).body;
+    const listed = { ...listing.categories[0], chores: listing.chores };
     const menu = (await chart.screen.get(`/api/observatory/children/${pip}/menu`)).body.categories[0];
 
     expect(listed.icon).toBe("home");

@@ -64,7 +64,7 @@ describe("chores at the observatory", () => {
 });
 
 describe("chores in the Control Center", () => {
-  test("a grown-up sees each category with its chores and who they're assigned to", async () => {
+  test("a grown-up sees the categories, and each chore with its category and who it's assigned to", async () => {
     const chart = await chartWithObservatory(harness);
     const nova = await chart.addChild("Nova");
     const pip = await chart.addChild("Pip", "pictures");
@@ -72,32 +72,27 @@ describe("chores in the Control Center", () => {
     await chart.owner.post("/api/chores", { categoryId: category.id, name: "Make your bed", stars: 1, childIds: [nova, pip] });
     await chart.owner.post("/api/chores", { categoryId: category.id, name: "Feed the cat", stars: 2, childIds: [nova] });
 
-    const categories = (await chart.owner.get("/api/categories")).body.categories;
+    const listing = (await chart.owner.get("/api/categories")).body;
 
-    expect(categories).toEqual([
+    expect(listing.categories).toEqual([{ id: category.id, name: "Chores", icon: null }]);
+    expect(listing.chores).toEqual([
       {
-        id: category.id,
-        name: "Chores",
-        kind: "chore",
+        id: expect.any(String),
+        name: "Feed the cat",
+        stars: 2,
         icon: null,
-        chores: [
-          {
-            id: expect.any(String),
-            name: "Feed the cat",
-            stars: 2,
-            icon: null,
-            frequency: { times: 1, per: "day" },
-            childIds: [nova],
-          },
-          {
-            id: expect.any(String),
-            name: "Make your bed",
-            stars: 1,
-            icon: null,
-            frequency: { times: 1, per: "day" },
-            childIds: expect.arrayContaining([nova, pip]),
-          },
-        ],
+        categoryId: category.id,
+        frequency: { times: 1, per: "day" },
+        childIds: [nova],
+      },
+      {
+        id: expect.any(String),
+        name: "Make your bed",
+        stars: 1,
+        icon: null,
+        categoryId: category.id,
+        frequency: { times: 1, per: "day" },
+        childIds: expect.arrayContaining([nova, pip]),
       },
     ]);
   });

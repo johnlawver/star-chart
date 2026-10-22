@@ -56,7 +56,7 @@ export function createQuizFeed(db: Database, clock: Clock) {
       const pools = await db
         .selectFrom("topic_children")
         .innerJoin("topics", "topics.id", "topic_children.topic_id")
-        .innerJoin("task_categories", "task_categories.id", "topics.category_id")
+        .leftJoin("task_categories", "task_categories.id", "topics.category_id")
         .innerJoin("children", "children.id", "topic_children.child_id")
         .select((eb) => [
           "topic_children.child_id as childId",
@@ -73,7 +73,8 @@ export function createQuizFeed(db: Database, clock: Clock) {
             .where("quizzes.state", "=", "pooled")
             .as("waiting"),
         ])
-        .where("task_categories.chart_id", "=", chartId)
+        .where("topics.chart_id", "=", chartId)
+        .where("topics.retired_at", "is", null)
         .where("children.chart_id", "=", chartId)
         .orderBy("topics.name")
         .orderBy("topic_children.child_id")

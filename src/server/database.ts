@@ -59,6 +59,7 @@ export interface Tables {
   };
   chores: {
     id: Generated<string>;
+    chart_id: string;
     category_id: string | null;
     retired_at: Date | null;
     name: string;
@@ -74,6 +75,7 @@ export interface Tables {
   };
   topics: {
     id: Generated<string>;
+    chart_id: string;
     category_id: string | null;
     retired_at: Date | null;
     name: string;

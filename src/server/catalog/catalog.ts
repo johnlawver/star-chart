@@ -20,32 +20,26 @@ export interface MenuCategory {
 /** The catalog module: task categories, chores, and what each child can choose. All scoped to one chart. */
 export function createCatalog(db: Database, clock: Clock) {
   return {
-    async addCategory(chartId: string, input: { name: string; kind: TaskKindName; icon?: string }) {
+    /** Adds a category: an optional folder for tasks, which can hold chores and quizzes alike. */
+    async addCategory(chartId: string, input: { name: string; icon?: string }) {
       return db
         .insertInto("task_categories")
-        .values({ chart_id: chartId, name: input.name.trim(), kind: input.kind, icon: input.icon ?? null, created_at: clock.now() })
-        .returning(["id", "name", "kind", "icon"])
+        .values({ chart_id: chartId, name: input.name.trim(), kind: null, icon: input.icon ?? null, created_at: clock.now() })
+        .returning(["id", "name", "icon"])
         .executeTakeFirstOrThrow();
     },
 
     /**
-     * Adds a chore to a chore category, assigned to some of the chart's children.
-     * Refused if the category or any child isn't in this chart, or the category isn't for chores.
+     * Adds a chore, assigned to some of the chart's children, and in a category if one is given.
+     * Refused if the category or any child isn't in this chart.
      */
     async addChore(
       chartId: string,
-      input: { categoryId: string; name: string; stars: number; childIds: string[]; frequency?: Frequency; icon?: string },
+      input: { categoryId?: string; name: string; stars: number; childIds: string[]; frequency?: Frequency; icon?: string },
     ): Promise<{ id: string; name: string; stars: number; icon: string | null } | { refused: string }> {
-      if (!isId(input.categoryId) || !input.childIds.every(isId)) return { refused: "unknown category or child" };
+      if (!input.childIds.every(isId)) return { refused: "unknown category or child" };
+      if (!(await isCategoryIn(db, chartId, input.categoryId))) return { refused: "unknown category or child" };
       return db.transaction().execute(async (trx) => {
-        const category = await trx
-          .selectFrom("task_categories")
-          .select("kind")
-          .where("chart_id", "=", chartId)
-          .where("id", "=", input.categoryId)
-          .executeTakeFirst();
-        if (!category) return { refused: "unknown category or child" };
-        if (category.kind !== "chore") return { refused: "that category isn't for chores" };
         const childIds = [...new Set(input.childIds)];
         const children =
           childIds.length === 0
@@ -60,7 +54,8 @@ export function createCatalog(db: Database, clock: Clock) {
         const chore = await trx
           .insertInto("chores")
           .values({
-            category_id: input.categoryId,
+            chart_id: chartId,
+            category_id: input.categoryId ?? null,
             name: input.name.trim(),
             stars: input.stars,
             frequency_times: input.frequency?.times ?? 1,
@@ -80,34 +75,61 @@ export function createCatalog(db: Database, clock: Clock) {
       });
     },
 
-    /** Every category in the chart with its chores and the children each chore is assigned to. */
+    /**
+     * The chart's categories, chores and topics for grown-ups. Tasks name their category (or none), so a category can
+     * hold chores and quizzes alike. Removed (retired) tasks aren't listed.
+     */
     async listForGrownUps(chartId: string) {
       const categories = await db
         .selectFrom("task_categories")
-        .select(["id", "name", "kind", "icon"])
+        .select(["id", "name", "icon"])
         .where("chart_id", "=", chartId)
         .orderBy("name")
         .execute();
-      const chores = await db
+      const choreRows = await db
         .selectFrom("chores")
-        .innerJoin("task_categories", "task_categories.id", "chores.category_id")
         .leftJoin("chore_assignments", "chore_assignments.chore_id", "chores.id")
         .select([
           "chores.id",
           "chores.category_id",
           "chores.name",
           "chores.stars",
+          "chores.icon",
           "chores.frequency_times",
           "chores.frequency_per",
-          "chores.icon",
           "chore_assignments.child_id",
         ])
-        .where("task_categories.chart_id", "=", chartId)
+        .where("chores.chart_id", "=", chartId)
+        .where("chores.retired_at", "is", null)
         .orderBy("chores.name")
         .execute();
-      const topics = await db
+      const chores = new Map<
+        string,
+        {
+          id: string;
+          name: string;
+          stars: number;
+          icon: string | null;
+          categoryId: string | null;
+          frequency: Frequency;
+          childIds: string[];
+        }
+      >();
+      for (const row of choreRows) {
+        const chore = chores.get(row.id) ?? {
+          id: row.id,
+          name: row.name,
+          stars: row.stars,
+          icon: row.icon,
+          categoryId: row.category_id,
+          frequency: { times: row.frequency_times, per: row.frequency_per },
+          childIds: [],
+        };
+        if (row.child_id) chore.childIds.push(row.child_id);
+        chores.set(row.id, chore);
+      }
+      const topicRows = await db
         .selectFrom("topics")
-        .innerJoin("task_categories", "task_categories.id", "topics.category_id")
         .leftJoin("topic_children", "topic_children.topic_id", "topics.id")
         .select([
           "topics.id",
@@ -119,54 +141,36 @@ export function createCatalog(db: Database, clock: Clock) {
           "topic_children.child_id",
           "topic_children.level",
         ])
-        .where("task_categories.chart_id", "=", chartId)
+        .where("topics.chart_id", "=", chartId)
+        .where("topics.retired_at", "is", null)
         .orderBy("topics.name")
         .execute();
-      return categories.map((category) => {
-        if (category.kind === "quiz") {
-          const byId = new Map<
-            string,
-            {
-              id: string;
-              name: string;
-              stars: number;
-              icon: string | null;
-              samples: SampleSet | null;
-              children: { childId: string; level: number }[];
-            }
-          >();
-          for (const row of topics.filter((topic) => topic.category_id === category.id)) {
-            const topic = byId.get(row.id) ?? {
-              id: row.id,
-              name: row.name,
-              stars: row.stars,
-              icon: row.icon,
-              samples: row.samples,
-              children: [],
-            };
-            if (row.child_id && row.level !== null) topic.children.push({ childId: row.child_id, level: row.level });
-            byId.set(row.id, topic);
-          }
-          return { ...category, topics: [...byId.values()] };
+      const topics = new Map<
+        string,
+        {
+          id: string;
+          name: string;
+          stars: number;
+          icon: string | null;
+          samples: SampleSet | null;
+          categoryId: string | null;
+          children: { childId: string; level: number }[];
         }
-        const byId = new Map<
-          string,
-          { id: string; name: string; stars: number; icon: string | null; frequency: Frequency; childIds: string[] }
-        >();
-        for (const row of chores.filter((chore) => chore.category_id === category.id)) {
-          const chore = byId.get(row.id) ?? {
-            id: row.id,
-            name: row.name,
-            stars: row.stars,
-            icon: row.icon,
-            frequency: { times: row.frequency_times, per: row.frequency_per },
-            childIds: [],
-          };
-          if (row.child_id) chore.childIds.push(row.child_id);
-          byId.set(row.id, chore);
-        }
-        return { ...category, chores: [...byId.values()] };
-      });
+      >();
+      for (const row of topicRows) {
+        const topic = topics.get(row.id) ?? {
+          id: row.id,
+          name: row.name,
+          stars: row.stars,
+          icon: row.icon,
+          samples: row.samples,
+          categoryId: row.category_id,
+          children: [],
+        };
+        if (row.child_id && row.level !== null) topic.children.push({ childId: row.child_id, level: row.level });
+        topics.set(row.id, topic);
+      }
+      return { categories, chores: [...chores.values()], topics: [...topics.values()] };
     },
 
     /**
@@ -175,21 +179,14 @@ export function createCatalog(db: Database, clock: Clock) {
      */
     async addTopic(
       chartId: string,
-      input: { categoryId: string; name: string; stars: number; icon?: string; samples?: SampleSet },
+      input: { categoryId?: string; name: string; stars: number; icon?: string; samples?: SampleSet },
     ): Promise<{ id: string; name: string; stars: number; icon: string | null; samples: SampleSet | null } | { refused: string }> {
-      if (!isId(input.categoryId)) return { refused: "unknown category" };
-      const category = await db
-        .selectFrom("task_categories")
-        .select("kind")
-        .where("chart_id", "=", chartId)
-        .where("id", "=", input.categoryId)
-        .executeTakeFirst();
-      if (!category) return { refused: "unknown category" };
-      if (category.kind !== "quiz") return { refused: "that category isn't for quizzes" };
+      if (!(await isCategoryIn(db, chartId, input.categoryId))) return { refused: "unknown category" };
       return db
         .insertInto("topics")
         .values({
-          category_id: input.categoryId,
+          chart_id: chartId,
+          category_id: input.categoryId ?? null,
           name: input.name.trim(),
           stars: input.stars,
           icon: input.icon ?? null,
@@ -205,9 +202,8 @@ export function createCatalog(db: Database, clock: Clock) {
       if (!isId(topicId) || !isId(childId)) return false;
       const topic = await db
         .selectFrom("topics")
-        .innerJoin("task_categories", "task_categories.id", "topics.category_id")
         .select("topics.id")
-        .where("task_categories.chart_id", "=", chartId)
+        .where("topics.chart_id", "=", chartId)
         .where("topics.id", "=", topicId)
         .executeTakeFirst();
       const child = await db
@@ -275,6 +271,19 @@ export function createCatalog(db: Database, clock: Clock) {
 }
 
 export type Catalog = ReturnType<typeof createCatalog>;
+
+/** Whether a category id (if one is given at all) is one of this chart's categories. */
+async function isCategoryIn(db: Database, chartId: string, categoryId: string | null | undefined): Promise<boolean> {
+  if (categoryId === undefined || categoryId === null) return true;
+  if (!isId(categoryId)) return false;
+  const category = await db
+    .selectFrom("task_categories")
+    .select("id")
+    .where("chart_id", "=", chartId)
+    .where("id", "=", categoryId)
+    .executeTakeFirst();
+  return category !== undefined;
+}
 
 /** A chart's time zone, which decides where its days and weeks begin. */
 export async function timeZoneOf(db: Database, chartId: string): Promise<string> {

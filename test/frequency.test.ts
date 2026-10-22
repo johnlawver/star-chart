@@ -99,7 +99,7 @@ describe("chore frequency", () => {
     await chart.owner.post("/api/chores", { categoryId: category.id, name: "Brush teeth", stars: 1, childIds: [nova], frequency: { times: 2, per: "day" } });
     await chart.owner.post("/api/chores", { categoryId: category.id, name: "Make your bed", stars: 1, childIds: [nova] });
 
-    const [chores] = (await chart.owner.get("/api/categories")).body.categories.map((c: any) => c.chores);
+    const { chores } = (await chart.owner.get("/api/categories")).body;
 
     expect(chores.map((chore: any) => [chore.name, chore.frequency])).toEqual([
       ["Brush teeth", { times: 2, per: "day" }],

@@ -16,17 +16,18 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
   app.get("/api/categories", async (request, reply) => {
     const signedIn = await requireGrownUp(people, request, reply);
     if (!signedIn) return reply;
-    return { categories: await catalog.listForGrownUps(signedIn.chart.id) };
+    return catalog.listForGrownUps(signedIn.chart.id);
   });
 
-  app.post<{ Body: { name: string; kind: TaskKindName; icon?: string } }>(
+  app.post<{ Body: { name: string; kind?: TaskKindName; icon?: string } }>(
     "/api/categories",
     {
       schema: {
         body: {
           type: "object",
+          // A category is just a folder now; "kind" is still accepted from older callers, and ignored.
           properties: { name: nameField, kind: { type: "string", enum: ["chore", "quiz"] }, icon: iconField },
-          required: ["name", "kind"],
+          required: ["name"],
           additionalProperties: false,
         },
       },
@@ -40,7 +41,7 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
   );
 
   app.post<{
-    Body: { categoryId: string; name: string; stars: number; childIds: string[]; frequency?: Frequency; icon?: string };
+    Body: { categoryId?: string; name: string; stars: number; childIds: string[]; frequency?: Frequency; icon?: string };
   }>(
     "/api/chores",
     {
@@ -63,7 +64,7 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
               additionalProperties: false,
             },
           },
-          required: ["categoryId", "name", "stars", "childIds"],
+          required: ["name", "stars", "childIds"],
           additionalProperties: false,
         },
       },
@@ -79,7 +80,7 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
   );
 
   app.post<{
-    Body: { categoryId: string; name: string; stars: number; icon?: string; samples?: SampleSet };
+    Body: { categoryId?: string; name: string; stars: number; icon?: string; samples?: SampleSet };
   }>(
     "/api/topics",
     {
@@ -93,7 +94,7 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
             icon: iconField,
             samples: { type: "string", enum: ["addition", "subtraction", "letters", "numbers", "spelling"] },
           },
-          required: ["categoryId", "name", "stars"],
+          required: ["name", "stars"],
           additionalProperties: false,
         },
       },

@@ -45,15 +45,16 @@ describe("topics", () => {
     await switchOn(addition.id, pip, 1);
     await switchOn(addition.id, nova, 3); // moving Nova up a level
 
-    const [math] = (await chart.owner.get("/api/categories")).body.categories;
+    const { topics } = (await chart.owner.get("/api/categories")).body;
 
-    expect(math.topics).toEqual([
+    expect(topics).toEqual([
       {
         id: addition.id,
         name: "Addition",
         stars: 3,
         icon: null,
         samples: null,
+        categoryId: expect.any(String),
         children: expect.arrayContaining([
           { childId: nova, level: 3 },
           { childId: pip, level: 1 },
@@ -287,11 +288,11 @@ describe("rules and settings", () => {
     expect((await chart.owner.get("/api/me")).body.chart.quizPoolTarget).toBe(8);
   });
 
-  test("topics only go in quiz categories", async () => {
+  test("a topic can't go in another chart's category", async () => {
     const { chart } = await aChartWithMath();
-    const { category } = (await chart.owner.post("/api/categories", { name: "Chores", kind: "chore" })).body;
+    const school = await aChartWithMath();
 
-    const topic = await chart.owner.post("/api/topics", { categoryId: category.id, name: "Sneaky", stars: 1 });
+    const topic = await chart.owner.post("/api/topics", { categoryId: school.category.id, name: "Sneaky", stars: 1 });
 
     expect(topic.status).toBe(400);
   });
