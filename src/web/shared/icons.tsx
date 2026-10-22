@@ -12,9 +12,9 @@ export function Icon({ id, size = 48, label }: { id: string | null | undefined; 
 }
 
 /** A plain picker for choosing an icon from the library, with a preview of the current choice. */
-export function IconPicker({ name = "icon" }: { name?: string }) {
+export function IconPicker({ name = "icon", initial = "" }: { name?: string; initial?: string | null }) {
   const [icons, setIcons] = useState<IconChoice[]>([]);
-  const [chosen, setChosen] = useState("");
+  const [chosen, setChosen] = useState(initial ?? "");
 
   useEffect(() => {
     void fetch("/api/icons")

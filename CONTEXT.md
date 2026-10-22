@@ -53,15 +53,15 @@ _Avoid_: Administrator, support admin, staff
 ### Tasks
 
 **Task**:
-Anything a child can do to earn stars: either a chore or a quiz.
+Anything a child can do to earn stars: either a chore or a quiz. A task stands on its own; it may be in a task category or in none, and a child sees tasks in no category straight on their main screen.
 _Avoid_: Job, activity, assignment
 
 **Task Category**:
-A top-level button a child taps at the observatory, such as Chores, Math, Spelling or Letters & Numbers. Grown-ups can add new categories at any time. A child sees a category only if it holds at least one chore or topic switched on for them, and may hold at most one open ticket per category.
-_Avoid_: Group, task type, activity
+An optional folder of tasks that grown-ups make, rename and remove, shown to a child as a button at the observatory, such as Morning or Math. It can hold chores and quizzes alike. Removing one keeps its tasks, which then show on the child's main screen. A child sees a category only if it holds something switched on for them.
+_Avoid_: Group, folder, task type, activity
 
 **Task Kind**:
-How the tasks in a category behave: as chores or as quizzes. A grown-up picks the kind when creating a category. More kinds may be added later.
+Whether a task is a chore or a quiz, which decides how it behaves. Every task has one; categories don't. A child may hold at most one open ticket of each kind at a time: one chore and one quiz. More kinds may be added later.
 _Avoid_: Task type, mode
 
 **Chore**:

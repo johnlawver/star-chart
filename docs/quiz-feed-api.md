@@ -41,7 +41,7 @@ Every pool you could fill: each child and each topic switched on for them, at th
 }
 ```
 
-`waiting` counts quizzes not yet printed at that level. Send `targetSize - waiting` more to fill it. Quizzes for a level the child has moved on from stay where they are, but aren't printed (withdraw them if you like).
+`categoryName` is `null` for a topic that isn't in a category. `waiting` counts quizzes not yet printed at that level. Send `targetSize - waiting` more to fill it. Quizzes for a level the child has moved on from stay where they are, but aren't printed (withdraw them if you like).
 
 ## `POST /api/feed/quizzes`
 

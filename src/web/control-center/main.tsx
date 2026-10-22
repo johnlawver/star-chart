@@ -4,7 +4,8 @@ import QRCode from "qrcode";
 import { stored } from "../shared/api.js";
 import { Icon, IconPicker } from "../shared/icons.js";
 import { ConstellationList, type Constellation } from "../shared/constellation.js";
-import { AnswerKey, FeedKeys, QuizCategory, QuizSettings, WriteQuiz, type Topic } from "./quizzes.js";
+import { AnswerKey, FeedKeys, QuizSettings } from "./quizzes.js";
+import { TasksSection } from "./tasks.js";
 
 // The Control Center, deliberately plain for now: sign up, sign in, and see your chart.
 
@@ -104,7 +105,7 @@ function ControlCenter() {
       <PinSection />
       {!onObservatory && <GuestPinsSection />}
       {me.grownUp.role === "owner" && !onObservatory && <DeleteChartSection me={me} />}
-      <ChoresSection />
+      <TasksSection />
       {me.grownUp.role !== "grown-up" && (
         <section>
           <h2>Quiz settings</h2>
@@ -439,130 +440,6 @@ function ObservatoriesSection() {
           </li>
         ))}
       </ul>
-    </section>
-  );
-}
-
-interface CategoryWithChores {
-  id: string;
-  name: string;
-  kind: "chore" | "quiz";
-  icon: string | null;
-  topics?: Topic[];
-  chores?: {
-    id: string;
-    name: string;
-    stars: number;
-    icon: string | null;
-    frequency: { times: number; per: "day" | "week" };
-    childIds: string[];
-  }[];
-}
-
-function ChoresSection() {
-  const [categories, setCategories] = useState<CategoryWithChores[]>([]);
-  const [children, setChildren] = useState<Child[]>([]);
-  const [error, setError] = useState<string | undefined>();
-
-  const load = async () => {
-    const [categoryResult, childResult] = await Promise.all([api("GET", "/api/categories"), api("GET", "/api/children")]);
-    if (categoryResult.ok) setCategories(categoryResult.data.categories);
-    if (childResult.ok) setChildren(childResult.data.children);
-  };
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  const nicknameOf = (id: string) => children.find((child) => child.id === id)?.nickname ?? "?";
-
-  const addCategory = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const { name, icon, kind } = Object.fromEntries(new FormData(form));
-    const result = await api("POST", "/api/categories", { name, kind, ...(icon ? { icon } : {}) });
-    setError(result.ok ? undefined : result.data?.error);
-    form.reset();
-    await load();
-  };
-
-  const addChore = async (event: FormEvent<HTMLFormElement>, categoryId: string) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const result = await api("POST", "/api/chores", {
-      categoryId,
-      name: data.get("name"),
-      stars: Number(data.get("stars")),
-      childIds: data.getAll("childIds"),
-      frequency: { times: Number(data.get("times")), per: data.get("per") },
-      ...(data.get("icon") ? { icon: data.get("icon") } : {}),
-    });
-    setError(result.ok ? undefined : result.data?.error);
-    form.reset();
-    await load();
-  };
-
-  return (
-    <section>
-      <h2>Tasks</h2>
-      {categories.map((category) => (
-        <div key={category.id}>
-          <h3>
-            <Icon id={category.icon} size={24} /> {category.name}
-          </h3>
-          {category.kind === "quiz" ? (
-            <QuizCategory category={{ ...category, topics: category.topics ?? [] }} children={children} onChange={load} />
-          ) : (
-            <>
-          <ul>
-            {(category.chores ?? []).map((chore) => (
-              <li key={chore.id}>
-                <Icon id={chore.icon} size={20} /> {chore.name}: {chore.stars} ★, {chore.frequency.times === 1 ? "once" : `${chore.frequency.times} times`} a{" "}
-                {chore.frequency.per}, for {chore.childIds.map(nicknameOf).join(", ") || "nobody yet"}
-              </li>
-            ))}
-          </ul>
-          <form onSubmit={(event) => addChore(event, category.id)}>
-            <label>
-              Chore <input name="name" maxLength={60} required />
-            </label>{" "}
-            <label>
-              Stars <input name="stars" type="number" min={0} max={100} defaultValue={1} required />
-            </label>{" "}
-            <label>
-              <input name="times" type="number" min={1} max={10} defaultValue={1} required style={{ width: "3em" }} /> times
-              a{" "}
-              <select name="per" defaultValue="day">
-                <option value="day">day</option>
-                <option value="week">week</option>
-              </select>
-            </label>{" "}
-            <IconPicker />{" "}
-            {children.map((child) => (
-              <label key={child.id}>
-                <input type="checkbox" name="childIds" value={child.id} /> {child.nickname}
-              </label>
-            ))}{" "}
-            <button type="submit">Add chore</button>
-          </form>
-            </>
-          )}
-        </div>
-      ))}
-      <form onSubmit={addCategory}>
-        <label>
-          New category <input name="name" placeholder="Chores" maxLength={60} required />
-        </label>{" "}
-        <select name="kind" defaultValue="chore">
-          <option value="chore">of chores</option>
-          <option value="quiz">of quizzes</option>
-        </select>{" "}
-        <IconPicker />{" "}
-        <button type="submit">Add category</button>
-      </form>
-      {error && <p role="alert">{error}</p>}
-      <WriteQuiz topics={categories.flatMap((category) => category.topics ?? [])} children={children} />
     </section>
   );
 }
