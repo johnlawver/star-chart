@@ -29,6 +29,35 @@ export function createCatalog(db: Database, clock: Clock) {
         .executeTakeFirstOrThrow();
     },
 
+    /** Renames a category, or gives it a new icon (null for none). False if there's no such category in this chart. */
+    async changeCategory(chartId: string, categoryId: string, changes: { name?: string; icon?: string | null }): Promise<boolean> {
+      if (!isId(categoryId)) return false;
+      const result = await db
+        .updateTable("task_categories")
+        .set({
+          ...(changes.name === undefined ? {} : { name: changes.name.trim() }),
+          ...(changes.icon === undefined ? {} : { icon: changes.icon }),
+        })
+        .where("chart_id", "=", chartId)
+        .where("id", "=", categoryId)
+        .executeTakeFirst();
+      return result.numUpdatedRows > 0n;
+    },
+
+    /**
+     * Removes a category. Its tasks stay, no longer in any category, and its tickets carry on (the database lets go
+     * of the category rather than removing what was in it). False if there's no such category in this chart.
+     */
+    async removeCategory(chartId: string, categoryId: string): Promise<boolean> {
+      if (!isId(categoryId)) return false;
+      const result = await db
+        .deleteFrom("task_categories")
+        .where("chart_id", "=", chartId)
+        .where("id", "=", categoryId)
+        .executeTakeFirst();
+      return result.numDeletedRows > 0n;
+    },
+
     /**
      * Adds a chore, assigned to some of the chart's children, and in a category if one is given.
      * Refused if the category or any child isn't in this chart.

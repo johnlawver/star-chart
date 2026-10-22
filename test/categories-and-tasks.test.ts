@@ -51,3 +51,64 @@ describe("tasks without a category", () => {
     ]);
   });
 });
+
+describe("one open chore and one open quiz", () => {
+  test("a child can hold a chore and a quiz at once, but not two chores, even from different categories", async () => {
+    const { chart, nova, addCategory, addChore, addTopic } = await novasChart();
+    const morning = await addCategory("Morning");
+    const evening = await addCategory("Evening");
+    const bed = await addChore("Make your bed", { categoryId: morning.id });
+    const teeth = await addChore("Brush teeth", { categoryId: evening.id });
+    const addition = await addTopic("Addition");
+    const printer = await chart.connectPrinter();
+    const print = (kind: string, taskId: string) => chart.screen.post(`/api/observatory/children/${nova}/tickets`, { kind, taskId });
+
+    const chore = await print("chore", bed.id);
+    const quiz = await print("quiz", addition.id);
+    const secondChore = await print("chore", teeth.id);
+
+    expect([chore.status, quiz.status, secondChore.status]).toEqual([201, 201, 409]);
+    expect(secondChore.body.error).toMatch(/already have a chore/i);
+    printer.close();
+  });
+});
+
+describe("renaming and removing categories", () => {
+  test("a category can be renamed and given a new icon", async () => {
+    const { chart, menu, addCategory, addChore } = await novasChart();
+    const morning = await addCategory("Morning");
+    await addChore("Make your bed", { categoryId: morning.id });
+
+    const renamed = await chart.owner.patch(`/api/categories/${morning.id}`, { name: "Wake up", icon: "sun" });
+
+    expect(renamed.status).toBe(200);
+    expect((await menu()).categories[0]).toMatchObject({ id: morning.id, name: "Wake up", icon: "sun" });
+  });
+
+  test("removing a category keeps its tasks, now on the main screen, and open tickets carry on", async () => {
+    const { chart, nova, menu, addCategory, addChore } = await novasChart();
+    const morning = await addCategory("Morning");
+    const bed = await addChore("Make your bed", { categoryId: morning.id });
+    const printer = await chart.connectPrinter();
+    const { ticketId } = await chart.print(nova, { categoryId: morning.id, choreId: bed.id }, printer);
+
+    const removed = await chart.owner.delete(`/api/categories/${morning.id}`);
+    const approved = await chart.owner.post(`/api/tickets/${ticketId}/approve`, {});
+
+    expect(removed.status).toBe(204);
+    expect(await menu()).toEqual({ categories: [], tasks: [expect.objectContaining({ kind: "chore", id: bed.id })] });
+    expect(approved.status).toBe(200);
+    printer.close();
+  });
+
+  test("another chart can't rename or remove our categories", async () => {
+    const { addCategory } = await novasChart();
+    const morning = await addCategory("Morning");
+    const school = await chartWithObservatory(harness, "Room 12");
+
+    const renamed = await school.owner.patch(`/api/categories/${morning.id}`, { name: "Sneaky" });
+    const removed = await school.owner.delete(`/api/categories/${morning.id}`);
+
+    expect([renamed.status, removed.status]).toEqual([404, 404]);
+  });
+});

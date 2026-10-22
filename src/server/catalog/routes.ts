@@ -40,6 +40,39 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
     },
   );
 
+  app.patch<{ Params: { categoryId: string }; Body: { name?: string; icon?: string | null } }>(
+    "/api/categories/:categoryId",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { name: nameField, icon: { type: ["string", "null"], maxLength: 40 } },
+          minProperties: 1,
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      const { icon } = request.body;
+      if (typeof icon === "string" && !iconLibrary.has(icon)) return reply.code(400).send(unknownIcon);
+      if (!(await catalog.changeCategory(signedIn.chart.id, request.params.categoryId, request.body))) {
+        return reply.code(404).send({ error: "no such category" });
+      }
+      return {};
+    },
+  );
+
+  app.delete<{ Params: { categoryId: string } }>("/api/categories/:categoryId", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    if (!(await catalog.removeCategory(signedIn.chart.id, request.params.categoryId))) {
+      return reply.code(404).send({ error: "no such category" });
+    }
+    return reply.code(204).send();
+  });
+
   app.post<{
     Body: { categoryId?: string; name: string; stars: number; childIds: string[]; frequency?: Frequency; icon?: string };
   }>(
