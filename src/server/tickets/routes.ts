@@ -124,23 +124,15 @@ export async function ticketRoutes(
   });
 
   // A child at an observatory chooses something to print.
-  app.post<{
-    Params: { childId: string };
-    Body: { kind?: TaskKindName; taskId?: string; categoryId?: string; choiceId?: string };
-  }>(
+  app.post<{ Params: { childId: string }; Body: { kind: TaskKindName; taskId: string } }>(
     "/api/observatory/children/:childId/tickets",
     {
       schema: {
         body: {
           type: "object",
-          // The task, named directly (kind and taskId), or the old way (categoryId and choiceId) while callers move over.
-          properties: {
-            kind: { type: "string", enum: ["chore", "quiz"] },
-            taskId: idField,
-            categoryId: idField,
-            choiceId: idField,
-          },
-          anyOf: [{ required: ["kind", "taskId"] }, { required: ["categoryId", "choiceId"] }],
+          // The task itself: a chore or a quiz topic, by id. Categories don't matter for printing.
+          properties: { kind: { type: "string", enum: ["chore", "quiz"] }, taskId: idField },
+          required: ["kind", "taskId"],
           additionalProperties: false,
         },
       },

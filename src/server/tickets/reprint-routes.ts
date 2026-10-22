@@ -19,16 +19,15 @@ export async function reprintRoutes(
   notifications: Notifications,
 ) {
   // A child taps "I lost it" on a category where they hold an open ticket.
-  app.post<{ Params: { childId: string }; Body: { kind?: TaskKindName; categoryId?: string } }>(
+  app.post<{ Params: { childId: string }; Body: { kind: TaskKindName } }>(
     "/api/observatory/children/:childId/reprint-requests",
     {
       schema: {
         body: {
           type: "object",
-          // Which open ticket: the child's open chore or quiz (kind), or the old way (categoryId) while callers move over.
-          properties: { kind: { type: "string", enum: ["chore", "quiz"] }, categoryId: idField },
-          minProperties: 1,
-          maxProperties: 1,
+          // Which open ticket: the child's open chore, or their open quiz.
+          properties: { kind: { type: "string", enum: ["chore", "quiz"] } },
+          required: ["kind"],
           additionalProperties: false,
         },
       },

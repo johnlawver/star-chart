@@ -11,8 +11,8 @@ describe("printing when the printer is offline", () => {
     const chore = await chart.addChore("Feed the cat", 2, [nova]);
 
     const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, {
-      categoryId: chore.categoryId,
-      choiceId: chore.choreId,
+      kind: "chore",
+      taskId: chore.choreId,
     });
 
     expect(printed.status).toBe(503);
@@ -55,8 +55,8 @@ describe("parts' online status", () => {
       .poll(async () => (await chart.owner.get("/api/observatories")).body.observatories[0].parts)
       .toContainEqual({ kind: "printer", online: false });
     const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, {
-      categoryId: chore.categoryId,
-      choiceId: chore.choreId,
+      kind: "chore",
+      taskId: chore.choreId,
     });
     expect(printed.status).toBe(503);
   });

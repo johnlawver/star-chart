@@ -89,7 +89,7 @@ describe("lost tickets", () => {
   test("a child asking for a lost ticket again notifies the grown-ups", async () => {
     const { chart, nova, chore, phone, closeAll } = await novaWithAPrintedChore();
 
-    await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, { categoryId: chore.categoryId });
+    await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, { kind: "chore" });
 
     await expect.poll(() => push.to(phone.endpoint)).toEqual([
       expect.objectContaining({ title: "Nova lost a ticket", body: expect.stringContaining("Feed the cat") }),
@@ -198,7 +198,7 @@ describe("app badges", () => {
     const pip = await chart.addChild("Pip");
     const pipsChore = await chart.addChore("Make your bed", 1, [pip]);
     await chart.print(pip, pipsChore, printer);
-    await chart.screen.post(`/api/observatory/children/${pip}/reprint-requests`, { categoryId: pipsChore.categoryId });
+    await chart.screen.post(`/api/observatory/children/${pip}/reprint-requests`, { kind: "chore" });
     await expect.poll(() => push.to(phone.endpoint).length).toBe(2);
     const afterALostTicket = push.to(phone.endpoint).at(-1)?.badge;
 

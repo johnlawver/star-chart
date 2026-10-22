@@ -24,9 +24,8 @@ describe("chores at the observatory", () => {
       {
         id: category.id,
         name: "Chores",
-        kind: "chore",
         icon: null,
-        choices: [{ id: expect.any(String), name: "Feed the cat", stars: 2, icon: null, done: false }],
+        choices: [{ kind: "chore", id: expect.any(String), name: "Feed the cat", stars: 2, icon: null, done: false }],
       },
     ]);
     expect(pipsMenu).toEqual([]);
@@ -42,8 +41,8 @@ describe("chores at the observatory", () => {
     const printer = await chart.connectPrinter();
 
     const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, {
-      categoryId: category.id,
-      choiceId: chore.id,
+      kind: "chore",
+      taskId: chore.id,
     });
 
     expect(printed.status).toBe(201);
@@ -117,8 +116,8 @@ describe("chore codes (ADR 0001)", () => {
     // Each ticket is approved straight away, because a child can only hold one open ticket per category.
     const print = async (childId: string) => {
       const printed = await chart.screen.post(`/api/observatory/children/${childId}/tickets`, {
-        categoryId: category.id,
-        choiceId: chore.id,
+        kind: "chore",
+        taskId: chore.id,
       });
       await chart.owner.post(`/api/tickets/${printed.body.ticket.id}/approve`, {});
       return (await printer.nextMessage()).ticket.code as string;
@@ -143,7 +142,7 @@ describe("chore codes (ADR 0001)", () => {
     ).body;
     const printer = await chart.connectPrinter();
 
-    await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: chore.id });
+    await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { kind: "chore", taskId: chore.id });
     const { code } = (await printer.nextMessage()).ticket;
 
     expect(code).not.toContain(nova);
@@ -169,8 +168,8 @@ describe("keeping chores to the right child and chart", () => {
     const { chart, pip, category, chore } = await homeWithChore();
 
     const printed = await chart.screen.post(`/api/observatory/children/${pip}/tickets`, {
-      categoryId: category.id,
-      choiceId: chore.id,
+      kind: "chore",
+      taskId: chore.id,
     });
 
     expect(printed.status).toBe(404);
@@ -182,8 +181,8 @@ describe("keeping chores to the right child and chart", () => {
 
     const menu = await school.screen.get(`/api/observatory/children/${nova}/menu`);
     const printed = await school.screen.post(`/api/observatory/children/${nova}/tickets`, {
-      categoryId: category.id,
-      choiceId: chore.id,
+      kind: "chore",
+      taskId: chore.id,
     });
 
     expect(menu.status).toBe(404);

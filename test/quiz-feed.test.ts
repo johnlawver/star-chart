@@ -92,7 +92,7 @@ describe("sending quizzes in", () => {
     const sent = await feed.post("/api/feed/quizzes", aFeedQuiz(nova, topic.id, "quiz-001"));
     const pools = (await feed.get("/api/feed/pools")).body.pools;
     const printer = await chart.connectPrinter();
-    await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: topic.id });
+    await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { kind: "quiz", taskId: topic.id });
 
     expect(sent.status).toBe(201);
     expect(pools[0].waiting).toBe(1);
@@ -131,7 +131,7 @@ describe("withdrawing quizzes", () => {
     await feed.post("/api/feed/quizzes", aFeedQuiz(nova, topic.id, "will-print"));
     await feed.post("/api/feed/quizzes", aFeedQuiz(nova, topic.id, "still-waiting"));
     const printer = await chart.connectPrinter();
-    await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: topic.id });
+    await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { kind: "quiz", taskId: topic.id });
     await printer.nextMessage();
 
     const waiting = await feed.delete("/api/feed/quizzes/still-waiting");
@@ -152,7 +152,7 @@ describe("what's done", () => {
     const scanner = await chart.connectScanner();
     const screen = await chart.connectScreen();
     const printAndHandIn = async () => {
-      const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: topic.id });
+      const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { kind: "quiz", taskId: topic.id });
       scanner.send({ type: "scan", code: (await printer.nextMessage()).ticket.code });
       await screen.nextMessage();
       return printed.body.ticket.id as string;

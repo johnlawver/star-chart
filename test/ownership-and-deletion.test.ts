@@ -143,9 +143,7 @@ describe("deleting a child", () => {
     await chart.owner.post(`/api/tickets/${approved.ticketId}/approve`, {});
     await chart.owner.post(`/api/children/${nova}/redemptions`, { amount: 2, note: "Sticker" });
     const stillOpen = await chart.print(nova, await chart.addChore("Make your bed", 1, [nova, pip]), printer);
-    await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, {
-      categoryId: (await chart.owner.get("/api/categories")).body.categories.find((c: any) => c.chores[0].name === "Make your bed").id,
-    });
+    await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, { kind: "chore" });
     const pipsTicket = await chart.print(pip, await chart.addChore("Tidy toys", 1, [pip]), printer);
     await chart.owner.post(`/api/tickets/${pipsTicket.ticketId}/approve`, {});
 

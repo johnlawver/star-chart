@@ -63,6 +63,8 @@ test("on the observatory, a child picks themselves and a chore, and the printer 
   const { child } = await grownUp("POST", "/api/children", { nickname: "Nova", displayStyle: "words" });
   const { category } = await grownUp("POST", "/api/categories", { name: "Chores", kind: "chore" });
   await grownUp("POST", "/api/chores", { categoryId: category.id, name: "Make your bed", stars: 1, childIds: [child.id] });
+  // A second chore, so tapping Chores shows the chores to pick from (a category with one task prints it at once).
+  await grownUp("POST", "/api/chores", { categoryId: category.id, name: "Feed the cat", stars: 1, childIds: [child.id] });
   const screenSetup = httpClient();
   await screenSetup("POST", "/api/sign-in", credentials);
   const { deviceToken: screenToken } = await screenSetup("POST", "/api/observatories");

@@ -21,7 +21,7 @@ async function novaWithChore(frequency?: { times: number; per: "day" | "week" })
   ).body;
   const printer = await chart.connectPrinter();
   const print = () =>
-    chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: chore.id });
+    chart.screen.post(`/api/observatory/children/${nova}/tickets`, { kind: "chore", taskId: chore.id });
   /** Prints the chore and approves it straight away, as if Nova did it and a grown-up checked. */
   const doIt = async () => {
     const printed = await print();

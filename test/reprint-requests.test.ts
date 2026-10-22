@@ -11,7 +11,7 @@ async function novaWithAnOpenTicket() {
   const chore = await chart.addChore("Feed the cat", 2, [nova]);
   const printer = await chart.connectPrinter();
   const printed = await chart.print(nova, chore, printer);
-  const ask = () => chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, { categoryId: chore.categoryId });
+  const ask = () => chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, { kind: "chore" });
   const pending = async () => (await chart.owner.get("/api/reprint-requests")).body.reprintRequests;
   return { chart, nova, chore, printer, ...printed, ask, pending };
 }
@@ -47,11 +47,9 @@ describe("reprint requests", () => {
 
   test("a child can only ask for a ticket they hold, and only once until a grown-up answers", async () => {
     const { chart, nova, printer, ask } = await novaWithAnOpenTicket();
-    const otherChores = await chart.addChore("Make your bed", 1, [nova]); // a new category, with no ticket yet
 
-    const nothingToReprint = await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, {
-      categoryId: otherChores.categoryId,
-    });
+    // Nova holds a chore ticket, but no quiz ticket.
+    const nothingToReprint = await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, { kind: "quiz" });
     const first = await ask();
     const again = await ask();
 
@@ -107,9 +105,7 @@ describe("keeping charts apart", () => {
     const theirList = (await school.owner.get("/api/reprint-requests")).body.reprintRequests;
     const approved = await school.owner.post(`/api/reprint-requests/${request.id}/approve`, {});
     const declined = await school.owner.post(`/api/reprint-requests/${request.id}/decline`, {});
-    const askedForUs = await school.screen.post(`/api/observatory/children/${nova}/reprint-requests`, {
-      categoryId: chore.categoryId,
-    });
+    const askedForUs = await school.screen.post(`/api/observatory/children/${nova}/reprint-requests`, { kind: "chore" });
 
     expect(theirList).toEqual([]);
     expect([approved.status, declined.status, askedForUs.status]).toEqual([404, 404, 404]);

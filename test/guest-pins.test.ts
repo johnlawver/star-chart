@@ -131,9 +131,7 @@ describe("what a guest can do", () => {
     const { chart, nova, printer, ticketId, unlockAsGuest, closeAll } = await aBabysittingEvening();
     await chart.owner.post(`/api/tickets/${ticketId}/approve`, {}); // brushed teeth, so Nova can print another chore
     const lost = await chart.print(nova, await chart.addChore("Feed the cat", 1, [nova]), printer);
-    await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, {
-      categoryId: (await chart.owner.get("/api/categories")).body.categories.find((c: any) => c.chores[0].name === "Feed the cat").id,
-    });
+    await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, { kind: "chore" });
     await unlockAsGuest();
 
     const [request] = (await chart.screen.get("/api/reprint-requests")).body.reprintRequests;

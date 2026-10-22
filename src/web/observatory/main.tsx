@@ -248,21 +248,37 @@ function SpinningStar() {
   );
 }
 
+/** Something a child can print: a chore, or a quiz topic. */
+interface MenuChoice {
+  kind: "chore" | "quiz";
+  id: string;
+  name: string;
+  stars: number;
+  icon: string | null;
+  done: boolean;
+}
+
+/** A category: an optional folder of tasks, which may mix chores and quizzes. */
 interface MenuCategory {
   id: string;
   name: string;
-  kind: "chore" | "quiz";
   icon: string | null;
-  choices: { id: string; name: string; stars: number; icon: string | null; done: boolean }[];
+  choices: MenuChoice[];
+}
+
+/** What a child sees: their categories, and the tasks not in any category. */
+interface Menu {
+  categories: MenuCategory[];
+  tasks: MenuChoice[];
 }
 
 function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: string; onDone: () => void }) {
-  const [menu, setMenu] = useState<MenuCategory[] | undefined>();
+  const [menu, setMenu] = useState<Menu | undefined>();
   const [category, setCategory] = useState<MenuCategory | undefined>();
   const [message, setMessage] = useState<string | undefined>();
   const [balance, setBalance] = useState<number | undefined>();
   const [constellation, setConstellation] = useState<Constellation | undefined>();
-  const [lostCategoryId, setLostCategoryId] = useState<string | undefined>();
+  const [lostKind, setLostKind] = useState<"chore" | "quiz" | undefined>();
   // Children who can't read yet see big icons instead of words (their display style).
   const pictures = child.displayStyle === "pictures";
 
@@ -276,34 +292,30 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
   useEffect(() => {
     void (async () => {
       const result = await api("GET", `/api/observatory/children/${child.id}/menu`, undefined, deviceToken);
-      if (result.ok) setMenu(result.data.categories);
+      if (result.ok) setMenu(result.data);
     })();
   }, [child.id]);
 
-  const print = async (choiceId: string) => {
-    if (category) await printIn(category, choiceId);
-  };
-
-  const printIn = async (category: MenuCategory, choiceId: string) => {
+  const printIn = async (choice: MenuChoice) => {
     const result = await api(
       "POST",
       `/api/observatory/children/${child.id}/tickets`,
-      { categoryId: category.id, choiceId },
+      { kind: choice.kind, taskId: choice.id },
       deviceToken,
     );
     setMessage(result.ok ? "Printing your ticket!" : (result.data?.error ?? "That didn't work. Ask a grown-up."));
-    // Already holding a ticket here? Offer to ask a grown-up for a new copy, in case it's lost.
+    // Already holding a ticket of this kind? Offer to ask a grown-up for a new copy, in case it's lost.
     if (result.status === 409 && /already have/i.test(result.data?.error ?? "")) {
-      setLostCategoryId(category.id);
+      setLostKind(choice.kind);
       return;
     }
     setTimeout(onDone, 3000);
   };
 
-  // A quiz category with just one topic for this child prints straight away; otherwise the child picks a topic.
+  // A category with just one task for this child prints it straight away; otherwise the child picks one.
   const chooseCategory = (chosen: MenuCategory) => {
     const only = chosen.choices[0];
-    if (chosen.kind === "quiz" && chosen.choices.length === 1 && only) void printIn(chosen, only.id);
+    if (chosen.choices.length === 1 && only && !only.done) void printIn(only);
     else setCategory(chosen);
   };
 
@@ -311,10 +323,10 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
     const result = await api(
       "POST",
       `/api/observatory/children/${child.id}/reprint-requests`,
-      { categoryId: lostCategoryId },
+      { kind: lostKind },
       deviceToken,
     );
-    setLostCategoryId(undefined);
+    setLostKind(undefined);
     setMessage(result.ok ? "OK! A grown-up will check, then print it again." : (result.data?.error ?? "Ask a grown-up."));
     setTimeout(onDone, 3000);
   };
@@ -323,7 +335,7 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
     return (
       <main>
         <h1>{message}</h1>
-        {lostCategoryId && (
+        {lostKind && (
           <>
             <button onClick={askForReprint}>I lost it</button> <button onClick={onDone}>I still have it</button>
           </>
@@ -356,16 +368,23 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
         </p>
       )}
       {menu === undefined && <p>Loading…</p>}
-      {menu?.length === 0 && <p>Nothing to do right now.</p>}
+      {menu?.categories.length === 0 && menu.tasks.length === 0 && <p>Nothing to do right now.</p>}
       {!category &&
-        menu?.map((c) => (
+        menu?.categories.map((c) => (
           <button key={c.id} onClick={() => chooseCategory(c)} aria-label={c.name}>
             {pictures && c.icon ? <Icon id={c.icon} size={96} /> : c.name}
           </button>
         ))}
+      {!category &&
+        menu?.tasks.map((choice) => (
+          <button key={`${choice.kind}-${choice.id}`} onClick={() => printIn(choice)} disabled={choice.done} aria-label={choice.name}>
+            {choice.done ? "✓ " : ""}
+            {pictures && choice.icon ? <Icon id={choice.icon} size={96} /> : `${choice.name} (${choice.stars} ★)`}
+          </button>
+        ))}
       {category &&
         category.choices.map((choice) => (
-          <button key={choice.id} onClick={() => print(choice.id)} disabled={choice.done} aria-label={choice.name}>
+          <button key={`${choice.kind}-${choice.id}`} onClick={() => printIn(choice)} disabled={choice.done} aria-label={choice.name}>
             {choice.done ? "✓ " : ""}
             {pictures && choice.icon ? <Icon id={choice.icon} size={96} /> : `${choice.name} (${choice.stars} ★)`}
           </button>

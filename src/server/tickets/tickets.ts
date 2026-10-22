@@ -40,28 +40,6 @@ export interface TicketSummary {
 class PrinterOffline extends Error {}
 class BadScore extends Error {}
 
-/** Whether a task id names one of the chart's chores or quiz topics. */
-async function kindOfTask(db: Database, chartId: string, taskId: string): Promise<TaskKindName | undefined> {
-  const chore = await db
-    .selectFrom("chores")
-    .innerJoin("chore_assignments", "chore_assignments.chore_id", "chores.id")
-    .innerJoin("children", "children.id", "chore_assignments.child_id")
-    .select("chores.id")
-    .where("chores.id", "=", taskId)
-    .where("children.chart_id", "=", chartId)
-    .executeTakeFirst();
-  if (chore) return "chore";
-  const topic = await db
-    .selectFrom("topics")
-    .innerJoin("topic_children", "topic_children.topic_id", "topics.id")
-    .innerJoin("children", "children.id", "topic_children.child_id")
-    .select("topics.id")
-    .where("topics.id", "=", taskId)
-    .where("children.chart_id", "=", chartId)
-    .executeTakeFirst();
-  return topic ? "quiz" : undefined;
-}
-
 /** The outcome of a grown-up's decision on a ticket. */
 export type Decision<T> =
   | T
@@ -143,12 +121,8 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
         chartId: string;
         observatoryId: string;
         childId: string;
-        /** The task, named directly... */
-        kind?: TaskKindName;
-        taskId?: string;
-        /** ...or the old way (expand step), by category and choice. */
-        categoryId?: string;
-        choiceId?: string;
+        kind: TaskKindName;
+        taskId: string;
       },
       /** Hands the print job to the observatory's printer. Returns false if no printer is there to take it. */
       deliver: (job: PrintJob) => boolean,
@@ -164,8 +138,8 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
       | { refused: "printer-offline" }
       | undefined
     > {
-      const taskId = input.taskId ?? input.choiceId;
-      if (!isId(input.childId) || !taskId || !isId(taskId)) return undefined;
+      const { kind, taskId } = input;
+      if (!isId(input.childId) || !isId(taskId)) return undefined;
       return db.transaction().execute(async (trx) => {
         const child = await trx
           .selectFrom("children")
@@ -174,8 +148,6 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
           .where("id", "=", input.childId)
           .executeTakeFirst();
         if (!child) return undefined;
-        const kind = input.kind ?? (await kindOfTask(trx, input.chartId, taskId));
-        if (!kind) return undefined;
         const alreadyHolding = await trx
           .selectFrom("tickets")
           .select("id")

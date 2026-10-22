@@ -169,7 +169,7 @@ describe("one open ticket per category", () => {
     const cat = await addChore("Feed the cat");
     const printer = await chart.connectPrinter();
     const print = (choiceId: string) =>
-      chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId });
+      chart.screen.post(`/api/observatory/children/${nova}/tickets`, { kind: "chore", taskId: choiceId });
     return { chart, bed, cat, printer, print };
   }
 

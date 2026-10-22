@@ -31,9 +31,8 @@ describe("topics", () => {
       {
         id: category.id,
         name: "Math",
-        kind: "quiz",
         icon: "math",
-        choices: [{ id: addition.id, name: "Addition", stars: 3, icon: "math", done: false }],
+        choices: [{ kind: "quiz", id: addition.id, name: "Addition", stars: 3, icon: "math", done: false }],
       },
     ]);
     expect(pipsMenu).toEqual([]);
@@ -81,7 +80,7 @@ async function novaWithSpelling() {
       items: words.map((word) => ({ prompt: `Spell: ${word}`, answer: word })),
       ...extra,
     });
-  const print = () => chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: spelling.id });
+  const print = () => chart.screen.post(`/api/observatory/children/${nova}/tickets`, { kind: "quiz", taskId: spelling.id });
   return { chart, nova, pip, category, spelling, printer, writeQuiz, print, addTopic, switchOn };
 }
 
@@ -156,8 +155,8 @@ describe("when a pool is empty", () => {
     const printer = await chart.connectPrinter();
 
     const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, {
-      categoryId: category.id,
-      choiceId: addition.id,
+      kind: "quiz",
+      taskId: addition.id,
     });
     const job = (await printer.nextMessage()).ticket;
 
@@ -202,7 +201,7 @@ describe("checking a quiz", () => {
     const printer = await chart.connectPrinter();
     const scanner = await chart.connectScanner();
     const screen = await chart.connectScreen();
-    const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: addition.id });
+    const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { kind: "quiz", taskId: addition.id });
     const { code } = (await printer.nextMessage()).ticket;
     scanner.send({ type: "scan", code });
     await screen.nextMessage();
@@ -253,7 +252,7 @@ describe("lost quizzes (ticket 16)", () => {
     await writeQuiz(["because", "friend"]);
     await print();
     const original = (await printer.nextMessage()).ticket;
-    await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, { categoryId: category.id });
+    await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, { kind: "quiz" });
     const [request] = (await chart.owner.get("/api/reprint-requests")).body.reprintRequests;
 
     await chart.owner.post(`/api/reprint-requests/${request.id}/approve`, {});
@@ -345,7 +344,7 @@ describe("the built-in sample sets", () => {
     for (const set of Object.keys(check)) {
       const topic = await addTopic(set, { samples: set });
       await switchOn(topic.id, nova, 2);
-      const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { categoryId: category.id, choiceId: topic.id });
+      const printed = await chart.screen.post(`/api/observatory/children/${nova}/tickets`, { kind: "quiz", taskId: topic.id });
       await printer.nextMessage();
       const [ticket] = (await chart.owner.get("/api/tickets?state=open")).body.tickets;
       for (const { prompt, answer } of ticket.answerKey as { prompt: string; answer: string }[]) {

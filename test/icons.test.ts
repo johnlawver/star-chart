@@ -70,7 +70,7 @@ describe("icons on categories and chores", () => {
     ).body;
     const printer = await chart.connectPrinter();
 
-    await chart.screen.post(`/api/observatory/children/${pip}/tickets`, { categoryId: category.id, choiceId: chore.id });
+    await chart.screen.post(`/api/observatory/children/${pip}/tickets`, { kind: "chore", taskId: chore.id });
 
     expect((await printer.nextMessage()).ticket).toMatchObject({ displayStyle: "pictures", title: "Tidy toys", icon: "lego" });
     printer.close();

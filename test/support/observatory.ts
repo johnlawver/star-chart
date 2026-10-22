@@ -69,8 +69,8 @@ export async function chartWithObservatory(harness: Harness, chartName = "Our Ho
       printer: LiveConnection,
     ): Promise<{ ticketId: string; code: string }> {
       const printed = await screen.post(`/api/observatory/children/${childId}/tickets`, {
-        categoryId: chore.categoryId,
-        choiceId: chore.choreId,
+        kind: "chore",
+        taskId: chore.choreId,
       });
       const job = (await printer.nextMessage()).ticket;
       return { ticketId: printed.body.ticket.id, code: job.code };

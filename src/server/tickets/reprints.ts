@@ -29,22 +29,17 @@ export function createReprints(db: Database, clock: Clock) {
       chartId: string;
       observatoryId: string;
       childId: string;
-      /** Which open ticket: the child's open chore or quiz... */
-      kind?: TaskKindName;
-      /** ...or (expand step, while callers move over) their open ticket in a category. */
-      categoryId?: string;
+      /** Which open ticket: the child's open chore, or their open quiz. */
+      kind: TaskKindName;
     }): Promise<{ id: string; childNickname: string; title: string } | { refused: "no-open-ticket" | "already-asked" }> {
-      if (!isId(input.childId) || (input.categoryId !== undefined && !isId(input.categoryId))) {
-        return { refused: "no-open-ticket" };
-      }
+      if (!isId(input.childId)) return { refused: "no-open-ticket" };
       const ticket = await db
         .selectFrom("tickets")
         .innerJoin("children", "children.id", "tickets.child_id")
         .select(["tickets.id", "tickets.title", "children.nickname"])
         .where("tickets.chart_id", "=", input.chartId)
         .where("tickets.child_id", "=", input.childId)
-        .$if(input.kind !== undefined, (query) => query.where("tickets.kind", "=", input.kind!))
-        .$if(input.categoryId !== undefined, (query) => query.where("tickets.category_id", "=", input.categoryId!))
+        .where("tickets.kind", "=", input.kind)
         .where("tickets.state", "=", "open")
         .executeTakeFirst();
       if (!ticket) return { refused: "no-open-ticket" };

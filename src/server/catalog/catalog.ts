@@ -256,18 +256,19 @@ export function createCatalog(db: Database, clock: Clock) {
         .sort((a, b) => a.name.localeCompare(b.name));
       const categories = await db
         .selectFrom("task_categories")
-        .select(["id", "name", "kind", "icon"])
+        .select(["id", "name", "icon"])
         .where("chart_id", "=", chartId)
         .orderBy("name")
         .execute();
-      // Expand step: categories keep their old shape (choices without kind) until every caller has moved over.
-      const inCategory = (categoryId: string) =>
-        choices.filter((choice) => choice.categoryId === categoryId).map(({ kind: _kind, categoryId: _c, ...rest }) => rest);
+      const withoutCategory = ({ categoryId: _categoryId, ...choice }: Choice) => choice;
       return {
         categories: categories
-          .map((category) => ({ ...category, choices: inCategory(category.id) }))
+          .map((category) => ({
+            ...category,
+            choices: choices.filter((choice) => choice.categoryId === category.id).map(withoutCategory),
+          }))
           .filter((category) => category.choices.length > 0),
-        tasks: choices.filter((choice) => choice.categoryId === null),
+        tasks: choices.filter((choice) => choice.categoryId === null).map(withoutCategory),
       };
     },
   };
