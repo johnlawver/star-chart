@@ -52,13 +52,15 @@ export interface Tables {
     id: Generated<string>;
     chart_id: string;
     name: string;
-    kind: TaskKindName;
+    /** No longer used: a category is just a folder now. Kept only because older rows have it. */
+    kind: TaskKindName | null;
     icon: string | null;
     created_at: Date;
   };
   chores: {
     id: Generated<string>;
-    category_id: string;
+    category_id: string | null;
+    retired_at: Date | null;
     name: string;
     stars: number;
     frequency_times: Generated<number>;
@@ -72,7 +74,8 @@ export interface Tables {
   };
   topics: {
     id: Generated<string>;
-    category_id: string;
+    category_id: string | null;
+    retired_at: Date | null;
     name: string;
     stars: number;
     icon: string | null;
@@ -117,7 +120,8 @@ export interface Tables {
     id: Generated<string>;
     chart_id: string;
     child_id: string;
-    category_id: string;
+    category_id: string | null;
+    kind: TaskKindName;
     chore_id: string | null;
     code: string;
     title: string;

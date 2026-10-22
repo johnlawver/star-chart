@@ -1,7 +1,7 @@
 import { timeZoneOf } from "../catalog/catalog.js";
 import { taskKind } from "../catalog/task-kinds.js";
 import type { Clock } from "../clock.js";
-import type { Database, DisplayStyle, QuizItem, TicketState } from "../database.js";
+import type { Database, DisplayStyle, QuizItem, TaskKindName, TicketState } from "../database.js";
 import { isId } from "../ids.js";
 import { isUniqueViolation } from "../database-errors.js";
 import type { Stars } from "../stars/stars.js";
@@ -39,6 +39,28 @@ export interface TicketSummary {
 
 class PrinterOffline extends Error {}
 class BadScore extends Error {}
+
+/** Whether a task id names one of the chart's chores or quiz topics. */
+async function kindOfTask(db: Database, chartId: string, taskId: string): Promise<TaskKindName | undefined> {
+  const chore = await db
+    .selectFrom("chores")
+    .innerJoin("chore_assignments", "chore_assignments.chore_id", "chores.id")
+    .innerJoin("children", "children.id", "chore_assignments.child_id")
+    .select("chores.id")
+    .where("chores.id", "=", taskId)
+    .where("children.chart_id", "=", chartId)
+    .executeTakeFirst();
+  if (chore) return "chore";
+  const topic = await db
+    .selectFrom("topics")
+    .innerJoin("topic_children", "topic_children.topic_id", "topics.id")
+    .innerJoin("children", "children.id", "topic_children.child_id")
+    .select("topics.id")
+    .where("topics.id", "=", taskId)
+    .where("children.chart_id", "=", chartId)
+    .executeTakeFirst();
+  return topic ? "quiz" : undefined;
+}
 
 /** The outcome of a grown-up's decision on a ticket. */
 export type Decision<T> =
@@ -121,8 +143,12 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
         chartId: string;
         observatoryId: string;
         childId: string;
-        categoryId: string;
-        choiceId: string;
+        /** The task, named directly... */
+        kind?: TaskKindName;
+        taskId?: string;
+        /** ...or the old way (expand step), by category and choice. */
+        categoryId?: string;
+        choiceId?: string;
       },
       /** Hands the print job to the observatory's printer. Returns false if no printer is there to take it. */
       deliver: (job: PrintJob) => boolean,
@@ -132,13 +158,14 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
           job: PrintJob;
           quizAlerts: { alerts: ("ran-out" | "recycled")[]; topicName: string } | undefined;
         }
-      | { refused: "already-holding"; category: string }
+      | { refused: "already-holding"; kind: TaskKindName }
       | { refused: "done-for-now"; title: string }
       | { refused: "no-quizzes" }
       | { refused: "printer-offline" }
       | undefined
     > {
-      if (!isId(input.childId) || !isId(input.categoryId)) return undefined;
+      const taskId = input.taskId ?? input.choiceId;
+      if (!isId(input.childId) || !taskId || !isId(taskId)) return undefined;
       return db.transaction().execute(async (trx) => {
         const child = await trx
           .selectFrom("children")
@@ -146,23 +173,19 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
           .where("chart_id", "=", input.chartId)
           .where("id", "=", input.childId)
           .executeTakeFirst();
-        const category = await trx
-          .selectFrom("task_categories")
-          .select(["kind", "name"])
-          .where("chart_id", "=", input.chartId)
-          .where("id", "=", input.categoryId)
-          .executeTakeFirst();
-        if (!child || !category) return undefined;
+        if (!child) return undefined;
+        const kind = input.kind ?? (await kindOfTask(trx, input.chartId, taskId));
+        if (!kind) return undefined;
         const alreadyHolding = await trx
           .selectFrom("tickets")
           .select("id")
           .where("child_id", "=", input.childId)
-          .where("category_id", "=", input.categoryId)
+          .where("kind", "=", kind)
           .where("state", "in", ["open", "handed-in"])
           .executeTakeFirst();
-        if (alreadyHolding) return { refused: "already-holding" as const, category: category.name };
+        if (alreadyHolding) return { refused: "already-holding" as const, kind };
         const context = { now: clock.now(), timeZone: await timeZoneOf(trx, input.chartId) };
-        const issued = await taskKind(category.kind).issue(trx, context, input.categoryId, input.childId, input.choiceId);
+        const issued = await taskKind(kind).issue(trx, context, input.childId, taskId);
         if (!issued) return undefined;
         if (issued === "done") return { refused: "done-for-now" as const, title: "" };
         if (issued === "empty") return { refused: "no-quizzes" as const };
@@ -171,7 +194,8 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
           .values({
             chart_id: input.chartId,
             child_id: input.childId,
-            category_id: input.categoryId,
+            category_id: issued.categoryId,
+            kind,
             chore_id: issued.choreId,
             quiz_id: issued.quizId ?? null,
             topic_id: issued.topicId ?? null,
@@ -187,10 +211,10 @@ export function createTickets(db: Database, clock: Clock, stars: Stars) {
           .executeTakeFirstOrThrow()
           .catch((error: unknown) => {
             // Another print for this child and category won the race between the check above and this insert.
-            if (isUniqueViolation(error, "tickets_one_open_per_category")) return undefined;
+            if (isUniqueViolation(error, "tickets_one_open_per_kind")) return undefined;
             throw error;
           });
-        if (!ticket) return { refused: "already-holding" as const, category: category.name };
+        if (!ticket) return { refused: "already-holding" as const, kind };
         const job: PrintJob = {
           id: ticket.id,
           childNickname: child.nickname,

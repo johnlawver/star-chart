@@ -60,9 +60,13 @@ describe("who gets notified", () => {
 describe("grouping hand-ins", () => {
   test("the first hand-in is sent straight away; more within a minute are sent together once it's passed", async () => {
     clock.set(new Date("2026-10-20T14:00:00Z"));
-    const { chart, nova, phone, printer, handIn, closeAll } = await novaWithAPrintedChore();
+    const { chart, phone, printer, handIn, closeAll } = await novaWithAPrintedChore();
+    // A busy morning: two more children each hand in a chore (a child holds only one open chore at a time).
     const more = await Promise.all(
-      ["Make your bed", "Brush teeth"].map(async (title) => chart.print(nova, await chart.addChore(title, 1, [nova]), printer)),
+      ["Pip", "Ava"].map(async (nickname) => {
+        const child = await chart.addChild(nickname);
+        return chart.print(child, await chart.addChore("Make your bed", 1, [child]), printer);
+      }),
     );
 
     await handIn();
@@ -107,10 +111,11 @@ describe("turning notifications off", () => {
   });
 
   test("a device the push service says is gone is forgotten", async () => {
-    const { chart, nova, phone, printer, handIn, closeAll } = await novaWithAPrintedChore();
+    const { chart, nova, phone, printer, ticketId, handIn, closeAll } = await novaWithAPrintedChore();
     push.markGone(phone.endpoint);
     await handIn();
     await new Promise((resolve) => setTimeout(resolve, 100));
+    await chart.owner.post(`/api/tickets/${ticketId}/approve`, {});
     const another = await chart.print(nova, await chart.addChore("Make your bed", 1, [nova]), printer);
     clock.advanceBy(2 * 60_000);
 
@@ -125,7 +130,7 @@ describe("turning notifications off", () => {
 
 describe("when sending goes wrong", () => {
   test("a device whose push fails doesn't stop the others getting theirs, and the server carries on", async () => {
-    const { chart, phone, printer, nova, handIn, closeAll } = await novaWithAPrintedChore();
+    const { chart, phone, printer, nova, ticketId, handIn, closeAll } = await novaWithAPrintedChore();
     const brokenTablet = fakeSubscription();
     await chart.owner.post("/api/push/subscriptions", brokenTablet);
     push.markBroken(brokenTablet.endpoint);
@@ -133,6 +138,7 @@ describe("when sending goes wrong", () => {
     await handIn();
 
     await expect.poll(() => push.to(phone.endpoint).length).toBe(1);
+    await chart.owner.post(`/api/tickets/${ticketId}/approve`, {});
     const stillWorking = await chart.print(nova, await chart.addChore("Make your bed", 1, [nova]), printer);
     expect(stillWorking.code).toEqual(expect.any(String));
     closeAll();
@@ -184,16 +190,15 @@ describe("delayed test notifications", () => {
 
 describe("app badges", () => {
   test("every notification carries how many things are waiting for the grown-ups, for the app's badge", async () => {
-    const { chart, nova, phone, printer, handIn, closeAll } = await novaWithAPrintedChore();
+    const { chart, phone, printer, handIn, closeAll } = await novaWithAPrintedChore();
 
     await handIn();
     await expect.poll(() => push.to(phone.endpoint).length).toBe(1);
     const afterOneHandIn = push.to(phone.endpoint).at(-1)?.badge;
-    await chart.print(nova, await chart.addChore("Make your bed", 1, [nova]), printer);
-    const otherCategory = (await chart.owner.get("/api/categories")).body.categories.find(
-      (c: { chores: { name: string }[] }) => c.chores[0]?.name === "Make your bed",
-    ).id;
-    await chart.screen.post(`/api/observatory/children/${nova}/reprint-requests`, { categoryId: otherCategory });
+    const pip = await chart.addChild("Pip");
+    const pipsChore = await chart.addChore("Make your bed", 1, [pip]);
+    await chart.print(pip, pipsChore, printer);
+    await chart.screen.post(`/api/observatory/children/${pip}/reprint-requests`, { categoryId: pipsChore.categoryId });
     await expect.poll(() => push.to(phone.endpoint).length).toBe(2);
     const afterALostTicket = push.to(phone.endpoint).at(-1)?.badge;
 

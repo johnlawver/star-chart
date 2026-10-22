@@ -84,9 +84,9 @@ describe("approving a ticket", () => {
       return printed.ticketId;
     };
     const cat = await handIn(feedTheCat);
-    const room = await handIn(tidyRoom);
-
     await chart.owner.post(`/api/tickets/${cat}/approve`, {});
+    const room = await handIn(tidyRoom); // one open chore at a time, so after the cat's been fed
+
     const bonus = await chart.owner.post(`/api/tickets/${room}/approve`, { stars: 5 });
 
     expect(bonus.body.ticket.stars).toBe(5);

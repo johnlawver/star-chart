@@ -4,7 +4,7 @@ import type { LiveParts } from "../observatories/live-parts.js";
 import type { Observatories } from "../observatories/observatories.js";
 import { decidedBy, requireActor } from "../people/authenticate.js";
 import type { People } from "../people/people.js";
-import type { TicketState } from "../database.js";
+import type { TaskKindName, TicketState } from "../database.js";
 import type { FastifyReply } from "fastify";
 import type { Decision, Tickets } from "./tickets.js";
 import type { Notifications } from "../notifications/notifications.js";
@@ -124,14 +124,23 @@ export async function ticketRoutes(
   });
 
   // A child at an observatory chooses something to print.
-  app.post<{ Params: { childId: string }; Body: { categoryId: string; choiceId: string } }>(
+  app.post<{
+    Params: { childId: string };
+    Body: { kind?: TaskKindName; taskId?: string; categoryId?: string; choiceId?: string };
+  }>(
     "/api/observatory/children/:childId/tickets",
     {
       schema: {
         body: {
           type: "object",
-          properties: { categoryId: idField, choiceId: idField },
-          required: ["categoryId", "choiceId"],
+          // The task, named directly (kind and taskId), or the old way (categoryId and choiceId) while callers move over.
+          properties: {
+            kind: { type: "string", enum: ["chore", "quiz"] },
+            taskId: idField,
+            categoryId: idField,
+            choiceId: idField,
+          },
+          anyOf: [{ required: ["kind", "taskId"] }, { required: ["categoryId", "choiceId"] }],
           additionalProperties: false,
         },
       },
@@ -154,7 +163,7 @@ export async function ticketRoutes(
         if (printed.refused === "done-for-now") {
           return reply.code(409).send({ error: "That one's already done for now. Great job! ⭐" });
         }
-        return reply.code(409).send({ error: `You already have a ${printed.category} ticket. Finish that one first!` });
+        return reply.code(409).send({ error: `You already have a ${printed.kind} ticket. Finish that one first!` });
       }
       if (printed.quizAlerts) {
         void notifications

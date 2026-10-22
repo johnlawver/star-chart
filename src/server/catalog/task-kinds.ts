@@ -6,12 +6,15 @@ import { newTicketCode } from "../tokens.js";
 import { addQuiz } from "../quizzes/quiz-pools.js";
 import { sampleQuiz } from "../quizzes/samples.js";
 
-/** Something a child can pick at the observatory within a category, such as one chore. */
+/** Something a child can pick at the observatory, such as one chore or one quiz topic. */
 export interface Choice {
+  kind: TaskKindName;
   id: string;
   name: string;
   stars: number;
   icon: string | null;
+  /** The category it's filed in, if any: categories are optional folders. */
+  categoryId: string | null;
   /** Already done as often as it can earn stars for now (for example, once today), so it can't be printed. */
   done: boolean;
 }
@@ -19,6 +22,8 @@ export interface Choice {
 /** What goes on a ticket when a child chooses something. */
 export interface IssuedTask {
   title: string;
+  /** The category the task is filed in, if any, kept on the ticket for the record. */
+  categoryId: string | null;
   icon: string | null;
   stars: number;
   code: string;
@@ -44,25 +49,19 @@ export interface ChoosingContext {
  */
 export interface TaskKind {
   name: TaskKindName;
-  /** What this child can choose from this category right now. */
-  choicesFor(db: Database, context: ChoosingContext, categoryId: string, childId: string): Promise<Choice[]>;
+  /** Everything of this kind the child can choose right now (tasks that are retired are never offered). */
+  choicesFor(db: Database, context: ChoosingContext, childId: string): Promise<Choice[]>;
   /**
    * The ticket's title, stars and code for a choice; "done" if the child can't do it again for now; "empty" if there's
    * nothing to print for it yet (a quiz topic with no quizzes); or undefined if it isn't one this child can choose.
    */
-  issue(
-    db: Database,
-    context: ChoosingContext,
-    categoryId: string,
-    childId: string,
-    choiceId: string,
-  ): Promise<IssuedTask | "done" | "empty" | undefined>;
+  issue(db: Database, context: ChoosingContext, childId: string, taskId: string): Promise<IssuedTask | "done" | "empty" | undefined>;
 }
 
 export const choreKind: TaskKind = {
   name: "chore",
 
-  async choicesFor(db, context, categoryId, childId) {
+  async choicesFor(db, context, childId) {
     const chores = await db
       .selectFrom("chores")
       .innerJoin("chore_assignments", "chore_assignments.chore_id", "chores.id")
@@ -71,11 +70,12 @@ export const choreKind: TaskKind = {
         "chores.name",
         "chores.stars",
         "chores.icon",
+        "chores.category_id",
         "chores.frequency_times",
         "chores.frequency_per",
       ])
-      .where("chores.category_id", "=", categoryId)
       .where("chore_assignments.child_id", "=", childId)
+      .where("chores.retired_at", "is", null)
       .orderBy("chores.name")
       .execute();
     const choices: Choice[] = [];
@@ -92,19 +92,21 @@ export const choreKind: TaskKind = {
         .where("ticket_events.created_at", ">=", since)
         .executeTakeFirstOrThrow();
       choices.push({
+        kind: "chore",
         id: chore.id,
         name: chore.name,
         stars: chore.stars,
         icon: chore.icon,
+        categoryId: chore.category_id,
         done: Number(approvals) >= chore.frequency_times,
       });
     }
     return choices;
   },
 
-  async issue(db, context, categoryId, childId, choiceId) {
-    if (!isId(choiceId)) return undefined;
-    const chore = (await this.choicesFor(db, context, categoryId, childId)).find((choice) => choice.id === choiceId);
+  async issue(db, context, childId, taskId) {
+    if (!isId(taskId)) return undefined;
+    const chore = (await this.choicesFor(db, context, childId)).find((choice) => choice.id === taskId);
     if (!chore) return undefined;
     if (chore.done) return "done";
     // A chore's code belongs to the child and the chore, not to one printing (ADR 0001).
@@ -119,24 +121,24 @@ export const choreKind: TaskKind = {
       .where("child_id", "=", childId)
       .where("chore_id", "=", chore.id)
       .executeTakeFirstOrThrow();
-    return { title: chore.name, icon: chore.icon, stars: chore.stars, code, choreId: chore.id };
+    return { title: chore.name, categoryId: chore.categoryId, icon: chore.icon, stars: chore.stars, code, choreId: chore.id };
   },
 };
 
 export const quizKind: TaskKind = {
   name: "quiz",
 
-  // A child can choose any topic in the category that's switched on for them.
-  async choicesFor(db, _context, categoryId, childId) {
+  // A child can choose any topic that's switched on for them.
+  async choicesFor(db, _context, childId) {
     const topics = await db
       .selectFrom("topics")
       .innerJoin("topic_children", "topic_children.topic_id", "topics.id")
-      .select(["topics.id", "topics.name", "topics.stars", "topics.icon"])
-      .where("topics.category_id", "=", categoryId)
+      .select(["topics.id", "topics.name", "topics.stars", "topics.icon", "topics.category_id as categoryId"])
       .where("topic_children.child_id", "=", childId)
+      .where("topics.retired_at", "is", null)
       .orderBy("topics.name")
       .execute();
-    return topics.map((topic) => ({ ...topic, done: false }));
+    return topics.map((topic) => ({ kind: "quiz" as const, ...topic, done: false }));
   },
 
   /**
@@ -144,15 +146,24 @@ export const quizKind: TaskKind = {
    * pool is empty, a fresh quiz from the topic's built-in sample set; failing that, the quiz the child did least
    * recently, reused (and grown-ups are told); and if there's nothing at all, "empty".
    */
-  async issue(db, context, categoryId, childId, choiceId) {
-    if (!isId(choiceId)) return undefined;
+  async issue(db, context, childId, taskId) {
+    if (!isId(taskId)) return undefined;
     const topic = await db
       .selectFrom("topics")
       .innerJoin("topic_children", "topic_children.topic_id", "topics.id")
       .innerJoin("children", "children.id", "topic_children.child_id")
-      .select(["topics.id", "topics.name", "topics.stars", "topics.icon", "topics.samples", "topic_children.level", "children.chart_id"])
-      .where("topics.category_id", "=", categoryId)
-      .where("topics.id", "=", choiceId)
+      .select([
+        "topics.id",
+        "topics.name",
+        "topics.stars",
+        "topics.icon",
+        "topics.samples",
+        "topics.category_id",
+        "topic_children.level",
+        "children.chart_id",
+      ])
+      .where("topics.id", "=", taskId)
+      .where("topics.retired_at", "is", null)
       .where("topic_children.child_id", "=", childId)
       .executeTakeFirst();
     if (!topic) return undefined;
@@ -203,6 +214,7 @@ export const quizKind: TaskKind = {
     }
     return {
       title: quiz.title,
+      categoryId: topic.category_id,
       icon: topic.icon,
       stars: topic.stars,
       code: newTicketCode(),
@@ -221,3 +233,5 @@ const kinds: Record<TaskKindName, TaskKind> = { chore: choreKind, quiz: quizKind
 export function taskKind(name: TaskKindName): TaskKind {
   return kinds[name];
 }
+
+export const allTaskKinds: TaskKind[] = Object.values(kinds);

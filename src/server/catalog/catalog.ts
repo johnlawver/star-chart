@@ -1,7 +1,7 @@
 import type { Clock } from "../clock.js";
 import type { Database, SampleSet, TaskKindName } from "../database.js";
 import { isId } from "../ids.js";
-import { taskKind, type Choice } from "./task-kinds.js";
+import { allTaskKinds, type Choice } from "./task-kinds.js";
 
 /** How often a chore can earn stars: so many times per day or per week. Once a day unless a grown-up says otherwise. */
 export interface Frequency {
@@ -237,8 +237,11 @@ export function createCatalog(db: Database, clock: Clock) {
       return result.numDeletedRows > 0n;
     },
 
-    /** The categories a child sees at the observatory: only those with something they can choose. */
-    async menuFor(chartId: string, childId: string): Promise<MenuCategory[] | undefined> {
+    /**
+     * What a child sees at the observatory: their categories (only those holding something they can choose), and the
+     * tasks they can choose that aren't in any category.
+     */
+    async menuFor(chartId: string, childId: string) {
       if (!isId(childId)) return undefined;
       const child = await db
         .selectFrom("children")
@@ -247,19 +250,25 @@ export function createCatalog(db: Database, clock: Clock) {
         .where("id", "=", childId)
         .executeTakeFirst();
       if (!child) return undefined;
+      const context = { now: clock.now(), timeZone: await timeZoneOf(db, chartId) };
+      const choices = (await Promise.all(allTaskKinds.map((kind) => kind.choicesFor(db, context, childId))))
+        .flat()
+        .sort((a, b) => a.name.localeCompare(b.name));
       const categories = await db
         .selectFrom("task_categories")
         .select(["id", "name", "kind", "icon"])
         .where("chart_id", "=", chartId)
         .orderBy("name")
         .execute();
-      const context = { now: clock.now(), timeZone: await timeZoneOf(db, chartId) };
-      const menu: MenuCategory[] = [];
-      for (const category of categories) {
-        const choices = await taskKind(category.kind).choicesFor(db, context, category.id, childId);
-        if (choices.length > 0) menu.push({ ...category, choices });
-      }
-      return menu;
+      // Expand step: categories keep their old shape (choices without kind) until every caller has moved over.
+      const inCategory = (categoryId: string) =>
+        choices.filter((choice) => choice.categoryId === categoryId).map(({ kind: _kind, categoryId: _c, ...rest }) => rest);
+      return {
+        categories: categories
+          .map((category) => ({ ...category, choices: inCategory(category.id) }))
+          .filter((category) => category.choices.length > 0),
+        tasks: choices.filter((choice) => choice.categoryId === null),
+      };
     },
   };
 }

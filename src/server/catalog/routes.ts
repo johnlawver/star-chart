@@ -146,8 +146,8 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
   app.get<{ Params: { childId: string } }>("/api/observatory/children/:childId/menu", async (request, reply) => {
     const screen = await requireDevice(observatories, "screen", request, reply);
     if (!screen) return reply;
-    const categories = await catalog.menuFor(screen.chartId, request.params.childId);
-    if (!categories) return reply.code(404).send({ error: "no such child" });
-    return { categories };
+    const menu = await catalog.menuFor(screen.chartId, request.params.childId);
+    if (!menu) return reply.code(404).send({ error: "no such child" });
+    return menu;
   });
 }
