@@ -5,6 +5,7 @@ import type { Observatories } from "../observatories/observatories.js";
 import { decidedBy, requireActor } from "../people/authenticate.js";
 import type { People } from "../people/people.js";
 import type { Reprints } from "./reprints.js";
+import type { TaskKindName } from "../database.js";
 import type { Notifications } from "../notifications/notifications.js";
 
 const idField = { type: "string", maxLength: 36 } as const;
@@ -18,14 +19,16 @@ export async function reprintRoutes(
   notifications: Notifications,
 ) {
   // A child taps "I lost it" on a category where they hold an open ticket.
-  app.post<{ Params: { childId: string }; Body: { categoryId: string } }>(
+  app.post<{ Params: { childId: string }; Body: { kind?: TaskKindName; categoryId?: string } }>(
     "/api/observatory/children/:childId/reprint-requests",
     {
       schema: {
         body: {
           type: "object",
-          properties: { categoryId: idField },
-          required: ["categoryId"],
+          // Which open ticket: the child's open chore or quiz (kind), or the old way (categoryId) while callers move over.
+          properties: { kind: { type: "string", enum: ["chore", "quiz"] }, categoryId: idField },
+          minProperties: 1,
+          maxProperties: 1,
           additionalProperties: false,
         },
       },
@@ -37,7 +40,7 @@ export async function reprintRoutes(
         chartId: screen.chartId,
         observatoryId: screen.observatoryId,
         childId: request.params.childId,
-        categoryId: request.body.categoryId,
+        ...request.body,
       });
       if ("refused" in result) {
         if (result.refused === "already-asked") {
