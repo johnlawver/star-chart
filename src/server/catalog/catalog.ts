@@ -59,6 +59,104 @@ export function createCatalog(db: Database, clock: Clock) {
     },
 
     /**
+     * Changes a chore: its name, stars, icon, frequency, category (null for none), or which children have it.
+     * Tickets already printed keep what they were printed with. Refused if the chore, category or a child isn't in
+     * this chart.
+     */
+    async changeChore(
+      chartId: string,
+      choreId: string,
+      changes: {
+        name?: string;
+        stars?: number;
+        icon?: string | null;
+        frequency?: Frequency;
+        categoryId?: string | null;
+        childIds?: string[];
+      },
+    ): Promise<"changed" | "not-found" | "unknown-category-or-child"> {
+      if (!isId(choreId)) return "not-found";
+      return db.transaction().execute(async (trx) => {
+        const chore = await trx
+          .selectFrom("chores")
+          .select("id")
+          .where("chart_id", "=", chartId)
+          .where("id", "=", choreId)
+          .where("retired_at", "is", null)
+          .executeTakeFirst();
+        if (!chore) return "not-found" as const;
+        if (!(await isCategoryIn(trx, chartId, changes.categoryId))) return "unknown-category-or-child" as const;
+        if (changes.childIds && !(await areChildrenIn(trx, chartId, changes.childIds))) {
+          return "unknown-category-or-child" as const;
+        }
+        const set = {
+          ...(changes.name === undefined ? {} : { name: changes.name.trim() }),
+          ...(changes.stars === undefined ? {} : { stars: changes.stars }),
+          ...(changes.icon === undefined ? {} : { icon: changes.icon }),
+          ...(changes.categoryId === undefined ? {} : { category_id: changes.categoryId }),
+          ...(changes.frequency === undefined
+            ? {}
+            : { frequency_times: changes.frequency.times, frequency_per: changes.frequency.per }),
+        };
+        if (Object.keys(set).length > 0) await trx.updateTable("chores").set(set).where("id", "=", choreId).execute();
+        if (changes.childIds) {
+          await trx.deleteFrom("chore_assignments").where("chore_id", "=", choreId).execute();
+          const childIds = [...new Set(changes.childIds)];
+          if (childIds.length > 0) {
+            await trx
+              .insertInto("chore_assignments")
+              .values(childIds.map((childId) => ({ chore_id: choreId, child_id: childId })))
+              .execute();
+          }
+        }
+        return "changed" as const;
+      });
+    },
+
+    /** Changes a quiz topic: its name, stars, icon, built-in sample set or category (null for none of either). */
+    async changeTopic(
+      chartId: string,
+      topicId: string,
+      changes: { name?: string; stars?: number; icon?: string | null; samples?: SampleSet | null; categoryId?: string | null },
+    ): Promise<"changed" | "not-found" | "unknown-category"> {
+      if (!isId(topicId)) return "not-found";
+      const topic = await db
+        .selectFrom("topics")
+        .select("id")
+        .where("chart_id", "=", chartId)
+        .where("id", "=", topicId)
+        .where("retired_at", "is", null)
+        .executeTakeFirst();
+      if (!topic) return "not-found";
+      if (!(await isCategoryIn(db, chartId, changes.categoryId))) return "unknown-category";
+      const set = {
+        ...(changes.name === undefined ? {} : { name: changes.name.trim() }),
+        ...(changes.stars === undefined ? {} : { stars: changes.stars }),
+        ...(changes.icon === undefined ? {} : { icon: changes.icon }),
+        ...(changes.samples === undefined ? {} : { samples: changes.samples }),
+        ...(changes.categoryId === undefined ? {} : { category_id: changes.categoryId }),
+      };
+      if (Object.keys(set).length > 0) await db.updateTable("topics").set(set).where("id", "=", topicId).execute();
+      return "changed";
+    },
+
+    /**
+     * Removes a chore or topic: it's no longer offered or listed, but it stays on record, so its tickets (even open
+     * ones, which can still be handed in and approved), history and stars all still make sense.
+     */
+    async retire(chartId: string, kind: TaskKindName, taskId: string): Promise<boolean> {
+      if (!isId(taskId)) return false;
+      const result = await db
+        .updateTable(kind === "chore" ? "chores" : "topics")
+        .set({ retired_at: clock.now() })
+        .where("chart_id", "=", chartId)
+        .where("id", "=", taskId)
+        .where("retired_at", "is", null)
+        .executeTakeFirst();
+      return result.numUpdatedRows > 0n;
+    },
+
+    /**
      * Adds a chore, assigned to some of the chart's children, and in a category if one is given.
      * Refused if the category or any child isn't in this chart.
      */
@@ -300,6 +398,15 @@ export function createCatalog(db: Database, clock: Clock) {
 }
 
 export type Catalog = ReturnType<typeof createCatalog>;
+
+/** Whether every one of these children is in this chart. */
+async function areChildrenIn(db: Database, chartId: string, childIds: string[]): Promise<boolean> {
+  const unique = [...new Set(childIds)];
+  if (unique.length === 0) return true;
+  if (!unique.every(isId)) return false;
+  const found = await db.selectFrom("children").select("id").where("chart_id", "=", chartId).where("id", "in", unique).execute();
+  return found.length === unique.length;
+}
 
 /** Whether a category id (if one is given at all) is one of this chart's categories. */
 async function isCategoryIn(db: Database, chartId: string, categoryId: string | null | undefined): Promise<boolean> {

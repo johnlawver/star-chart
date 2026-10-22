@@ -65,7 +65,7 @@ export async function chartWithObservatory(harness: Harness, chartName = "Our Ho
     /** A child prints a chore at the observatory; returns the ticket and the code the printer printed. */
     async print(
       childId: string,
-      chore: { categoryId: string; choreId: string },
+      chore: { choreId: string; categoryId?: string },
       printer: LiveConnection,
     ): Promise<{ ticketId: string; code: string }> {
       const printed = await screen.post(`/api/observatory/children/${childId}/tickets`, {

@@ -112,3 +112,104 @@ describe("renaming and removing categories", () => {
     expect([renamed.status, removed.status]).toEqual([404, 404]);
   });
 });
+
+describe("editing tasks", () => {
+  test("a chore can be renamed and changed, moved into or out of a category, and given to other children", async () => {
+    const { chart, nova, menu, addCategory, addChore } = await novasChart();
+    const pip = await chart.addChild("Pip", "pictures");
+    const morning = await addCategory("Morning");
+    const chore = await addChore("Make bed");
+
+    const changed = await chart.owner.patch(`/api/chores/${chore.id}`, {
+      name: "Make your bed",
+      stars: 2,
+      icon: "bed",
+      frequency: { times: 1, per: "week" },
+      categoryId: morning.id,
+      childIds: [nova, pip],
+    });
+    const inMorning = (await menu()).categories[0]?.choices[0];
+    await chart.owner.patch(`/api/chores/${chore.id}`, { categoryId: null, childIds: [pip] });
+    const novasAfter = await menu();
+    const pipsAfter = (await chart.screen.get(`/api/observatory/children/${pip}/menu`)).body;
+
+    expect(changed.status).toBe(200);
+    expect(inMorning).toMatchObject({ kind: "chore", id: chore.id, name: "Make your bed", stars: 2, icon: "bed" });
+    expect(novasAfter).toEqual({ categories: [], tasks: [] });
+    expect(pipsAfter.tasks).toEqual([expect.objectContaining({ id: chore.id, name: "Make your bed" })]);
+    const [listed] = (await chart.owner.get("/api/categories")).body.chores;
+    expect(listed).toMatchObject({ frequency: { times: 1, per: "week" }, categoryId: null, childIds: [pip] });
+  });
+
+  test("a quiz topic can be renamed and changed, and moved into a category", async () => {
+    const { chart, menu, addCategory, addTopic } = await novasChart();
+    const math = await addCategory("Math");
+    const topic = await addTopic("Adding");
+
+    const changed = await chart.owner.patch(`/api/topics/${topic.id}`, {
+      name: "Addition",
+      stars: 4,
+      icon: "math",
+      samples: "subtraction",
+      categoryId: math.id,
+    });
+
+    expect(changed.status).toBe(200);
+    expect((await menu()).categories[0]).toMatchObject({
+      name: "Math",
+      choices: [expect.objectContaining({ kind: "quiz", id: topic.id, name: "Addition", stars: 4, icon: "math" })],
+    });
+    const [listed] = (await chart.owner.get("/api/categories")).body.topics;
+    expect(listed).toMatchObject({ samples: "subtraction", categoryId: math.id });
+  });
+});
+
+describe("removing tasks", () => {
+  test("a removed chore isn't offered or listed any more, but an open ticket for it can still be approved", async () => {
+    const { chart, nova, menu, addChore } = await novasChart();
+    const chore = await addChore("Feed the cat", { stars: 2 });
+    const printer = await chart.connectPrinter();
+    const { ticketId } = await chart.print(nova, { choreId: chore.id }, printer);
+
+    const removed = await chart.owner.delete(`/api/chores/${chore.id}`);
+    const approved = await chart.owner.post(`/api/tickets/${ticketId}/approve`, {});
+
+    expect(removed.status).toBe(204);
+    expect(await menu()).toEqual({ categories: [], tasks: [] });
+    expect((await chart.owner.get("/api/categories")).body.chores).toEqual([]);
+    expect(approved.status).toBe(200);
+    expect((await chart.owner.get(`/api/children/${nova}/constellation`)).body.balance).toBe(2);
+    printer.close();
+  });
+
+  test("a removed quiz topic isn't offered, listed, or sent to the quiz feed", async () => {
+    const { chart, menu, addTopic } = await novasChart();
+    const topic = await addTopic("Addition");
+    const { key } = (await chart.owner.post("/api/feed-keys", {})).body;
+    const feed = harness.newClient();
+    feed.useDeviceToken(key);
+
+    const removed = await chart.owner.delete(`/api/topics/${topic.id}`);
+
+    expect(removed.status).toBe(204);
+    expect(await menu()).toEqual({ categories: [], tasks: [] });
+    expect((await chart.owner.get("/api/categories")).body.topics).toEqual([]);
+    expect((await feed.get("/api/feed/pools")).body.pools).toEqual([]);
+  });
+
+  test("another chart can't edit or remove our tasks", async () => {
+    const { addChore, addTopic } = await novasChart();
+    const chore = await addChore("Feed the cat");
+    const topic = await addTopic("Addition");
+    const school = await chartWithObservatory(harness, "Room 12");
+
+    const statuses = [
+      (await school.owner.patch(`/api/chores/${chore.id}`, { name: "Sneaky" })).status,
+      (await school.owner.delete(`/api/chores/${chore.id}`)).status,
+      (await school.owner.patch(`/api/topics/${topic.id}`, { name: "Sneaky" })).status,
+      (await school.owner.delete(`/api/topics/${topic.id}`)).status,
+    ];
+
+    expect(statuses).toEqual([404, 404, 404, 404]);
+  });
+});

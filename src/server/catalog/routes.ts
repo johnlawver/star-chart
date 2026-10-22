@@ -177,6 +177,102 @@ export async function catalogRoutes(app: FastifyInstance, people: People, observ
     },
   );
 
+  app.patch<{
+    Params: { choreId: string };
+    Body: {
+      name?: string;
+      stars?: number;
+      icon?: string | null;
+      frequency?: Frequency;
+      categoryId?: string | null;
+      childIds?: string[];
+    };
+  }>(
+    "/api/chores/:choreId",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            name: nameField,
+            stars: { type: "integer", minimum: 0, maximum: 100 },
+            icon: { type: ["string", "null"], maxLength: 40 },
+            frequency: {
+              type: "object",
+              properties: {
+                times: { type: "integer", minimum: 1, maximum: 10 },
+                per: { type: "string", enum: ["day", "week"] },
+              },
+              required: ["times", "per"],
+              additionalProperties: false,
+            },
+            categoryId: { type: ["string", "null"], maxLength: 36 },
+            childIds: { type: "array", items: idField, maxItems: 100 },
+          },
+          minProperties: 1,
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      const { icon } = request.body;
+      if (typeof icon === "string" && !iconLibrary.has(icon)) return reply.code(400).send(unknownIcon);
+      const outcome = await catalog.changeChore(signedIn.chart.id, request.params.choreId, request.body);
+      if (outcome === "not-found") return reply.code(404).send({ error: "no such chore" });
+      if (outcome !== "changed") return reply.code(400).send({ error: "unknown category or child" });
+      return {};
+    },
+  );
+
+  app.patch<{
+    Params: { topicId: string };
+    Body: { name?: string; stars?: number; icon?: string | null; samples?: SampleSet | null; categoryId?: string | null };
+  }>(
+    "/api/topics/:topicId",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            name: nameField,
+            stars: { type: "integer", minimum: 0, maximum: 100 },
+            icon: { type: ["string", "null"], maxLength: 40 },
+            samples: { type: ["string", "null"], enum: ["addition", "subtraction", "letters", "numbers", "spelling", null] },
+            categoryId: { type: ["string", "null"], maxLength: 36 },
+          },
+          minProperties: 1,
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      const { icon } = request.body;
+      if (typeof icon === "string" && !iconLibrary.has(icon)) return reply.code(400).send(unknownIcon);
+      const outcome = await catalog.changeTopic(signedIn.chart.id, request.params.topicId, request.body);
+      if (outcome === "not-found") return reply.code(404).send({ error: "no such topic" });
+      if (outcome !== "changed") return reply.code(400).send({ error: "unknown category" });
+      return {};
+    },
+  );
+
+  for (const [kind, path] of [
+    ["chore", "/api/chores/:taskId"],
+    ["quiz", "/api/topics/:taskId"],
+  ] as const) {
+    app.delete<{ Params: { taskId: string } }>(path, async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      if (!(await catalog.retire(signedIn.chart.id, kind, request.params.taskId))) {
+        return reply.code(404).send({ error: `no such ${kind === "chore" ? "chore" : "topic"}` });
+      }
+      return reply.code(204).send();
+    });
+  }
+
   app.get<{ Params: { childId: string } }>("/api/observatory/children/:childId/menu", async (request, reply) => {
     const screen = await requireDevice(observatories, "screen", request, reply);
     if (!screen) return reply;
