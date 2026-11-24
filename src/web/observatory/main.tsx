@@ -2,20 +2,22 @@ import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { api, stored } from "../shared/api.js";
 import { useLiveConnection } from "../shared/live.js";
-import { Icon } from "../shared/icons.js";
-import { StarHistoryList, type StarHistory } from "../shared/star-history.js";
-import { ArtStyles } from "./art/components.js";
+import type { StarHistory } from "../shared/star-history.js";
+import { ArtStyles, NightSky } from "./art/components.js";
+import { ChildScreen, CouldNotPrint, Printing, Scanned, WhoAreYou, type Child, type Menu, type MenuChoice, type ScanOutcome } from "./dome/screens.js";
+import { domeCss } from "./dome/styles.js";
+import { useIdle } from "./dome/use-idle.js";
 import { Stage } from "./stage.js";
 
-// The observatory screen. Deliberately plain until its design phase (see Project conventions in CLAUDE.md).
+// The observatory screen children use: design A, "The Dome" (see .scratch/observatory-design/verdict.md). This file
+// talks to the server; the screens in dome/ only draw.
 
 const tokenKey = "star-chart.observatory.deviceToken";
 
-interface Child {
-  id: string;
-  nickname: string;
-  displayStyle: "pictures" | "words";
-}
+/** After this long with no taps, a child's screen (or the grown-up unlock) goes back to Who are you. */
+const idleMs = 60_000;
+/** How long a printed ticket, or a message about one, stays up before going back to Who are you. */
+const messageMs = 4_000;
 
 function Observatory() {
   const [deviceToken, setDeviceToken] = useState(stored.get(tokenKey));
@@ -48,7 +50,7 @@ function Unpaired({ onPaired }: { onPaired: (token: string) => void }) {
   };
 
   return (
-    <main>
+    <main className="plain">
       <h1>Set up this observatory</h1>
       <p>A grown-up signs in to connect this observatory to their chart.</p>
       <form onSubmit={submit}>
@@ -78,13 +80,21 @@ function Unpaired({ onPaired }: { onPaired: (token: string) => void }) {
   );
 }
 
+type Showing =
+  | { screen: "who" }
+  | { screen: "unlock" }
+  | { screen: "child"; child: Child }
+  | { screen: "printing"; child: Child; choice: MenuChoice }
+  | { screen: "could-not-print"; child: Child; message: string; lostKind?: "chore" | "quiz" };
+
 function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnpaired: () => void }) {
   const [children, setChildren] = useState<Child[]>([]);
-  const [chosen, setChosen] = useState<Child | undefined>();
-  const [unlocking, setUnlocking] = useState(false);
-  const [scanMessage, setScanMessage] = useState<string | undefined>();
-  const [scanResult, setScanResult] = useState<string | undefined>();
+  const [showing, setShowing] = useState<Showing>({ screen: "who" });
+  const [scanned, setScanned] = useState<ScanOutcome | undefined>();
   const [parts, setParts] = useState<{ printer: string; scanner: string } | undefined>();
+  const backToStart = () => setShowing({ screen: "who" });
+
+  useIdle(showing.screen !== "who", idleMs, backToStart);
 
   useEffect(() => {
     const check = async () => {
@@ -100,19 +110,16 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
   useLiveConnection(
     deviceToken,
     (message) => {
-      if (message.type !== "scan-result") return;
-      const messages: Record<string, string> = {
-        "handed-in": `Great job, ${message.childNickname}! "${message.title}" is waiting for a grown-up.`,
-        "waiting-for-grown-up": `"${message.title}" is already waiting for a grown-up to check it.`,
-        "already-done": `"${message.title}" is already done! ⭐`,
-        "not-recognised": "Hmm, I don't know that ticket. Ask a grown-up.",
-      };
-      setScanMessage(messages[message.result] ?? messages["not-recognised"]);
-      setScanResult(message.result);
-      setTimeout(() => setScanMessage(undefined), 4000);
+      if (message.type === "scan-result") setScanned(message);
     },
     onUnpaired,
   );
+
+  useEffect(() => {
+    if (!scanned) return;
+    const timer = setTimeout(() => setScanned(undefined), messageMs);
+    return () => clearTimeout(timer);
+  }, [scanned]);
 
   useEffect(() => {
     void (async () => {
@@ -122,46 +129,96 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
     })();
   }, [deviceToken]);
 
-  if (unlocking) return <Unlock deviceToken={deviceToken} onCancel={() => setUnlocking(false)} />;
-  if (scanMessage) {
-    return (
-      <main>
-        {scanResult === "already-done" && <SpinningStar />}
-        <h1 role="status">{scanMessage}</h1>
-      </main>
-    );
-  }
-  const napping = [
-    parts?.printer === "offline" && "printer",
-    parts?.scanner === "offline" && "scanner",
-  ].filter(Boolean);
-  const banner =
-    napping.length > 0 ? <p role="alert">The {napping.join(" and ")} {napping.length > 1 ? "are" : "is"} napping. Ask a grown-up!</p> : null;
+  // Printed tickets and messages about them go back to Who are you after a moment, ready for the next child.
+  useEffect(() => {
+    if (showing.screen !== "printing" && !(showing.screen === "could-not-print" && !showing.lostKind)) return;
+    const timer = setTimeout(backToStart, messageMs);
+    return () => clearTimeout(timer);
+  }, [showing]);
 
-  if (chosen) {
-    return (
-      <>
-        {banner}
-        <ChildView child={chosen} deviceToken={deviceToken} onDone={() => setChosen(undefined)} />
-      </>
-    );
-  }
+  const print = async (child: Child, choice: MenuChoice) => {
+    const result = await api("POST", `/api/observatory/children/${child.id}/tickets`, { kind: choice.kind, taskId: choice.id }, deviceToken);
+    if (result.ok) return setShowing({ screen: "printing", child, choice });
+    const message = result.data?.error ?? "That didn't work. Ask a grown-up.";
+    // Already holding a ticket of this kind? Offer to ask a grown-up for a new copy, in case it's lost.
+    const lostKind = result.status === 409 && /already have/i.test(message) ? choice.kind : undefined;
+    setShowing({ screen: "could-not-print", child, message, lostKind });
+  };
 
+  const askForReprint = async (child: Child, kind: "chore" | "quiz") => {
+    const result = await api("POST", `/api/observatory/children/${child.id}/reprint-requests`, { kind }, deviceToken);
+    setShowing({
+      screen: "could-not-print",
+      child,
+      message: result.ok ? "OK! A grown-up will check, then print it again." : (result.data?.error ?? "Ask a grown-up."),
+    });
+  };
+
+  const napping = [parts?.printer === "offline" && "printer", parts?.scanner === "offline" && "scanner"].filter(Boolean);
 
   return (
-    <main>
-      {banner}
-      <h1>Who are you?</h1>
-      {children.length === 0 && <p>No children yet. A grown-up can add them in the Control Center.</p>}
-      {children.map((child) => (
-        <button key={child.id} onClick={() => setChosen(child)}>
-          {child.nickname}
-        </button>
-      ))}
-      <footer>
-        <button onClick={() => setUnlocking(true)}>Grown-ups</button>
-      </footer>
-    </main>
+    <>
+      <NightSky />
+      {napping.length > 0 && (
+        <p className="dome-banner" role="alert">
+          The {napping.join(" and ")} {napping.length > 1 ? "are" : "is"} napping. Ask a grown-up!
+        </p>
+      )}
+      {showing.screen === "who" && (
+        <WhoAreYou children={children} onChoose={(child) => setShowing({ screen: "child", child })} onGrownUps={() => setShowing({ screen: "unlock" })} />
+      )}
+      {showing.screen === "unlock" && <Unlock deviceToken={deviceToken} onCancel={backToStart} />}
+      {showing.screen === "child" && (
+        <ChildView key={showing.child.id} child={showing.child} deviceToken={deviceToken} onPrint={(choice) => print(showing.child, choice)} onLeave={backToStart} />
+      )}
+      {showing.screen === "printing" && <Printing child={showing.child} choice={showing.choice} />}
+      {showing.screen === "could-not-print" && (
+        <CouldNotPrint
+          message={showing.message}
+          lost={Boolean(showing.lostKind)}
+          onLost={() => showing.lostKind && askForReprint(showing.child, showing.lostKind)}
+          onStillHaveIt={backToStart}
+        />
+      )}
+      {scanned && <Scanned outcome={scanned} onClose={() => setScanned(undefined)} />}
+    </>
+  );
+}
+
+/** Loads a child's balance, lifetime stars and menu, then shows their dome. */
+function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; deviceToken: string; onPrint: (choice: MenuChoice) => void; onLeave: () => void }) {
+  const [totals, setTotals] = useState<{ balance: number; earned: number } | undefined>();
+  const [menu, setMenu] = useState<Menu | undefined>();
+  const [history, setHistory] = useState<StarHistory | undefined>();
+
+  useEffect(() => {
+    void (async () => {
+      const [view, choices] = await Promise.all([
+        api("GET", `/api/observatory/children/${child.id}`, undefined, deviceToken),
+        api("GET", `/api/observatory/children/${child.id}/menu`, undefined, deviceToken),
+      ]);
+      if (view.ok) setTotals({ balance: view.data.child.balance, earned: view.data.child.earned });
+      if (choices.ok) setMenu(choices.data);
+    })();
+  }, [child.id]);
+
+  const showHistory = async (show: boolean) => {
+    if (!show) return setHistory(undefined);
+    const result = await api("GET", `/api/observatory/children/${child.id}/star-history`, undefined, deviceToken);
+    if (result.ok) setHistory(result.data);
+  };
+
+  return (
+    <ChildScreen
+      child={child}
+      balance={totals?.balance}
+      earned={totals?.earned}
+      menu={menu}
+      history={history}
+      onPrint={onPrint}
+      onShowHistory={showHistory}
+      onLeave={onLeave}
+    />
   );
 }
 
@@ -198,7 +255,7 @@ function Unlock({ deviceToken, onCancel }: { deviceToken: string; onCancel: () =
 
   if (!chosen) {
     return (
-      <main>
+      <main className="plain">
         <h1>Which grown-up are you?</h1>
         {grownUps?.length === 0 && <p>No grown-up has set a PIN yet. Set one in the Control Center on your phone.</p>}
         {/* Guests (babysitters) have a Guest PIN instead. */}
@@ -216,10 +273,10 @@ function Unlock({ deviceToken, onCancel }: { deviceToken: string; onCancel: () =
   }
 
   return (
-    <main>
+    <main className="plain">
       <h1>Hi {chosen.name}, enter your PIN</h1>
-      <p aria-live="polite">{"•".repeat(pin.length) || " "}</p>
-      <div>
+      <p className="plain-pin" aria-live="polite">{"•".repeat(pin.length) || " "}</p>
+      <div className="plain-keys">
         {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((digit) => (
           <button key={digit} onClick={() => pin.length < 8 && setPin(pin + digit)}>
             {digit}
@@ -238,170 +295,11 @@ function Unlock({ deviceToken, onCancel }: { deviceToken: string; onCancel: () =
   );
 }
 
-/** A little "already done!" animation. Plain for now; the observatory's design phase will replace it. */
-function SpinningStar() {
-  return (
-    <>
-      <style>{"@keyframes star-spin { from { transform: rotate(0deg) scale(1) } to { transform: rotate(360deg) scale(1.4) } }"}</style>
-      <div aria-hidden style={{ fontSize: 96, display: "inline-block", animation: "star-spin 1s ease-in-out infinite alternate" }}>
-        ⭐
-      </div>
-    </>
-  );
-}
-
-/** Something a child can print: a chore, or a quiz topic. */
-interface MenuChoice {
-  kind: "chore" | "quiz";
-  id: string;
-  name: string;
-  stars: number;
-  icon: string | null;
-  done: boolean;
-}
-
-/** A category: an optional folder of tasks, which may mix chores and quizzes. */
-interface MenuCategory {
-  id: string;
-  name: string;
-  icon: string | null;
-  choices: MenuChoice[];
-}
-
-/** What a child sees: their categories, and the tasks not in any category. */
-interface Menu {
-  categories: MenuCategory[];
-  tasks: MenuChoice[];
-}
-
-function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: string; onDone: () => void }) {
-  const [menu, setMenu] = useState<Menu | undefined>();
-  const [category, setCategory] = useState<MenuCategory | undefined>();
-  const [message, setMessage] = useState<string | undefined>();
-  const [balance, setBalance] = useState<number | undefined>();
-  const [history, setHistory] = useState<StarHistory | undefined>();
-  const [lostKind, setLostKind] = useState<"chore" | "quiz" | undefined>();
-  // Children who can't read yet see big icons instead of words (their display style).
-  const pictures = child.displayStyle === "pictures";
-
-  useEffect(() => {
-    void (async () => {
-      const result = await api("GET", `/api/observatory/children/${child.id}`, undefined, deviceToken);
-      if (result.ok) setBalance(result.data.child.balance);
-    })();
-  }, [child.id]);
-
-  useEffect(() => {
-    void (async () => {
-      const result = await api("GET", `/api/observatory/children/${child.id}/menu`, undefined, deviceToken);
-      if (result.ok) setMenu(result.data);
-    })();
-  }, [child.id]);
-
-  const printIn = async (choice: MenuChoice) => {
-    const result = await api(
-      "POST",
-      `/api/observatory/children/${child.id}/tickets`,
-      { kind: choice.kind, taskId: choice.id },
-      deviceToken,
-    );
-    setMessage(result.ok ? "Printing your ticket!" : (result.data?.error ?? "That didn't work. Ask a grown-up."));
-    // Already holding a ticket of this kind? Offer to ask a grown-up for a new copy, in case it's lost.
-    if (result.status === 409 && /already have/i.test(result.data?.error ?? "")) {
-      setLostKind(choice.kind);
-      return;
-    }
-    setTimeout(onDone, 3000);
-  };
-
-  // A category with just one task for this child prints it straight away; otherwise the child picks one.
-  const chooseCategory = (chosen: MenuCategory) => {
-    const only = chosen.choices[0];
-    if (chosen.choices.length === 1 && only && !only.done) void printIn(only);
-    else setCategory(chosen);
-  };
-
-  const askForReprint = async () => {
-    const result = await api(
-      "POST",
-      `/api/observatory/children/${child.id}/reprint-requests`,
-      { kind: lostKind },
-      deviceToken,
-    );
-    setLostKind(undefined);
-    setMessage(result.ok ? "OK! A grown-up will check, then print it again." : (result.data?.error ?? "Ask a grown-up."));
-    setTimeout(onDone, 3000);
-  };
-
-  if (message) {
-    return (
-      <main>
-        <h1>{message}</h1>
-        {lostKind && (
-          <>
-            <button onClick={askForReprint}>I lost it</button> <button onClick={onDone}>I still have it</button>
-          </>
-        )}
-      </main>
-    );
-  }
-
-  const showHistory = async () => {
-    const result = await api("GET", `/api/observatory/children/${child.id}/star-history`, undefined, deviceToken);
-    if (result.ok) setHistory(result.data);
-  };
-
-  if (history) {
-    return (
-      <main>
-        <h1>{child.nickname}'s stars</h1>
-        <StarHistoryList history={history} />
-        <button onClick={() => setHistory(undefined)}>Back</button>
-      </main>
-    );
-  }
-
-  return (
-    <main>
-      <h1>Hi, {child.nickname}!</h1>
-      {balance !== undefined && (
-        <p>
-          You have {balance} ★ <button onClick={showHistory}>My stars</button>
-        </p>
-      )}
-      {menu === undefined && <p>Loading…</p>}
-      {menu?.categories.length === 0 && menu.tasks.length === 0 && <p>Nothing to do right now.</p>}
-      {!category &&
-        menu?.categories.map((c) => (
-          <button key={c.id} onClick={() => chooseCategory(c)} aria-label={c.name}>
-            {pictures && c.icon ? <Icon id={c.icon} size={96} /> : c.name}
-          </button>
-        ))}
-      {!category &&
-        menu?.tasks.map((choice) => (
-          <button key={`${choice.kind}-${choice.id}`} onClick={() => printIn(choice)} disabled={choice.done} aria-label={choice.name}>
-            {choice.done ? "✓ " : ""}
-            {pictures && choice.icon ? <Icon id={choice.icon} size={96} /> : `${choice.name} (${choice.stars} ★)`}
-          </button>
-        ))}
-      {category &&
-        category.choices.map((choice) => (
-          <button key={`${choice.kind}-${choice.id}`} onClick={() => printIn(choice)} disabled={choice.done} aria-label={choice.name}>
-            {choice.done ? "✓ " : ""}
-            {pictures && choice.icon ? <Icon id={choice.icon} size={96} /> : `${choice.name} (${choice.stars} ★)`}
-          </button>
-        ))}
-      <footer>
-        <button onClick={category ? () => setCategory(undefined) : onDone}>Back</button>
-      </footer>
-    </main>
-  );
-}
-
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Stage scroll>
+    <Stage>
       <ArtStyles />
+      <style>{domeCss}</style>
       <Observatory />
     </Stage>
   </StrictMode>,
