@@ -67,6 +67,9 @@ export interface AppDependencies {
   config: AppConfig;
 }
 
+/** The Control Center's pages, which must match `Page` in src/web/control-center/shell.tsx. */
+const controlCenterPages = ["/tickets", "/kids", "/tasks", "/family", "/settings"];
+
 export async function buildApp({ db, clock, mailer, push, config }: AppDependencies) {
   // Unexpected fields in a request are refused, not silently dropped (we never store more than we asked for).
   const app = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
@@ -140,6 +143,10 @@ export async function buildApp({ db, clock, mailer, push, config }: AppDependenc
         reply.header("cache-control", hashed ? "public, max-age=31536000, immutable" : "no-cache");
       },
     });
+    // The Control Center's pages each have their own address, all served by the same page (it picks the page).
+    for (const page of controlCenterPages) {
+      app.get(page, (_request, reply) => reply.header("cache-control", "no-cache").sendFile("index.html"));
+    }
   }
   return app;
 }

@@ -52,7 +52,7 @@ export function WriteQuiz(props: { topics: { id: string; name: string; children:
 
   return (
     <section>
-      <h3>Write a quiz</h3>
+      <h2>Write a quiz</h2>
       <form onSubmit={write}>
         <label>
           For{" "}
@@ -166,7 +166,7 @@ export function FeedKeys() {
 
   return (
     <div>
-      <h3>Quiz feed keys</h3>
+      <h2>Quiz feed keys</h2>
       <p>A key lets an outside quiz service fill this chart's quiz pools. It never sees children's names.</p>
       <form onSubmit={make}>
         <label>

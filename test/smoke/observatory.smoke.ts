@@ -234,12 +234,13 @@ test("a child's screen goes back to Who are you after a minute with no taps", as
 });
 
 test("pages are always checked for a newer version, while built files (named by their contents) are kept", async () => {
-  const pages = await Promise.all(["/", "/observatory.html"].map((path) => fetch(base + path)));
+  const pages = await Promise.all(["/", "/observatory.html", "/kids"].map((path) => fetch(base + path)));
   const html = await pages[1]!.text();
   const script = html.match(/src="([^"]+\.js)"/)?.[1];
   const built = await fetch(base + script);
 
-  expect(pages.map((page) => page.headers.get("cache-control"))).toEqual(["no-cache", "no-cache"]);
+  expect(pages.map((page) => page.headers.get("cache-control"))).toEqual(["no-cache", "no-cache", "no-cache"]);
+  expect(pages.map((page) => page.status)).toEqual([200, 200, 200]);
   expect(built.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
 });
 
@@ -304,28 +305,54 @@ test("in the Control Center, removing and renaming ask in the page (the frame's 
   const credentials = { email: uniqueEmail("dialogs"), password: "correct horse battery staple" };
   await page.request.post(`${base}/api/sign-up`, { data: { ...credentials, chartName: "Dialogs", timeZone: "America/Chicago" } });
   await page.request.post(`${base}/api/children`, { data: { nickname: "Nova", displayStyle: "words" } });
-  await page.goto(`${base}/`);
-  const children = page.locator("section", { has: page.getByRole("heading", { name: "Children" }) });
-  await children.getByText("Nova", { exact: true }).waitFor();
+  await page.goto(`${base}/kids`);
+  const nova = page.getByRole("region", { name: "Nova" });
+  await nova.waitFor();
 
   // Renaming asks for the new nickname, filled in with the old one.
-  await children.getByRole("button", { name: "Rename" }).click();
+  await nova.getByRole("button", { name: "Rename" }).click();
   const rename = page.getByRole("dialog", { name: "New nickname" });
   await expect.poll(() => rename.getByRole("textbox").inputValue()).toBe("Nova");
   await rename.getByRole("textbox").fill("Luna");
   await rename.getByRole("button", { name: "Rename" }).click();
-  await children.getByText("Luna", { exact: true }).waitFor();
+  const luna = page.getByRole("region", { name: "Luna" });
+  await luna.waitFor();
 
   // Removing asks first. Cancelling keeps the child; confirming removes them.
-  await children.getByRole("button", { name: "Remove" }).click();
+  await luna.getByRole("button", { name: "Remove" }).click();
   const remove = page.getByRole("dialog", { name: /Remove Luna\?/ });
   await remove.getByRole("button", { name: "Cancel" }).click();
   await expect.poll(() => remove.count()).toBe(0);
-  expect(await children.getByText("Luna", { exact: true }).count()).toBe(1);
+  expect(await luna.count()).toBe(1);
 
-  await children.getByRole("button", { name: "Remove" }).click();
+  await luna.getByRole("button", { name: "Remove" }).click();
   await remove.getByRole("button", { name: "Remove Luna" }).click();
-  await expect.poll(() => children.getByText("No children yet.").isVisible()).toBe(true);
+  await expect.poll(() => page.getByText("No children yet.").isVisible()).toBe(true);
   expect(browserDialogs).toEqual([]);
+  await page.close();
+});
+
+test("each Control Center page has its own address, and Back and Forward move between them", async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const credentials = { email: uniqueEmail("pages"), password: "correct horse battery staple" };
+  await page.request.post(`${base}/api/sign-up`, { data: { ...credentials, chartName: "Pages", timeZone: "America/Chicago" } });
+  const heading = () => page.getByRole("heading", { level: 1 }).textContent();
+
+  await page.goto(`${base}/`);
+  await expect.poll(heading).toBe("Tickets");
+  await page.getByRole("link", { name: "Kids" }).click();
+  await expect.poll(heading).toBe("Kids");
+  expect(new URL(page.url()).pathname).toBe("/kids");
+  await page.getByRole("link", { name: "Tasks" }).click();
+  await expect.poll(heading).toBe("Tasks");
+
+  await page.goBack();
+  await expect.poll(heading).toBe("Kids");
+  await page.goForward();
+  await expect.poll(heading).toBe("Tasks");
+
+  // Opening a page's address directly works too.
+  await page.goto(`${base}/settings`);
+  await expect.poll(heading).toBe("Settings");
   await page.close();
 });
