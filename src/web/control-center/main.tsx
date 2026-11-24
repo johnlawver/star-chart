@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import QRCode from "qrcode";
 import { stored } from "../shared/api.js";
 import { Icon, IconPicker } from "../shared/icons.js";
-import { ConstellationList, type Constellation } from "../shared/constellation.js";
+import { StarHistoryList, type StarHistory } from "../shared/star-history.js";
 import { AnswerKey, FeedKeys, QuizSettings } from "./quizzes.js";
 import { TasksSection } from "./tasks.js";
 
@@ -613,13 +613,13 @@ function StarsSection() {
 }
 
 function ChildStars({ child }: { child: Child }) {
-  const [constellation, setConstellation] = useState<Constellation | undefined>();
+  const [history, setHistory] = useState<StarHistory | undefined>();
   const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
   const load = async () => {
-    const result = await api("GET", `/api/children/${child.id}/constellation`);
-    if (result.ok) setConstellation(result.data);
+    const result = await api("GET", `/api/children/${child.id}/star-history`);
+    if (result.ok) setHistory(result.data);
   };
 
   useEffect(() => {
@@ -642,22 +642,22 @@ function ChildStars({ child }: { child: Child }) {
   return (
     <div>
       <h3>
-        {child.nickname}: {constellation?.balance ?? "…"} ★
+        {child.nickname}: {history?.balance ?? "…"} ★
       </h3>
       <form onSubmit={spend}>
         <label>
-          Spend <input name="amount" type="number" min={1} max={constellation?.balance ?? 0} required style={{ width: "4em" }} /> ★
+          Spend <input name="amount" type="number" min={1} max={history?.balance ?? 0} required style={{ width: "4em" }} /> ★
         </label>{" "}
         <label>
           on <input name="note" placeholder="Ice cream" maxLength={100} required />
         </label>{" "}
         <button type="submit">Record</button>{" "}
         <button type="button" onClick={() => setShowHistory(!showHistory)}>
-          {showHistory ? "Hide" : "Show"} constellation
+          {showHistory ? "Hide" : "Show"} star history
         </button>
       </form>
       {error && <p role="alert">{error}</p>}
-      {showHistory && constellation && <ConstellationList constellation={constellation} />}
+      {showHistory && history && <StarHistoryList history={history} />}
     </div>
   );
 }

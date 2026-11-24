@@ -56,10 +56,10 @@ export function createStars(db: Database, clock: Clock) {
     },
 
     /**
-     * A child's constellation: every star earned (with the task it was for) and spent (with what it was spent on),
+     * A child's star history: every star earned (with the task it was for) and spent (with what it was spent on),
      * newest first, with totals. Undefined if there's no such child in this chart.
      */
-    async constellation(chartId: string, childId: string) {
+    async history(chartId: string, childId: string) {
       if (!isId(childId)) return undefined;
       const child = await db
         .selectFrom("children")

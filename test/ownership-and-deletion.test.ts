@@ -153,10 +153,10 @@ describe("deleting a child", () => {
     scanner.send({ type: "scan", code: stillOpen.code });
     expect(await screen.nextMessage()).toEqual({ type: "scan-result", result: "not-recognised" });
     expect((await chart.owner.get("/api/reprint-requests")).body.reprintRequests).toEqual([]);
-    expect((await chart.owner.get(`/api/children/${nova}/constellation`)).status).toBe(404);
+    expect((await chart.owner.get(`/api/children/${nova}/star-history`)).status).toBe(404);
     expect(await rowsStillPointingAt("child_id", [nova])).toEqual({});
     expect(await rowsStillPointingAt("ticket_id", [approved.ticketId, stillOpen.ticketId])).toEqual({});
-    expect((await chart.owner.get(`/api/children/${pip}/constellation`)).body.balance).toBe(1);
+    expect((await chart.owner.get(`/api/children/${pip}/star-history`)).body.balance).toBe(1);
     [printer, scanner, screen].forEach((connection) => connection.close());
   });
 });

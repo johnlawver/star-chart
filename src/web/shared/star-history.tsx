@@ -1,20 +1,20 @@
-export interface Constellation {
+export interface StarHistory {
   earned: number;
   spent: number;
   balance: number;
   entries: { kind: "earned" | "spent"; amount: number; what: string; at: string }[];
 }
 
-/** A child's constellation as a plain list. The observatory's design phase will give it a proper look. */
-export function ConstellationList({ constellation }: { constellation: Constellation }) {
+/** A child's star history as a plain list. */
+export function StarHistoryList({ history }: { history: StarHistory }) {
   return (
     <div>
       <p>
-        Earned {constellation.earned} ★ · spent {constellation.spent} ★ · {constellation.balance} ★ left
+        Earned {history.earned} ★ · spent {history.spent} ★ · {history.balance} ★ left
       </p>
-      {constellation.entries.length === 0 && <p>No stars yet.</p>}
+      {history.entries.length === 0 && <p>No stars yet.</p>}
       <ul>
-        {constellation.entries.map((entry, index) => (
+        {history.entries.map((entry, index) => (
           <li key={index}>
             {entry.kind === "earned" ? "+" : "−"}
             {entry.amount} ★ {entry.what}{" "}

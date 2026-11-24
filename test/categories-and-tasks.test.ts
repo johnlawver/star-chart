@@ -178,7 +178,7 @@ describe("removing tasks", () => {
     expect(await menu()).toEqual({ categories: [], tasks: [] });
     expect((await chart.owner.get("/api/categories")).body.chores).toEqual([]);
     expect(approved.status).toBe(200);
-    expect((await chart.owner.get(`/api/children/${nova}/constellation`)).body.balance).toBe(2);
+    expect((await chart.owner.get(`/api/children/${nova}/star-history`)).body.balance).toBe(2);
     printer.close();
   });
 

@@ -62,16 +62,16 @@ describe("redemptions", () => {
   });
 });
 
-describe("the constellation", () => {
+describe("the star history", () => {
   test("it shows every star earned and spent, newest first, and the balance is earned minus spent", async () => {
     const { chart, nova, earn, redeem, printer } = await novaWithStars();
     await earn("Feed the cat", 2);
     await earn("Tidy your room", 3);
     await redeem(4, "Ice cream");
 
-    const constellation = (await chart.owner.get(`/api/children/${nova}/constellation`)).body;
+    const history = (await chart.owner.get(`/api/children/${nova}/star-history`)).body;
 
-    expect(constellation).toEqual({
+    expect(history).toEqual({
       earned: 5,
       spent: 4,
       balance: 1,
@@ -84,28 +84,38 @@ describe("the constellation", () => {
     printer.close();
   });
 
-  test("the observatory shows a child their own constellation", async () => {
+  test("the observatory shows a child their own star history", async () => {
     const { chart, nova, earn, redeem, printer } = await novaWithStars();
     await earn("Feed the cat", 2);
     await redeem(1, "Sticker");
 
-    const constellation = (await chart.screen.get(`/api/observatory/children/${nova}/constellation`)).body;
+    const history = (await chart.screen.get(`/api/observatory/children/${nova}/star-history`)).body;
 
-    expect(constellation).toMatchObject({ earned: 2, spent: 1, balance: 1 });
-    expect(constellation.entries.map((entry: { what: string }) => entry.what)).toEqual(["Sticker", "Feed the cat"]);
+    expect(history).toMatchObject({ earned: 2, spent: 1, balance: 1 });
+    expect(history.entries.map((entry: { what: string }) => entry.what)).toEqual(["Sticker", "Feed the cat"]);
+    printer.close();
+  });
+
+  test("the old constellation paths are gone: a constellation now means a star pattern, not this record", async () => {
+    const { chart, nova, printer } = await novaWithStars();
+
+    const grownUps = await chart.owner.get(`/api/children/${nova}/constellation`);
+    const screen = await chart.screen.get(`/api/observatory/children/${nova}/constellation`);
+
+    expect([grownUps.status, screen.status]).toEqual([404, 404]);
     printer.close();
   });
 });
 
 describe("keeping charts apart", () => {
-  test("another chart can't spend our child's stars or see their constellation", async () => {
+  test("another chart can't spend our child's stars or see their star history", async () => {
     const { nova, earn, balance, printer } = await novaWithStars();
     await earn("Feed the cat", 5);
     const school = await chartWithObservatory(harness, "Room 12");
 
     const spent = await school.owner.post(`/api/children/${nova}/redemptions`, { amount: 5, note: "Sneaky" });
-    const theirView = await school.owner.get(`/api/children/${nova}/constellation`);
-    const theirScreen = await school.screen.get(`/api/observatory/children/${nova}/constellation`);
+    const theirView = await school.owner.get(`/api/children/${nova}/star-history`);
+    const theirScreen = await school.screen.get(`/api/observatory/children/${nova}/star-history`);
 
     expect([spent.status, theirView.status, theirScreen.status]).toEqual([404, 404, 404]);
     expect(await balance()).toBe(5);
