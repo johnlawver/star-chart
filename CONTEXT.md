@@ -157,12 +157,54 @@ The stars a child currently has available to spend: everything earned minus ever
 _Avoid_: Score, total, wallet
 
 **Redemption**:
-A grown-up recording that a child spent stars, with an amount and a note such as "ice cream".
-_Avoid_: Purchase, withdrawal, spend
+A grown-up recording that a child spent stars on something in the real world, with an amount and a note such as "ice cream".
+_Avoid_: Withdrawal, spend
+
+**Star History**:
+A child's complete record of stars: every star earned, every redemption and every purchase, over time. Grown-ups see it in the control center.
+_Avoid_: Ledger, log, constellation
+
+**Star Jar**:
+The jar on a child's observatory screen that shows their balance by how full it is. It grows into a bigger jar as the stars they've earned over all time grow, and spending never shrinks it.
+_Avoid_: Wallet, bank, meter
+
+**New Stars**:
+The stars a child has earned since their last visit to their observatory screen, which fly into their star jar when they next open it. They arrive once, on whichever observatory the child opens first.
+_Avoid_: Pending stars, unseen stars, notifications
 
 **Constellation**:
-A child's complete star history: every star earned and every redemption, over time.
-_Avoid_: History, ledger, star history, log
+A real star pattern, such as Orion or the Big Dipper, that a child's stars fill one at a time on their observatory screen. Every star a child has ever earned fills the next empty place, so their constellations only ever grow, even when they spend. All of a child's constellations together are their sky.
+_Avoid_: History, achievement, badge, level
+
+### The store
+
+**Store**:
+The place on the observatory where a child spends stars on store items. Each chart has its own store.
+_Avoid_: Shop, market, rewards
+
+**Store Item**:
+Something a child can buy in the store, such as a sticker or an outfit, with a price in stars. Every store item comes from a built-in list, and each child can buy each one once.
+_Avoid_: Product, reward, prize
+
+**Purchase**:
+A child spending stars on a store item at the observatory. It comes out of the same balance as a redemption, needs no grown-up's approval, and shows in the child's star history.
+_Avoid_: Redemption, order, buy
+
+**Sticker**:
+A store item that goes into the child's sticker book.
+_Avoid_: Badge, decal
+
+**Sticker Book**:
+Where a child sees every sticker they've bought.
+_Avoid_: Collection, album, inventory
+
+**Mascot**:
+A child's own character on the observatory, which wears the outfits the child chooses and appears wherever the child does.
+_Avoid_: Avatar, pet, character, buddy
+
+**Outfit**:
+A store item the mascot can wear: a hat or a hairstyle. The mascot wears at most one of each at a time.
+_Avoid_: Costume, skin, accessory, wardrobe
 
 ### Places and devices
 
