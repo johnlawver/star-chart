@@ -46,6 +46,19 @@ export class ApiClient {
     const response = await this.app.inject({ method: "GET", url, headers: this.cookieHeader() });
     return response.body;
   }
+  /** Sends a file, such as a picture, as the request's body with its content type. */
+  async upload(url: string, bytes: Buffer, contentType: string): Promise<ApiResponse> {
+    const response = await this.app.inject({ method: "POST", url, payload: bytes, headers: { ...this.cookieHeader(), "content-type": contentType } });
+    const isJson = String(response.headers["content-type"] ?? "").includes("json");
+    return { status: response.statusCode, body: isJson ? response.json() : undefined };
+  }
+
+  /** Fetches anything, returning its status, headers and raw bytes. */
+  async getRaw(url: string): Promise<{ status: number; headers: Record<string, unknown>; bytes: Buffer }> {
+    const response = await this.app.inject({ method: "GET", url, headers: { ...this.cookieHeader(), ...this.deviceHeader() } });
+    return { status: response.statusCode, headers: response.headers, bytes: response.rawPayload };
+  }
+
   post = (url: string, payload?: Body) => this.request("POST", url, payload);
   put = (url: string, payload?: Body) => this.request("PUT", url, payload);
   patch = (url: string, payload?: Body) => this.request("PATCH", url, payload);

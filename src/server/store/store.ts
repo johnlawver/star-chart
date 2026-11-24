@@ -1,9 +1,11 @@
+import { randomBytes } from "node:crypto";
+import { artFileUrl } from "../art-files/art-files.js";
 import type { Clock } from "../clock.js";
 import type { Database } from "../database.js";
 import { isUniqueViolation } from "../database-errors.js";
 import { isId } from "../ids.js";
 import { balanceIn } from "../stars/stars.js";
-import { builtInItem, type StoreItemKind } from "./items.js";
+import { builtInItem, builtInItems, type StoreItemKind } from "./items.js";
 
 /** What the store sells for now. Outfits join when the mascot can wear them (ticket 09). */
 const forSale: StoreItemKind[] = ["sticker"];
@@ -13,6 +15,8 @@ export interface StoreItem {
   kind: StoreItemKind;
   name: string;
   price: number;
+  /** The uploaded picture's address, or null for a built-in item (its picture comes with the app). */
+  art: string | null;
 }
 
 /** What a child owns, and what their mascot is wearing. */
@@ -32,13 +36,18 @@ export function createStore(db: Database, clock: Clock) {
   async function itemsFor(trx: Database, chartId: string): Promise<StoreItem[]> {
     const rows = await trx
       .selectFrom("store_items")
-      .select(["item_id", "price"])
+      .select(["item_id", "price", "name", "kind", "art_file_id"])
       .where("chart_id", "=", chartId)
       .orderBy("position")
       .execute();
-    return rows.flatMap((row) => {
+    return rows.flatMap((row): StoreItem[] => {
+      // The chart's own item, with its own name and uploaded picture.
+      if (row.art_file_id && row.name && row.kind) {
+        const kind = row.kind as StoreItemKind;
+        return forSale.includes(kind) ? [{ id: row.item_id, kind, name: row.name, price: row.price, art: artFileUrl(row.art_file_id) }] : [];
+      }
       const item = builtInItem(row.item_id);
-      return item && forSale.includes(item.kind) ? [{ id: item.id, kind: item.kind, name: item.name, price: row.price }] : [];
+      return item && forSale.includes(item.kind) ? [{ id: item.id, kind: item.kind, name: item.name, price: row.price, art: null }] : [];
     });
   }
 
@@ -53,7 +62,50 @@ export function createStore(db: Database, clock: Clock) {
     return { owned: owned.map((row) => row.item_id), wearing: { hat: null, hair: null } };
   }
 
+  /** Puts an item at the end of the chart's store. False if it's already there. */
+  async function append(chartId: string, row: { item_id: string; price: number; name?: string; kind?: string; art_file_id?: string }) {
+    try {
+      await db.transaction().execute(async (trx) => {
+        const { last } = await trx
+          .selectFrom("store_items")
+          .select((eb) => eb.fn.max("position").as("last"))
+          .where("chart_id", "=", chartId)
+          .executeTakeFirstOrThrow();
+        await trx
+          .insertInto("store_items")
+          .values({ chart_id: chartId, position: (last ?? -1) + 1, ...row })
+          .execute();
+      });
+      return true;
+    } catch (error) {
+      if (isUniqueViolation(error, "store_items_one_per_chart")) return false;
+      throw error;
+    }
+  }
+
   return {
+    /** Adds an item from the built-in list to the chart's store, at its usual price unless given another. */
+    async addBuiltIn(chartId: string, itemId: string, price?: number): Promise<"added" | "unknown" | "already-in-store"> {
+      const item = builtInItem(itemId);
+      if (!item) return "unknown";
+      return (await append(chartId, { item_id: item.id, price: price ?? item.price })) ? "added" : "already-in-store";
+    },
+
+    /** Adds the chart's own sticker, with a picture uploaded to this chart, to the end of its store. */
+    async addSticker(chartId: string, sticker: { name: string; price: number; artFileId: string }): Promise<{ id: string }> {
+      const id = `sticker-${randomBytes(5).toString("hex")}`;
+      await append(chartId, { item_id: id, price: sticker.price, name: sticker.name, kind: "sticker", art_file_id: sticker.artFileId });
+      return { id };
+    },
+
+    /** The built-in items for sale that aren't in the chart's store yet, so a grown-up can add them. */
+    async available(chartId: string): Promise<Omit<StoreItem, "art">[]> {
+      const inStore = new Set((await db.selectFrom("store_items").select("item_id").where("chart_id", "=", chartId).execute()).map((row) => row.item_id));
+      return builtInItems
+        .filter((item) => forSale.includes(item.kind) && !inStore.has(item.id))
+        .map(({ id, kind, name, price }) => ({ id, kind, name, price }));
+    },
+
     /** The chart's store, in order. */
     list: (chartId: string) => itemsFor(db, chartId),
 

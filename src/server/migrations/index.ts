@@ -30,6 +30,7 @@ import * as tasksStandAlone from "./0028-tasks-stand-alone.js";
 import * as tasksKnowTheirChart from "./0029-tasks-know-their-chart.js";
 import * as childVisits from "./0030-child-visits.js";
 import * as store from "./0031-store.js";
+import * as artFiles from "./0032-art-files.js";
 
 // Every schema change is a migration, listed here in order. Never edit one that has shipped; add a new one.
 export const migrations: Record<string, Migration> = {
@@ -64,4 +65,5 @@ export const migrations: Record<string, Migration> = {
   "0029-tasks-know-their-chart": tasksKnowTheirChart,
   "0030-child-visits": childVisits,
   "0031-store": store,
+  "0032-art-files": artFiles,
 };

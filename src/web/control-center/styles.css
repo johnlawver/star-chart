@@ -299,6 +299,13 @@ textarea {
   padding: 8px 12px;
   min-height: 42px;
   box-sizing: border-box;
+  max-width: 100%;
+}
+input[type="file"] {
+  padding: 6px;
+}
+label {
+  min-width: 0;
 }
 textarea {
   min-height: 120px;
@@ -416,6 +423,23 @@ details summary {
   .cc-main img[src^="/api/icons/"] {
     filter: invert(1);
   }
+}
+
+/* The store. */
+.store-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.store-item img,
+.store-item span[role="img"] {
+  flex: none;
+}
+.preview {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  object-fit: contain;
+  background: var(--field);
 }
 
 /* A child's card. */

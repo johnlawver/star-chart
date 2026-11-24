@@ -1,10 +1,12 @@
+import { FakeMailer } from "./fake-mailer.js";
 import type { LiveConnection } from "./live-connection.js";
 import { signUpOwner } from "./sign-up.js";
-import type { ApiClient } from "./test-app.js";
+import { uniqueEmail, type ApiClient } from "./test-app.js";
 
 interface Harness {
   newClient: () => ApiClient;
   openLiveConnection: () => Promise<LiveConnection>;
+  mailer: FakeMailer;
 }
 
 /** A chart with an owner (signed in on their own client) and a paired observatory screen. */
@@ -41,6 +43,16 @@ export async function chartWithObservatory(harness: Harness, chartName = "Our Ho
     owner: owner.client,
     screen,
     pairingCode,
+
+    /** Invites a grown-up (not an admin) into this chart, and returns them signed in. */
+    async inviteGrownUp() {
+      const email = uniqueEmail("partner");
+      await owner.client.post("/api/invitations", { email });
+      const token = FakeMailer.linkParameter(harness.mailer.lastTo(email)!, "token");
+      const partner = harness.newClient();
+      await partner.post("/api/invitations/accept", { token, password: "a good long password" });
+      return partner;
+    },
 
     /** Pairs a second observatory in the same chart (the owner signs in on it), and returns its screen. */
     async pairAnotherScreen() {

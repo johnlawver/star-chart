@@ -31,11 +31,11 @@ describe("the store", () => {
 
     expect(store.status).toBe(200);
     expect(store.body.items).toEqual([
-      { id: "rocket", kind: "sticker", name: "Rocket", price: 2 },
-      { id: "moon", kind: "sticker", name: "Moon", price: 2 },
-      { id: "planet", kind: "sticker", name: "Ringed planet", price: 3 },
-      { id: "alien", kind: "sticker", name: "Friendly alien", price: 4 },
-      { id: "comet", kind: "sticker", name: "Comet", price: 3 },
+      { id: "rocket", kind: "sticker", name: "Rocket", price: 2, art: null },
+      { id: "moon", kind: "sticker", name: "Moon", price: 2, art: null },
+      { id: "planet", kind: "sticker", name: "Ringed planet", price: 3, art: null },
+      { id: "alien", kind: "sticker", name: "Friendly alien", price: 4, art: null },
+      { id: "comet", kind: "sticker", name: "Comet", price: 3, art: null },
     ]);
     printer.close();
   });

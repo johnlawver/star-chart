@@ -1,9 +1,62 @@
 import type { FastifyInstance } from "fastify";
+import type { ArtFiles } from "../art-files/art-files.js";
 import { requireDevice } from "../observatories/authenticate-device.js";
 import type { Observatories } from "../observatories/observatories.js";
+import { requireGrownUp } from "../people/authenticate.js";
+import type { People } from "../people/people.js";
 import type { Store } from "./store.js";
 
-export async function storeRoutes(app: FastifyInstance, observatories: Observatories, store: Store) {
+const price = { type: "integer", minimum: 1, maximum: 10_000 };
+
+export async function storeRoutes(app: FastifyInstance, people: People, observatories: Observatories, store: Store, artFiles: ArtFiles) {
+  // The store as grown-ups manage it.
+  app.get("/api/store-items", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    const [items, available] = await Promise.all([store.list(signedIn.chart.id), store.available(signedIn.chart.id)]);
+    return { items, available };
+  });
+
+  // An owner or admin adds to the store: an item from the built-in list, or their own sticker with an uploaded picture.
+  app.post<{ Body: { itemId: string; price?: number } | { name: string; price: number; artFileId: string } }>(
+    "/api/store-items",
+    {
+      schema: {
+        body: {
+          oneOf: [
+            {
+              type: "object",
+              properties: { itemId: { type: "string", minLength: 1, maxLength: 40 }, price },
+              required: ["itemId"],
+              additionalProperties: false,
+            },
+            {
+              type: "object",
+              properties: { name: { type: "string", minLength: 1, maxLength: 40, pattern: "\\S" }, price, artFileId: { type: "string", maxLength: 40 } },
+              required: ["name", "price", "artFileId"],
+              additionalProperties: false,
+            },
+          ],
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      if (signedIn.grownUp.role === "grown-up") return reply.code(403).send({ error: "Ask an admin to change the store." });
+      const chartId = signedIn.chart.id;
+      const body = request.body;
+      if ("itemId" in body) {
+        const added = await store.addBuiltIn(chartId, body.itemId, body.price);
+        if (added === "unknown") return reply.code(400).send({ error: "that isn't one of the built-in items" });
+        if (added === "already-in-store") return reply.code(409).send({ error: "that's already in the store" });
+        return reply.code(201).send({ id: body.itemId });
+      }
+      if (!(await artFiles.belongsTo(chartId, body.artFileId))) return reply.code(404).send({ error: "no such picture" });
+      return reply.code(201).send(await store.addSticker(chartId, { name: body.name.trim(), price: body.price, artFileId: body.artFileId }));
+    },
+  );
+
   // The chart's store, for the children's screen.
   app.get("/api/observatory/store", async (request, reply) => {
     const screen = await requireDevice(observatories, "screen", request, reply);

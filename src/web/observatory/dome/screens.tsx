@@ -38,6 +38,13 @@ export interface StoreItem {
   kind: "sticker" | "hat" | "hair";
   name: string;
   price: number;
+  /** An uploaded picture's address, or null for a built-in item (whose picture ships with the app). */
+  art: string | null;
+}
+
+/** A store item's picture: its uploaded one, or the built-in art for its id. */
+function ItemPicture({ item, width }: { item: Pick<StoreItem, "id" | "kind" | "art">; width: number }) {
+  return item.art ? <img src={item.art} width={width} height={width} alt="" draggable={false} style={{ objectFit: "contain" }} /> : <Art id={storeItemArt(item)} width={width} />;
 }
 
 /** What a child sees: their categories, and the tasks not in any category. */
@@ -269,7 +276,7 @@ function Shop({ store, owned, balance, pictures, onBuy }: { store: StoreItem[] |
         const label = mine ? `${item.name}, yours` : `Buy ${item.name} for ${item.price} ${item.price === 1 ? "star" : "stars"}`;
         return (
           <button key={item.id} className={`dome-shelf-item ${mine ? "dome-owned" : ""}`} disabled={mine || item.price > balance} onClick={() => onBuy(item)} aria-label={label}>
-            <Art id={storeItemArt(item)} width={110} />
+            <ItemPicture item={item} width={110} />
             {!pictures && <span className="dome-shelf-name">{item.name}</span>}
             <span className="dome-price">
               {mine ? (
@@ -308,7 +315,7 @@ function StickerBook({ owned, store, pictures, onShop }: { owned: string[]; stor
           // Tilted on the outside, popping in on the inside: the animation would otherwise replace the tilt.
           <span key={id} className="dome-book-sticker" style={{ transform: `rotate(${((i * 23) % 30) - 15}deg)` }} role="img" aria-label={name(id)}>
             <span className="anim-pop" style={{ display: "inline-block", animationDelay: `${i * 60}ms` }}>
-              <Art id={storeItemArt({ kind: "sticker", id })} width={150} />
+              <ItemPicture item={store?.find((item) => item.id === id) ?? { id, kind: "sticker", art: null }} width={150} />
             </span>
           </span>
         ))

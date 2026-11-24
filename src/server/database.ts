@@ -181,6 +181,16 @@ export interface Tables {
     item_id: string;
     price: number;
     position: number;
+    name: string | null;
+    kind: string | null;
+    art_file_id: string | null;
+  };
+  art_files: {
+    id: Generated<string>;
+    chart_id: string;
+    content_type: string;
+    bytes: Buffer;
+    created_at: Date;
   };
   purchases: {
     id: Generated<string>;

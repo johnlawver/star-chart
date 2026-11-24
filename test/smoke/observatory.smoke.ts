@@ -356,3 +356,29 @@ test("each Control Center page has its own address, and Back and Forward move be
   await expect.poll(heading).toBe("Settings");
   await page.close();
 });
+
+test("in the Control Center, an owner uploads their own sticker and adds a built-in one, and both join the store", async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+  const credentials = { email: uniqueEmail("store"), password: "correct horse battery staple" };
+  await page.request.post(`${base}/api/sign-up`, { data: { ...credentials, chartName: "Store", timeZone: "America/Chicago" } });
+  await page.goto(`${base}/tasks`);
+  const store = page.getByRole("region", { name: "Store" });
+  await store.getByText("Rocket").waitFor();
+
+  await store.getByLabel("Picture").setInputFiles({ name: "dragon.png", mimeType: "image/png", buffer: png });
+  await store.getByRole("img", { name: "Preview" }).waitFor();
+  await store.getByLabel("Name").fill("Dragon");
+  await store.getByLabel("Price").fill("5");
+  await store.getByRole("button", { name: "Add sticker" }).click();
+  await store.getByRole("img", { name: "Dragon" }).waitFor();
+  expect(await store.getByRole("img", { name: "Dragon" }).evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+
+  await store.getByLabel("Add from the built-in list").selectOption({ label: "Astronaut (5 ★)" });
+  await store.getByRole("button", { name: "Add", exact: true }).click();
+  await store.getByRole("img", { name: "Astronaut" }).waitFor();
+
+  const items = (await (await page.request.get(`${base}/api/store-items`)).json()).items.map((item: { name: string }) => item.name);
+  expect(items.slice(-2)).toEqual(["Dragon", "Astronaut"]);
+  await page.close();
+});
