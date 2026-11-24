@@ -33,6 +33,19 @@ You need Node 24+, Docker, the Doppler CLI and Tailscale.
 
 Every email sent in development lands in Mailpit's inbox at `http://127.0.0.1:8025` on the dev server (`ssh -L 8025:127.0.0.1:8025 <server>` to open it from a laptop).
 
+## Observatory art
+
+Every picture on the children's observatory is a file in `src/web/observatory/art/files/`, named by its id: for example `stickers/rocket.svg`, `outfits/hat-crown.svg` or `mascot/body.svg`.
+
+- **To replace a picture**, save a new SVG or PNG over the file with the same name (an SVG wins if both exist). No code changes are needed.
+- **The mascot, its faces and its outfits** share one 200×200 canvas, so draw a new hat where it should sit on the head. Hair is drawn behind the body and hats in front.
+- **The jar's lid, glass and inside** share one 200×250 canvas. `jar/inside` is the shape the stars fill: only its shape matters, not its colour. A jar of one size can have its own art, such as `jar/glass-50.svg`.
+- **Constellations** are data, not pictures: `src/web/observatory/art/constellations.ts`.
+- **Animations** live in `src/web/observatory/art/animations.ts`, each with its timing in one place.
+- **New art** also needs a line in `src/web/observatory/art/manifest.ts`.
+
+The **Art Gallery** at `/art-gallery.html` shows every picture and animation in all its states, and flags missing files in red. It's in development builds only. Open it on the observatory's own screen to judge size and smoothness there.
+
 ## Tests
 
 `npm test` runs the API tests against the `star_chart_test` database in the same Postgres container. They don't need Doppler.

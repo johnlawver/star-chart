@@ -92,3 +92,50 @@ test("on the observatory, a child picks themselves and a chore, and the printer 
   expect(await printJob).toMatchObject({ childNickname: "Nova", title: "Make your bed" });
   printer.close();
 });
+
+test("the Art Gallery shows every piece of observatory art, and none of it is missing", async () => {
+  const page = await browser.newPage({ viewport: { width: 800, height: 1280 } });
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto(`${base}/art-gallery.html`);
+  await page.locator("[data-art-id]").first().waitFor();
+
+  const shown = await page.locator("[data-art-id]").evaluateAll((entries) => entries.map((entry) => entry.getAttribute("data-art-id")));
+  const missing = await page.locator("[data-missing]").evaluateAll((entries) => entries.map((entry) => entry.getAttribute("data-art-id")));
+  const brokenImages = await page.locator("img").evaluateAll((images) =>
+    (images as HTMLImageElement[]).filter((image) => image.complete && image.naturalWidth === 0).map((image) => image.src),
+  );
+  const constellations = await page.locator("[data-constellation]").count();
+
+  // The art the ticket asks for, by id: the store's items, the mascot and its moods, the jar, the dock.
+  expect(shown).toEqual(
+    expect.arrayContaining([
+      "mascot/body",
+      "mascot/mood-happy",
+      "mascot/mood-wow",
+      "outfits/hat-crown",
+      "outfits/hat-wizard",
+      "outfits/hat-helmet",
+      "outfits/hair-spiky",
+      "outfits/hair-curly",
+      "stickers/rocket",
+      "stickers/moon",
+      "stickers/planet",
+      "stickers/alien",
+      "stickers/comet",
+      "jar/glass",
+      "jar/lid",
+      "jar/inside",
+      "star",
+      "dock/back",
+      "dock/store",
+      "dock/stickers",
+      "dock/sky",
+    ]),
+  );
+  expect(missing).toEqual([]);
+  expect(brokenImages).toEqual([]);
+  expect(constellations).toBeGreaterThanOrEqual(12);
+  expect(errors).toEqual([]);
+  await page.close();
+});
