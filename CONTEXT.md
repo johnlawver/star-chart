@@ -224,6 +224,18 @@ _Avoid_: Print server, receipt printer
 The part of an observatory that reads a ticket's QR code for a hand-in, whether it is a camera or a barcode reader.
 _Avoid_: Camera, reader, code reader
 
+**Unit**:
+A single box that is both an observatory's printer and its scanner, such as an ESP32 with a camera and a thermal printer. It pairs once and does both jobs.
+_Avoid_: Device, hub, module, printer box
+
+**Setup Guide**:
+The slip a unit prints when it isn't set up yet. Its QR code opens the setup page on a grown-up's phone and lists the Wi-Fi networks the unit can see.
+_Avoid_: Setup sheet, welcome page, instructions
+
+**Handshake QR**:
+The QR code a grown-up's phone shows for a unit's camera to read. It holds the Wi-Fi network and password, the server's address and a one-time pairing code.
+_Avoid_: Setup code, Wi-Fi code, pairing QR
+
 **Control Center**:
 The grown-up side of Star Chart, used to manage the chart and confirm completed tickets. It opens on an observatory's screen behind a PIN. A grown-up can install it on their phone by scanning a QR code shown there, or by signing in on the web, for example after accepting an invitation.
 _Avoid_: Grown-up app, parent app, admin app, admin panel, dashboard
