@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../../shared/api.js";
 import { askForText, confirmFirst } from "../../shared/dialog.js";
 import { AnswerKey } from "../quizzes.js";
+import { PageTitle } from "../shell.js";
 
 interface WaitingTicket {
   id: string;
@@ -139,6 +140,7 @@ export function TicketsPage() {
 
   return (
     <>
+      <PageTitle title="Tickets" />
       <section>
         <h2>Waiting for you</h2>
         {waiting.length === 0 && <p className="empty">Nothing to check right now.</p>}

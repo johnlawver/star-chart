@@ -64,6 +64,34 @@ export async function storeRoutes(app: FastifyInstance, people: People, observat
     return { items: await store.list(screen.chartId) };
   });
 
+  // An owner or admin changes an item's price or picture.
+  app.patch<{ Params: { itemId: string }; Body: { price?: number; artFileId?: string | null } }>(
+    "/api/store-items/:itemId",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { price, artFileId: { type: ["string", "null"], maxLength: 40 } },
+          minProperties: 1,
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      if (signedIn.grownUp.role === "grown-up") return reply.code(403).send({ error: "Ask an admin to change the store." });
+      const { artFileId } = request.body;
+      if (typeof artFileId === "string" && !(await artFiles.belongsTo(signedIn.chart.id, artFileId))) {
+        return reply.code(404).send({ error: "no such picture" });
+      }
+      const changed = await store.change(signedIn.chart.id, request.params.itemId, request.body);
+      if (changed === "not-found") return reply.code(404).send({ error: "that isn't in the store" });
+      if (changed === "needs-picture") return reply.code(400).send({ error: "an uploaded sticker needs a picture; replace it instead" });
+      return { items: await store.list(signedIn.chart.id) };
+    },
+  );
+
   // A child buys something with their stars, at the observatory. No grown-up needed.
   app.post<{ Params: { childId: string }; Body: { storeItemId: string } }>(
     "/api/observatory/children/:childId/purchases",

@@ -9,13 +9,14 @@ import { lockObservatory, onObservatory, type GuestMe, type Me } from "./common.
 import { FamilyPage } from "./pages/family.js";
 import { KidsPage } from "./pages/kids.js";
 import { SettingsPage } from "./pages/settings.js";
+import { StorePage } from "./pages/store.js";
 import { TasksPage } from "./pages/tasks.js";
 import { TicketsPage } from "./pages/tickets.js";
 import { Shell, usePage, type Page } from "./shell.js";
 import { SignedOut } from "./signed-out.js";
 
 const idleLockMs = 90_000;
-const everyPage: Page[] = ["tickets", "kids", "tasks", "family", "settings"];
+const everyPage: Page[] = ["tickets", "kids", "tasks", "store", "family", "settings"];
 const guestPages: Page[] = ["tickets"];
 
 function ControlCenter() {
@@ -71,6 +72,7 @@ function SignedIn({ me, onSignedOut }: { me: Me | GuestMe; onSignedOut: () => vo
       {page === "tickets" && <TicketsPage />}
       {!guest && page === "kids" && <KidsPage />}
       {!guest && page === "tasks" && <TasksPage me={me} />}
+      {!guest && page === "store" && <StorePage me={me} />}
       {!guest && page === "family" && <FamilyPage me={me} />}
       {!guest && page === "settings" && <SettingsPage me={me} account={account} />}
     </Shell>

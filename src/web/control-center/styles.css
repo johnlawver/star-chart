@@ -425,15 +425,71 @@ details summary {
   }
 }
 
+/* Sub-tabs (Tasks and Store). */
+.cc-subtabs {
+  display: flex;
+  gap: 4px;
+  margin: -6px 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+.cc-subtabs a {
+  padding: 8px 14px;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 600;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+}
+.cc-subtabs a[aria-current="page"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 /* The store. */
 .store-item {
   display: flex;
   align-items: center;
   gap: 12px;
 }
-.store-item img,
-.store-item span[role="img"] {
+.picture {
   flex: none;
+  object-fit: contain;
+}
+.price-form {
+  margin: 0;
+  gap: 6px;
+  align-items: center;
+}
+.cc-main .price-form {
+  margin: 0;
+  align-items: center;
+}
+/* A file chooser that looks like a button. */
+.file-button {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 15px;
+  cursor: pointer;
+}
+.file-button input {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 .preview {
   border: 1px solid var(--line);

@@ -357,28 +357,48 @@ test("each Control Center page has its own address, and Back and Forward move be
   await page.close();
 });
 
-test("in the Control Center, an owner uploads their own sticker and adds a built-in one, and both join the store", async () => {
+test("in the Control Center, the store has its own page: upload and add stickers, change prices, replace pictures", async () => {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
   const credentials = { email: uniqueEmail("store"), password: "correct horse battery staple" };
   await page.request.post(`${base}/api/sign-up`, { data: { ...credentials, chartName: "Store", timeZone: "America/Chicago" } });
+  const storeNow = async () => (await (await page.request.get(`${base}/api/store-items`)).json()).items as { id: string; name: string; price: number; art: string | null }[];
+
+  // Reached from inside Tasks, at its own address.
   await page.goto(`${base}/tasks`);
-  const store = page.getByRole("region", { name: "Store" });
-  await store.getByText("Rocket").waitFor();
+  await page.getByRole("link", { name: "Store", exact: true }).click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/store");
+  const inStore = page.getByRole("region", { name: "In the store" });
+  await inStore.getByText("Rocket").waitFor();
 
-  await store.getByLabel("Picture").setInputFiles({ name: "dragon.png", mimeType: "image/png", buffer: png });
-  await store.getByRole("img", { name: "Preview" }).waitFor();
-  await store.getByLabel("Name").fill("Dragon");
-  await store.getByLabel("Price").fill("5");
-  await store.getByRole("button", { name: "Add sticker" }).click();
-  await store.getByRole("img", { name: "Dragon" }).waitFor();
-  expect(await store.getByRole("img", { name: "Dragon" }).evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+  // Upload a new sticker.
+  const upload = page.getByRole("region", { name: "Upload a new sticker" });
+  await upload.getByLabel("Picture").setInputFiles({ name: "dragon.png", mimeType: "image/png", buffer: png });
+  await upload.getByRole("img", { name: "Preview" }).waitFor();
+  await upload.getByLabel("Name").fill("Dragon");
+  await upload.getByLabel("Price").fill("5");
+  await upload.getByRole("button", { name: "Add sticker" }).click();
+  await inStore.getByRole("img", { name: "Dragon" }).waitFor();
+  expect(await inStore.getByRole("img", { name: "Dragon" }).evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
 
-  await store.getByLabel("Add from the built-in list").selectOption({ label: "Astronaut (5 ★)" });
-  await store.getByRole("button", { name: "Add", exact: true }).click();
-  await store.getByRole("img", { name: "Astronaut" }).waitFor();
+  // Add one from the built-in list.
+  const builtIn = page.getByRole("region", { name: "Add from the built-in list" });
+  await builtIn.getByLabel("Item").selectOption({ label: "Astronaut (5 ★)" });
+  await builtIn.getByRole("button", { name: "Add" }).click();
+  await inStore.getByRole("img", { name: "Astronaut" }).waitFor();
+  expect((await storeNow()).slice(-2).map((item) => item.name)).toEqual(["Dragon", "Astronaut"]);
 
-  const items = (await (await page.request.get(`${base}/api/store-items`)).json()).items.map((item: { name: string }) => item.name);
-  expect(items.slice(-2)).toEqual(["Dragon", "Astronaut"]);
+  // Change the Rocket's price.
+  const rocket = inStore.getByRole("listitem").filter({ hasText: "Rocket" });
+  await rocket.getByLabel("Price").fill("4");
+  await rocket.getByRole("button", { name: "Save price" }).click();
+  await expect.poll(async () => (await storeNow()).find((item) => item.id === "rocket")?.price).toBe(4);
+
+  // Replace the Moon's picture, then go back to the original.
+  const moon = inStore.getByRole("listitem").filter({ hasText: "Moon" });
+  await moon.getByLabel("Replace picture").setInputFiles({ name: "moon.png", mimeType: "image/png", buffer: png });
+  await expect.poll(async () => (await storeNow()).find((item) => item.id === "moon")?.art).toMatch(/^\/api\/art-files\//);
+  await moon.getByRole("button", { name: "Use the original picture" }).click();
+  await expect.poll(async () => (await storeNow()).find((item) => item.id === "moon")?.art).toBe(null);
   await page.close();
 });

@@ -5,7 +5,10 @@ import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { api } from "../shared/api.js";
 import { onObservatory } from "./common.js";
 
-export type Page = "tickets" | "kids" | "tasks" | "family" | "settings";
+export type Page = "tickets" | "kids" | "tasks" | "store" | "family" | "settings";
+
+/** Pages reached from inside another (as a sub-tab), which keep that page highlighted in the navigation. */
+const insidePage: Partial<Record<Page, Page>> = { store: "tasks" };
 
 const pages: { id: Page; label: string; icon: ReactNode }[] = [
   {
@@ -53,13 +56,31 @@ export function usePage(allowed: Page[]): Page {
 }
 
 /** Goes to another page without reloading, adding it to the history. Keeps `?on=observatory` and the like. */
-function go(event: MouseEvent<HTMLAnchorElement>, page: Page) {
+export function go(event: MouseEvent<HTMLAnchorElement>, page: Page) {
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
   event.preventDefault();
   if (location.pathname === `/${page}`) return;
   history.pushState(null, "", `/${page}${location.search}`);
   window.dispatchEvent(new PopStateEvent("popstate"));
   window.scrollTo(0, 0);
+}
+
+/** A page's heading, with sub-tabs when it has them (Tasks and Store). */
+export function PageTitle({ title, tabs, current }: { title: string; tabs?: { page: Page; label: string }[]; current?: Page }) {
+  return (
+    <>
+      <h1>{title}</h1>
+      {tabs && (
+        <nav className="cc-subtabs" aria-label={`${title} sections`}>
+          {tabs.map((tab) => (
+            <a key={tab.page} href={`/${tab.page}${location.search}`} onClick={(event) => go(event, tab.page)} aria-current={tab.page === current ? "page" : undefined}>
+              {tab.label}
+            </a>
+          ))}
+        </nav>
+      )}
+    </>
+  );
 }
 
 /** Shows how many things are waiting on the app's home-screen badge (where the browser supports it). */
@@ -105,7 +126,7 @@ export function Shell({
 }) {
   const waiting = useWaitingCount();
   const visible = pages.filter((candidate) => allowed.includes(candidate.id));
-  const title = visible.find((candidate) => candidate.id === page)?.label;
+  const highlighted = insidePage[page] ?? page;
   return (
     <div className={`cc ${visible.length > 1 ? "cc-with-nav" : ""}`}>
       <header className="cc-top">
@@ -118,7 +139,7 @@ export function Shell({
       {visible.length > 1 && (
         <nav className="cc-nav" aria-label="Pages">
           {visible.map((candidate) => (
-            <a key={candidate.id} href={`/${candidate.id}${location.search}`} onClick={(event) => go(event, candidate.id)} aria-current={candidate.id === page ? "page" : undefined}>
+            <a key={candidate.id} href={`/${candidate.id}${location.search}`} onClick={(event) => go(event, candidate.id)} aria-current={candidate.id === highlighted ? "page" : undefined}>
               <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 {candidate.icon}
               </svg>
@@ -132,10 +153,7 @@ export function Shell({
           ))}
         </nav>
       )}
-      <main className="cc-main">
-        <h1>{title}</h1>
-        {children}
-      </main>
+      <main className="cc-main">{children}</main>
     </div>
   );
 }

@@ -26,3 +26,8 @@
 - **Store items:** `store_items` gains `name`, `kind` and `art_file_id` for a chart's own stickers, whose ids look like `sticker-<hex>`. `GET /api/store-items` (grown-ups) lists the store plus the built-in items still available to add.
 - **Control Center:** the Tasks page has a Store card with pictures and prices, "Add from the built-in list", and "Upload a new sticker" with a preview.
 - **Built-in art:** stickers for the flying saucer, astronaut and telescope are drawn and added to the manifest.
+
+2026-11-24 (follow-up, the user's request):
+- **Its own page:** the store moved to `/store`, a sub-tab of Tasks (Tasks stays highlighted in the navigation).
+- **Changing items:** owners and admins can change any item's price and replace any item's picture with `PATCH /api/store-items/:itemId {price?, artFileId?}`. `artFileId: null` puts a built-in item's shipped picture back; a chart's own sticker can't lose its picture (400).
+- **Already bought:** a child who bought an item keeps it when its price changes.

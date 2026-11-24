@@ -47,7 +47,9 @@ export function createStore(db: Database, clock: Clock) {
         return forSale.includes(kind) ? [{ id: row.item_id, kind, name: row.name, price: row.price, art: artFileUrl(row.art_file_id) }] : [];
       }
       const item = builtInItem(row.item_id);
-      return item && forSale.includes(item.kind) ? [{ id: item.id, kind: item.kind, name: item.name, price: row.price, art: null }] : [];
+      // A built-in item, with its shipped picture unless the chart has replaced it with its own.
+      const art = row.art_file_id ? artFileUrl(row.art_file_id) : null;
+      return item && forSale.includes(item.kind) ? [{ id: item.id, kind: item.kind, name: item.name, price: row.price, art }] : [];
     });
   }
 
@@ -96,6 +98,26 @@ export function createStore(db: Database, clock: Clock) {
       const id = `sticker-${randomBytes(5).toString("hex")}`;
       await append(chartId, { item_id: id, price: sticker.price, name: sticker.name, kind: "sticker", art_file_id: sticker.artFileId });
       return { id };
+    },
+
+    /**
+     * Changes an item in the chart's store: its price, or its picture (an uploaded one; null puts a built-in item's
+     * shipped picture back). A chart's own sticker always needs a picture of its own.
+     */
+    async change(chartId: string, itemId: string, changes: { price?: number; artFileId?: string | null }): Promise<"changed" | "not-found" | "needs-picture"> {
+      const row = await db.selectFrom("store_items").select(["name"]).where("chart_id", "=", chartId).where("item_id", "=", itemId).executeTakeFirst();
+      if (!row) return "not-found";
+      if (changes.artFileId === null && row.name !== null) return "needs-picture";
+      await db
+        .updateTable("store_items")
+        .set({
+          ...(changes.price === undefined ? {} : { price: changes.price }),
+          ...(changes.artFileId === undefined ? {} : { art_file_id: changes.artFileId }),
+        })
+        .where("chart_id", "=", chartId)
+        .where("item_id", "=", itemId)
+        .execute();
+      return "changed";
     },
 
     /** The built-in items for sale that aren't in the chart's store yet, so a grown-up can add them. */

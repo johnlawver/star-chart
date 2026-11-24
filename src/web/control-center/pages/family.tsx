@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../../shared/api.js";
 import { confirmFirst } from "../../shared/dialog.js";
 import { onObservatory, type Me } from "../common.js";
+import { PageTitle } from "../shell.js";
 
 function GrownUps({ me }: { me: Me }) {
   const [grownUps, setGrownUps] = useState<{ id: string; email: string; role: string }[]>([]);
@@ -211,6 +212,7 @@ function GuestPins() {
 export function FamilyPage({ me }: { me: Me }) {
   return (
     <>
+      <PageTitle title="Family" />
       <GrownUps me={me} />
       <MyPin />
       {!onObservatory && <GuestPins />}

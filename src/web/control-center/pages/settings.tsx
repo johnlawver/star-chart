@@ -6,6 +6,7 @@ import { api, stored } from "../../shared/api.js";
 import { confirmFirst } from "../../shared/dialog.js";
 import { manages, observatoryTokenKey, onObservatory, type Me } from "../common.js";
 import { FeedKeys } from "../quizzes.js";
+import { PageTitle } from "../shell.js";
 
 /** The browser wants the public key as bytes. */
 function keyBytes(base64Url: string): Uint8Array<ArrayBuffer> {
@@ -257,6 +258,7 @@ function DeleteChart({ me }: { me: Me }) {
 export function SettingsPage({ me, account }: { me: Me; account: ReactNode }) {
   return (
     <>
+      <PageTitle title="Settings" />
       <section>
         <h2>You</h2>
         <p>

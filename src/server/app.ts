@@ -70,7 +70,7 @@ export interface AppDependencies {
 }
 
 /** The Control Center's pages, which must match `Page` in src/web/control-center/shell.tsx. */
-const controlCenterPages = ["/tickets", "/kids", "/tasks", "/family", "/settings"];
+const controlCenterPages = ["/tickets", "/kids", "/tasks", "/store", "/family", "/settings"];
 
 export async function buildApp({ db, clock, mailer, push, config }: AppDependencies) {
   // Unexpected fields in a request are refused, not silently dropped (we never store more than we asked for).

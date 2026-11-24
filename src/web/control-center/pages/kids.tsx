@@ -4,6 +4,7 @@ import { api } from "../../shared/api.js";
 import { askForText, confirmFirst } from "../../shared/dialog.js";
 import { StarHistoryList, type StarHistory } from "../../shared/star-history.js";
 import type { Child } from "../common.js";
+import { PageTitle } from "../shell.js";
 
 function KidCard({ child, onChanged }: { child: Child; onChanged: () => Promise<void> }) {
   const [history, setHistory] = useState<StarHistory | undefined>();
@@ -122,6 +123,7 @@ export function KidsPage() {
 
   return (
     <>
+      <PageTitle title="Kids" />
       {children?.length === 0 && <p className="empty">No children yet.</p>}
       {children?.map((child) => <KidCard key={child.id} child={child} onChanged={load} />)}
       <section>

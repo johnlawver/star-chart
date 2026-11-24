@@ -147,6 +147,74 @@ describe("adding to the store", () => {
   });
 });
 
+describe("changing what's in the store", () => {
+  test("an owner changes an item's price, and the store shows the new price", async () => {
+    const { chart, store, printer } = await chartWithStars();
+
+    const changed = await chart.owner.patch("/api/store-items/rocket", { price: 9 });
+
+    expect(changed.status).toBe(200);
+    expect((await store())[0]).toMatchObject({ id: "rocket", price: 9 });
+    printer.close();
+  });
+
+  test("an owner replaces a built-in item's picture with their own, and can go back to the original", async () => {
+    const { chart, store, printer } = await chartWithStars();
+    const picture = (await chart.owner.upload("/api/art-files", png, "image/png")).body;
+
+    await chart.owner.patch("/api/store-items/moon", { artFileId: picture.id });
+    const replaced = (await store())[1];
+    await chart.owner.patch("/api/store-items/moon", { artFileId: null });
+    const original = (await store())[1];
+
+    expect(replaced).toEqual({ id: "moon", kind: "sticker", name: "Moon", price: 2, art: picture.url });
+    expect(original).toMatchObject({ id: "moon", art: null });
+    printer.close();
+  });
+
+  test("an uploaded sticker's picture can be replaced, but not removed (it has no original)", async () => {
+    const { chart, store, printer } = await chartWithStars();
+    const first = (await chart.owner.upload("/api/art-files", png, "image/png")).body;
+    const second = (await chart.owner.upload("/api/art-files", svg, "image/svg+xml")).body;
+    const { id } = (await chart.owner.post("/api/store-items", { name: "Dragon", price: 5, artFileId: first.id })).body;
+
+    const replaced = await chart.owner.patch(`/api/store-items/${id}`, { artFileId: second.id });
+    const removed = await chart.owner.patch(`/api/store-items/${id}`, { artFileId: null });
+
+    expect(replaced.status).toBe(200);
+    expect(removed.status).toBe(400);
+    expect((await store()).at(-1)).toMatchObject({ name: "Dragon", art: second.url });
+    printer.close();
+  });
+
+  test("a child who already bought an item keeps it when its price changes", async () => {
+    const { chart, novaId, store, printer } = await chartWithStars();
+    await chart.screen.post(`/api/observatory/children/${novaId}/purchases`, { storeItemId: "comet" });
+
+    await chart.owner.patch("/api/store-items/comet", { price: 12 });
+
+    expect((await chart.screen.get(`/api/observatory/children/${novaId}`)).body.child.wardrobe.owned).toEqual(["comet"]);
+    expect((await store())[4]).toMatchObject({ id: "comet", price: 12 });
+    printer.close();
+  });
+
+  test("changing an item that isn't in the store, with someone else's picture, or as a plain grown-up, is refused", async () => {
+    const { chart, printer } = await chartWithStars();
+    const other = await chartWithStars();
+    const theirPicture = (await other.chart.owner.upload("/api/art-files", png, "image/png")).body;
+    const partner = await chart.inviteGrownUp();
+
+    const missing = await chart.owner.patch("/api/store-items/telescope", { price: 3 });
+    const borrowed = await chart.owner.patch("/api/store-items/rocket", { artFileId: theirPicture.id });
+    const notAdmin = await partner.patch("/api/store-items/rocket", { price: 1 });
+    const silly = await chart.owner.patch("/api/store-items/rocket", { price: 0 });
+
+    expect([missing.status, borrowed.status, notAdmin.status, silly.status]).toEqual([404, 404, 403, 400]);
+    printer.close();
+    other.printer.close();
+  });
+});
+
 describe("keeping charts apart", () => {
   test("a chart can't put another chart's picture in its store, and its own additions stay its own", async () => {
     const ours = await chartWithStars();
