@@ -3,7 +3,7 @@ import { chromium, type Browser, type Page } from "playwright";
 import WebSocket from "ws";
 import { buildApp } from "../../src/server/app.js";
 import { createTestDatabase } from "../support/database.js";
-import { FakeClock } from "../support/fake-clock.js";
+import { systemClock } from "../../src/server/clock.js";
 import { FakeMailer } from "../support/fake-mailer.js";
 import { FakePushSender } from "../support/fake-push.js";
 import { uniqueEmail } from "../support/test-app.js";
@@ -15,7 +15,8 @@ import { uniqueEmail } from "../support/test-app.js";
 const db = createTestDatabase();
 const app = await buildApp({
   db,
-  clock: new FakeClock(new Date()),
+  // The real clock: this is the whole app running, where things happen one after another (a visit, then an approval).
+  clock: systemClock,
   mailer: new FakeMailer(),
   push: new FakePushSender(),
   config: { allowNewCharts: true, appUrl: "https://star-chart.test", vapidPublicKey: "test", scheduledJobsEveryMs: null },
@@ -130,7 +131,12 @@ async function observatoryWithNova() {
     printer.close();
     scanner.close();
   };
-  return { printJobs, scanner, openScreen, close };
+  /** A grown-up approves every ticket that's been handed in. */
+  const approveHandedIn = async () => {
+    const { tickets } = await grownUp("GET", "/api/tickets?state=handed-in");
+    for (const ticket of tickets) await grownUp("POST", `/api/tickets/${ticket.id}/approve`, {});
+  };
+  return { printJobs, scanner, openScreen, approveHandedIn, close };
 }
 
 // The frame presents itself as a 1280×800 landscape window though it hangs portrait, so its kiosk address asks the stage
@@ -159,6 +165,34 @@ test.each([
   expect(await stageFits(page)).toBe(true);
   expect(await stageOnScreen(page)).toEqual(shown);
   expect(await endlessAnimations(page)).toEqual([]);
+  close();
+  await page.close();
+});
+
+test("stars approved since a child's last visit fly into their jar once, when they next open their screen", async () => {
+  const { printJobs, scanner, openScreen, approveHandedIn, close } = await observatoryWithNova();
+  const { page, go } = await openScreen({ width: 800, height: 1280 });
+  await go();
+  await page.getByRole("button", { name: /Nova/ }).click();
+  await page.getByRole("button", { name: /Chores/ }).click();
+  await page.getByRole("button", { name: /Feed the cat/ }).click();
+  await expect.poll(() => printJobs.length).toBe(1);
+  scanner.send(JSON.stringify({ type: "scan", code: printJobs[0].code }));
+  await expect.poll(() => page.getByText("Great job, Nova!").isVisible()).toBe(true);
+  await approveHandedIn();
+  await page.reload();
+
+  await page.getByRole("button", { name: /Nova/ }).click();
+  await expect.poll(() => page.getByText("You earned 2 stars!").isVisible()).toBe(true);
+  await page.getByRole("button", { name: "My stars: 2" }).waitFor();
+
+  // They've arrived, so they don't arrive again.
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: /Nova/ }).click();
+  const jar = page.getByRole("button", { name: /My stars/ });
+  await jar.waitFor();
+  expect(await page.getByText(/You earned/).count()).toBe(0);
+  expect(await jar.getAttribute("aria-label")).toBe("My stars: 2");
   close();
   await page.close();
 });

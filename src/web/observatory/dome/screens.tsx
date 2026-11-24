@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Icon } from "../../shared/icons.js";
 import { StarHistoryList, type StarHistory } from "../../shared/star-history.js";
-import { Art, Confetti, Mascot, StarJar, jarCapacity } from "../art/components.js";
+import { Art, Confetti, FlyingStars, Mascot, StarJar, jarCapacity } from "../art/components.js";
 import { jarSizes } from "../art/manifest.js";
 import { categoryColours, taskColours } from "./styles.js";
 
@@ -97,16 +97,27 @@ function TaskPlanet({ choice, index, pictures, onPrint }: { choice: MenuChoice; 
   );
 }
 
+/** At most this many stars fly in, however many arrived, so it's over quickly and the old screen keeps up. */
+export const mostFlyingStars = 12;
+
+/** How long the new stars take to fly in, so the screen can carry on even if the frame never says they've landed. */
+export function arrivalMs(newStars: number) {
+  return 900 + (Math.min(newStars, mostFlyingStars) - 1) * 260;
+}
+
 /**
  * A child's own screen: the dome with their star jar and mascot, their categories and tasks as planets, and the dock.
- * Tapping the jar shows their star history.
+ * Tapping the jar shows their star history. While `arriving` new stars fly into the jar, the jar shows the balance
+ * before them; any tap skips ahead.
  */
 export function ChildScreen({
   child,
   balance,
   earned,
+  arriving,
   menu,
   history,
+  onArrived,
   onPrint,
   onShowHistory,
   onLeave,
@@ -114,8 +125,10 @@ export function ChildScreen({
   child: Child;
   balance: number | undefined;
   earned: number | undefined;
+  arriving: number;
   menu: Menu | undefined;
   history: StarHistory | undefined;
+  onArrived: () => void;
   onPrint: (choice: MenuChoice) => void;
   onShowHistory: (show: boolean) => void;
   onLeave: () => void;
@@ -141,17 +154,26 @@ export function ChildScreen({
       <div className="dome-dome">
         {!pictures && <div className="dome-title">Hi {child.nickname}!</div>}
         {balance !== undefined && earned !== undefined && (
-          <button className="dome-jar" onClick={() => onShowHistory(true)} aria-label={`My stars: ${balance}`}>
-            <StarJar balance={balance} earned={earned} width={jarWidth(earned)} />
-            {!pictures && <div className="dome-count">{balance} ★</div>}
+          <button className="dome-jar" onClick={() => onShowHistory(true)} aria-label={`My stars: ${balance - arriving}`}>
+            <StarJar balance={balance - arriving} earned={earned} width={jarWidth(earned)} />
+            {!pictures && <div className="dome-count">{balance - arriving} ★</div>}
           </button>
         )}
         <div className="dome-mascot anim-hop">
-          <Mascot wearing={bare} size={230} />
+          <Mascot wearing={bare} mood={arriving ? "wow" : "happy"} size={230} />
         </div>
       </div>
 
-      {history ? (
+      {arriving > 0 ? (
+        <div className="dome-overlay" style={{ background: "none" }} onClick={onArrived}>
+          <FlyingStars count={Math.min(arriving, mostFlyingStars)} from={[378, -40]} to={[205, 360]} onDone={onArrived} />
+          {!pictures && (
+            <div className="dome-big anim-pop" style={{ top: 700 }} role="status">
+              You earned {arriving} {arriving === 1 ? "star" : "stars"}!
+            </div>
+          )}
+        </div>
+      ) : history ? (
         <div className="dome-panel" style={{ top: 620, bottom: 190 }}>
           <StarHistoryList history={history} />
         </div>
@@ -173,7 +195,7 @@ export function ChildScreen({
         </div>
       )}
 
-      <div className="dome-dock">
+      <div className="dome-dock" style={arriving ? { visibility: "hidden" } : undefined}>
         <button className="dome-door" onClick={back} aria-label="Back">
           <span className="dome-door-arrow" aria-hidden>
             ⬅

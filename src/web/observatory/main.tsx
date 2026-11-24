@@ -4,7 +4,7 @@ import { api, stored } from "../shared/api.js";
 import { useLiveConnection } from "../shared/live.js";
 import type { StarHistory } from "../shared/star-history.js";
 import { ArtStyles, NightSky } from "./art/components.js";
-import { ChildScreen, CouldNotPrint, Printing, Scanned, WhoAreYou, type Child, type Menu, type MenuChoice, type ScanOutcome } from "./dome/screens.js";
+import { ChildScreen, CouldNotPrint, Printing, Scanned, WhoAreYou, arrivalMs, type Child, type Menu, type MenuChoice, type ScanOutcome } from "./dome/screens.js";
 import { domeCss } from "./dome/styles.js";
 import { useIdle } from "./dome/use-idle.js";
 import { Stage } from "./stage.js";
@@ -185,9 +185,13 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
   );
 }
 
-/** Loads a child's balance, lifetime stars and menu, then shows their dome. */
+/**
+ * Loads a child's balance, lifetime stars, new stars and menu, then shows their dome. Once their new stars have flown
+ * into the jar (or straight away, if there are none) it records the visit, so they arrive only once.
+ */
 function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; deviceToken: string; onPrint: (choice: MenuChoice) => void; onLeave: () => void }) {
-  const [totals, setTotals] = useState<{ balance: number; earned: number } | undefined>();
+  const [totals, setTotals] = useState<{ balance: number; earned: number; newStars: number } | undefined>();
+  const [arrived, setArrived] = useState(false);
   const [menu, setMenu] = useState<Menu | undefined>();
   const [history, setHistory] = useState<StarHistory | undefined>();
 
@@ -197,10 +201,24 @@ function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; dev
         api("GET", `/api/observatory/children/${child.id}`, undefined, deviceToken),
         api("GET", `/api/observatory/children/${child.id}/menu`, undefined, deviceToken),
       ]);
-      if (view.ok) setTotals({ balance: view.data.child.balance, earned: view.data.child.earned });
+      if (view.ok) setTotals({ balance: view.data.child.balance, earned: view.data.child.earned, newStars: view.data.child.newStars });
       if (choices.ok) setMenu(choices.data);
     })();
   }, [child.id]);
+
+  const arriving = totals && !arrived ? totals.newStars : 0;
+
+  useEffect(() => {
+    if (!totals || arrived) return;
+    if (totals.newStars === 0) return setArrived(true);
+    // In case the frame never reports the last star landing, carry on once they should all be in.
+    const timer = setTimeout(() => setArrived(true), arrivalMs(totals.newStars) + 1500);
+    return () => clearTimeout(timer);
+  }, [totals, arrived]);
+
+  useEffect(() => {
+    if (arrived) void api("POST", `/api/observatory/children/${child.id}/visit`, undefined, deviceToken);
+  }, [arrived]);
 
   const showHistory = async (show: boolean) => {
     if (!show) return setHistory(undefined);
@@ -213,6 +231,8 @@ function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; dev
       child={child}
       balance={totals?.balance}
       earned={totals?.earned}
+      arriving={arriving}
+      onArrived={() => setArrived(true)}
       menu={menu}
       history={history}
       onPrint={onPrint}
