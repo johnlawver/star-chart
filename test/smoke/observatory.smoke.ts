@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { chromium, type Browser } from "playwright";
+import { chromium, type Browser, type Page } from "playwright";
 import WebSocket from "ws";
 import { buildApp } from "../../src/server/app.js";
 import { createTestDatabase } from "../support/database.js";
@@ -56,7 +56,42 @@ function httpClient() {
   };
 }
 
-test("on the observatory, a child picks themselves and a chore, and the printer gets the ticket", async () => {
+/** Every animation running on a page has an end: on the frame, a looping one keeps a processor core busy forever. */
+async function endlessAnimations(page: Page) {
+  return page.evaluate(() =>
+    document
+      .getAnimations()
+      .filter((animation) => !Number.isFinite(animation.effect?.getComputedTiming().endTime ?? 0))
+      .map((animation) => (animation as CSSAnimation).animationName ?? "unnamed"),
+  );
+}
+
+/** Whether the observatory's own font (self-hosted, so it works offline and looks the same everywhere) is in use. */
+async function observatoryFontLoaded(page: Page) {
+  return page.evaluate(async () => {
+    await document.fonts.ready;
+    return [...document.fonts].some((font) => font.family.replace(/"/g, "") === "Observatory" && font.status === "loaded");
+  });
+}
+
+/** The size the observatory's 800×1280 stage takes up on screen, after any turning and scaling. */
+async function stageOnScreen(page: Page) {
+  const box = (await page.locator("[data-stage]").boundingBox())!;
+  return { width: Math.round(box.width), height: Math.round(box.height) };
+}
+
+/** Where the observatory's 800×1280 stage sits in the window, and whether it fits inside it. */
+async function stageFits(page: Page) {
+  const box = await page.locator("[data-stage]").boundingBox();
+  const window = page.viewportSize()!;
+  return Boolean(box && box.x >= -1 && box.y >= -1 && box.x + box.width <= window.width + 1 && box.y + box.height <= window.height + 1);
+}
+
+// The frame presents itself as a 1280×800 landscape window though it hangs portrait, so the stage turns itself.
+test.each([
+  { window: "the frame's 1280×800 landscape window (the stage turns)", width: 1280, height: 800 },
+  { window: "an 800×1280 portrait window", width: 800, height: 1280 },
+])("on the observatory in $window, a child picks themselves and a chore, and the printer gets the ticket", async ({ width, height }) => {
   const grownUp = httpClient();
   const credentials = { email: uniqueEmail("smoke"), password: "correct horse battery staple" };
   await grownUp("POST", "/api/sign-up", { ...credentials, chartName: "Smoke Test", timeZone: "America/Chicago" });
@@ -81,7 +116,7 @@ test("on the observatory, a child picks themselves and a chore, and the printer 
   await new Promise((resolve) => printer.on("open", resolve));
   printer.send(JSON.stringify({ type: "hello", deviceToken: printerToken }));
 
-  const page = await browser.newPage();
+  const page = await browser.newPage({ viewport: { width, height } });
   await page.addInitScript((token) => localStorage.setItem("star-chart.observatory.deviceToken", token), screenToken);
   await page.goto(`${base}/observatory.html`);
   await page.getByRole("button", { name: "Nova" }).click();
@@ -90,7 +125,22 @@ test("on the observatory, a child picks themselves and a chore, and the printer 
 
   await expect.poll(() => page.getByText("Printing your ticket!").isVisible()).toBe(true);
   expect(await printJob).toMatchObject({ childNickname: "Nova", title: "Make your bed" });
+  expect(await stageFits(page)).toBe(true);
+  // Both windows are exactly the design's size, one way or the other, so the design fills it at full size.
+  expect(await stageOnScreen(page)).toEqual({ width, height });
+  expect(await endlessAnimations(page)).toEqual([]);
   printer.close();
+  await page.close();
+});
+
+test("pages are always checked for a newer version, while built files (named by their contents) are kept", async () => {
+  const pages = await Promise.all(["/", "/observatory.html"].map((path) => fetch(base + path)));
+  const html = await pages[1]!.text();
+  const script = html.match(/src="([^"]+\.js)"/)?.[1];
+  const built = await fetch(base + script);
+
+  expect(pages.map((page) => page.headers.get("cache-control"))).toEqual(["no-cache", "no-cache"]);
+  expect(built.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
 });
 
 test("the Art Gallery shows every piece of observatory art, and none of it is missing", async () => {
@@ -131,11 +181,15 @@ test("the Art Gallery shows every piece of observatory art, and none of it is mi
       "dock/store",
       "dock/stickers",
       "dock/sky",
+      "sky",
     ]),
   );
   expect(missing).toEqual([]);
   expect(brokenImages).toEqual([]);
   expect(constellations).toBeGreaterThanOrEqual(12);
+  expect(await stageFits(page)).toBe(true);
+  expect(await endlessAnimations(page)).toEqual([]);
+  expect(await observatoryFontLoaded(page)).toBe(true);
   expect(errors).toEqual([]);
   await page.close();
 });

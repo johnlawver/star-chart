@@ -124,6 +124,18 @@ export async function buildApp({ db, clock, mailer, push, config }: AppDependenc
   await feedRoutes(app, people, createQuizFeed(db, clock), quizPools);
   await reprintRoutes(app, people, observatories, liveParts, createReprints(db, clock), notifications);
   // The built web front ends (`vite build`), if present. Tests drive the API directly and don't need them.
-  if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot });
+  // Built files in assets/ have their contents in their names, so they can be kept forever. Everything else (pages, the
+  // service worker, the app manifest) is always checked for a newer version, so a screen that stays open for weeks (like
+  // the picture frame) picks up a new release on its next reload.
+  if (existsSync(webRoot)) {
+    await app.register(fastifyStatic, {
+      root: webRoot,
+      cacheControl: false,
+      setHeaders: (reply, path) => {
+        const hashed = /[/\\]assets[/\\]/.test(path);
+        reply.header("cache-control", hashed ? "public, max-age=31536000, immutable" : "no-cache");
+      },
+    });
+  }
   return app;
 }

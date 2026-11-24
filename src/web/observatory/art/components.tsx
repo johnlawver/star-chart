@@ -2,6 +2,7 @@
 // placeholder instead, and the Art Gallery flags it.
 import type { CSSProperties } from "react";
 import { animationCss } from "./animations.js";
+import fontUrl from "./files/fonts/observatory.woff2?url";
 import type { ConstellationPattern } from "./constellations.js";
 import { artUrl } from "./files.js";
 import { jarSizes } from "./manifest.js";
@@ -12,11 +13,11 @@ export function ArtStyles() {
 }
 
 const artCss = `
+@font-face { font-family: "Observatory"; src: url("${fontUrl}") format("woff2"); font-weight: 300 700; font-display: swap; }
 .art-missing { box-sizing: border-box; border: 3px dashed #ff6b6b; border-radius: 12px; }
 .art-layers { position: relative; }
 .art-layers > img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
 .art-sky { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: none; }
-.art-sky i { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #fff; }
 .art-burst { position: absolute; left: 50%; top: 45%; width: 0; height: 0; pointer-events: none; z-index: 40; }
 .art-burst span { position: absolute; width: 16px; height: 16px; border-radius: 4px; }
 .art-flight { position: absolute; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; z-index: 30; }
@@ -132,7 +133,7 @@ export function Constellation({ pattern, filled, size = 260, golden = false }: {
       })}
       {pattern.stars.map(([x, y], i) =>
         i < filled && star ? (
-          <image key={i} href={star} x={x - 6} y={y - 6} width={12} height={12} className={done ? "anim-twinkle" : undefined} />
+          <image key={i} href={star} x={x - 6} y={y - 6} width={12} height={12} className={done ? "anim-sparkle" : undefined} style={{ transformOrigin: `${x}px ${y}px`, transformBox: "view-box" }} />
         ) : (
           <circle key={i} cx={x} cy={y} r="2.2" fill={i < filled ? lit : "none"} stroke="rgba(255,255,255,0.45)" strokeWidth="0.8" />
         ),
@@ -141,8 +142,8 @@ export function Constellation({ pattern, filled, size = 260, golden = false }: {
   );
 }
 
-/** A burst of confetti from the middle of its container. Fewer pieces are kinder to an old screen. */
-export function Confetti({ pieces = 28 }: { pieces?: number }) {
+/** A burst of confetti from the middle of its container. Few pieces: each one is an animation the frame has to draw. */
+export function Confetti({ pieces = 12 }: { pieces?: number }) {
   return (
     <div className="art-burst" aria-hidden>
       {Array.from({ length: pieces }, (_, i) => {
@@ -167,19 +168,10 @@ export function Confetti({ pieces = 28 }: { pieces?: number }) {
   );
 }
 
-/** A starry background that twinkles gently, filling its container. */
-export function TwinklingSky({ count = 50 }: { count?: number }) {
-  return (
-    <div className="art-sky" aria-hidden>
-      {Array.from({ length: count }, (_, i) => (
-        <i
-          key={i}
-          className="anim-twinkle"
-          style={{ left: `${(i * 61) % 100}%`, top: `${(i * 37) % 100}%`, transform: `scale(${0.5 + (i % 3) * 0.4})`, animationDelay: `${(i % 7) * 400}ms` }}
-        />
-      ))}
-    </div>
-  );
+/** The night sky, filling its container. A still picture: on the frame, moving stars would keep its processor busy. */
+export function NightSky() {
+  const url = artUrl("sky");
+  return <div className="art-sky" aria-hidden style={url ? { backgroundImage: `url("${url}")`, backgroundSize: "cover" } : { background: "#1c1f5c" }} />;
 }
 
 /**

@@ -4,6 +4,8 @@ import { api, stored } from "../shared/api.js";
 import { useLiveConnection } from "../shared/live.js";
 import { Icon } from "../shared/icons.js";
 import { StarHistoryList, type StarHistory } from "../shared/star-history.js";
+import { ArtStyles } from "./art/components.js";
+import { Stage } from "./stage.js";
 
 // The observatory screen. Deliberately plain until its design phase (see Project conventions in CLAUDE.md).
 
@@ -398,6 +400,9 @@ function ChildView({ child, deviceToken, onDone }: { child: Child; deviceToken: 
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Observatory />
+    <Stage scroll>
+      <ArtStyles />
+      <Observatory />
+    </Stage>
   </StrictMode>,
 );

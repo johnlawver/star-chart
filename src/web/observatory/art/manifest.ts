@@ -21,6 +21,7 @@ export function storeItemArt(item: { kind: "sticker" | "hat" | "hair"; id: strin
 }
 
 export const manifest: ArtEntry[] = [
+  { id: "sky", what: "The night sky behind every observatory screen (a still picture: nothing in it moves)", canvas: [800, 1280] },
   { id: "star", what: "A star: in the jar, flying in and out, on prices, in constellations", canvas: square },
   { id: "mascot/body", what: "The mascot, Comet, without a face", canvas: mascot },
   { id: "mascot/mood-happy", what: "The mascot's happy face", canvas: mascot },

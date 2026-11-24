@@ -4,22 +4,26 @@
  *
  * Some read CSS variables set where they're used: confetti reads `--dx`/`--dy` (where a piece ends up) and the flights
  * read `--fx`/`--fy` (where a star lands).
+ *
+ * Every animation ends. On the picture frame a looping animation keeps a whole processor core busy for as long as it
+ * runs; a finished one costs nothing.
  */
 export interface Animation {
   what: string;
   durationMs: number;
   easing: string;
-  repeat: number | "infinite";
+  /** How many times it plays. Always a number: nothing loops on the frame. */
+  repeat: number;
   keyframes: string;
 }
 
 export const animations = {
-  twinkle: {
-    what: "A star in the sky glowing and dimming",
-    durationMs: 2800,
-    easing: "ease-in-out",
-    repeat: "infinite",
-    keyframes: "0%, 100% { opacity: 0.35; } 50% { opacity: 1; }",
+  sparkle: {
+    what: "A star flaring up once, then settling",
+    durationMs: 1400,
+    easing: "ease-out",
+    repeat: 1,
+    keyframes: "0% { transform: scale(1); opacity: 0.6; } 30% { transform: scale(1.6) rotate(20deg); opacity: 1; } 100% { transform: scale(1); opacity: 1; }",
   },
   "fly-in": {
     what: "A new star hopping up, then flying into the jar",
@@ -47,12 +51,12 @@ export const animations = {
       80% { opacity: 1; }
       100% { transform: translate(var(--dx), var(--dy)) rotate(540deg) scale(1); opacity: 0; }`,
   },
-  bounce: {
-    what: "The mascot bobbing gently",
-    durationMs: 1200,
+  hop: {
+    what: "The mascot giving one short hop",
+    durationMs: 700,
     easing: "ease-in-out",
-    repeat: "infinite",
-    keyframes: "0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); }",
+    repeat: 1,
+    keyframes: "0%, 100% { transform: translateY(0); } 40% { transform: translateY(-24px); } 70% { transform: translateY(4px); }",
   },
   "ticket-slide": {
     what: "A printed ticket sliding out of the top",
