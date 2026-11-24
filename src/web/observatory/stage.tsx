@@ -1,7 +1,7 @@
 // The observatory's stage: every observatory screen is designed at 800×1280 (portrait), and the stage scales that
-// design to fit whatever window it's in. The picture frame hangs portrait but tells the page it's a 1280×800 landscape
-// window, so when the window is wider than tall the stage turns a quarter turn to keep the design upright.
-// `?turn=left` or `?turn=right` (the default) picks which way, to match how the frame is hung.
+// design to fit whatever window it's in, upright. The picture frame hangs portrait but tells the page it's a 1280×800
+// landscape window, so its kiosk address adds `?turn=right` (or `?turn=left`, depending on how it's hung) and the stage
+// turns a quarter turn to stay upright. Without it, as on a computer, nothing turns.
 // Taps land where they look: the browser maps touches through the turn and the scaling.
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -20,8 +20,8 @@ function windowSize() {
 }
 
 /** How the 800×1280 design sits in a window: turned or not, and how much it's scaled. */
-export function stageFit(window: { width: number; height: number }, turn: "left" | "right") {
-  const turned = window.width > window.height;
+export function stageFit(window: { width: number; height: number }, turn: "left" | "right" | null) {
+  const turned = turn !== null;
   const [across, down] = turned ? [window.height, window.width] : [window.width, window.height];
   const scale = Math.min(across / stageWidth, down / stageHeight);
   const degrees = turned ? (turn === "left" ? -90 : 90) : 0;
@@ -36,7 +36,8 @@ export function Stage({ children, scroll = false }: { children: ReactNode; scrol
     window.addEventListener("resize", resized);
     return () => window.removeEventListener("resize", resized);
   }, []);
-  const turn = new URLSearchParams(window.location.search).get("turn") === "left" ? "left" : "right";
+  const asked = new URLSearchParams(window.location.search).get("turn");
+  const turn = asked === "left" || asked === "right" ? asked : null;
   const fit = stageFit(size, turn);
   return (
     <>

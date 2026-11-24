@@ -242,8 +242,7 @@ The frame has been rooted and measured. Its report is "PF1007L Frame Dashboard R
   - Also unavailable: Web Push, the Fullscreen API, the camera, and new windows (`target="_blank"` strands the kiosk).
 - **Portrait:**
   - The OS presents the screen as 1280×800 landscape (the panel is physically portrait).
-  - The observatory's stage turns itself: when the window is wider than tall, the 800×1280 stage is rotated a quarter turn to fill it. Touch follows CSS transforms, so taps still land.
-  - Which way it turns is a setting on the observatory's URL (`?turn=left` or `?turn=right`, default `right`), so it matches how the frame hangs. The kiosk app needs no change.
+  - The observatory's 800×1280 stage turns a quarter turn only when its URL asks (`?turn=right` or `?turn=left`, to match how the frame hangs). The frame's kiosk address includes it, so the kiosk app needs no change. Without it, as on a computer, the stage stays upright and fits the window. Touch follows CSS transforms, so taps still land.
 - **Animations must end:**
   - On the frame, one looping CSS animation costs about a whole CPU core, and a finished one costs nothing.
   - So nothing animates forever: no endless twinkle, bob or spin. The animations module only allows a finite repeat count, enforced by its type.

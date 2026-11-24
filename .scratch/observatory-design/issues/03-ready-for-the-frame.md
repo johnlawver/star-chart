@@ -23,3 +23,5 @@
 - [x] HTML pages are served with `Cache-Control: no-cache`.
 - [x] The smoke test loads the observatory in a 1280×800 window and still taps a child and a task (the stage turned). It still passes in 800×1280.
 - [x] The README has a "Running on the picture frame" section: the WebView 106 limits, the "animations must end" rule, setting the kiosk URL over ADB, and live debugging with `adb reverse` and `chrome://inspect`.
+
+**Changed 2026-11-24:** the stage no longer turns just because the window is wider than tall, which turned it sideways on computers. It turns only when the address asks (`?turn=right` or `?turn=left`), and the frame's kiosk address includes it.

@@ -87,11 +87,13 @@ async function stageFits(page: Page) {
   return Boolean(box && box.x >= -1 && box.y >= -1 && box.x + box.width <= window.width + 1 && box.y + box.height <= window.height + 1);
 }
 
-// The frame presents itself as a 1280×800 landscape window though it hangs portrait, so the stage turns itself.
+// The frame presents itself as a 1280×800 landscape window though it hangs portrait, so its kiosk address asks the stage
+// to turn (?turn=right). Anywhere else, such as a computer, the design stays upright.
 test.each([
-  { window: "the frame's 1280×800 landscape window (the stage turns)", width: 1280, height: 800 },
-  { window: "an 800×1280 portrait window", width: 800, height: 1280 },
-])("on the observatory in $window, a child picks themselves and a chore, and the printer gets the ticket", async ({ width, height }) => {
+  { window: "the frame (1280×800, ?turn=right: turned, filling the window)", width: 1280, height: 800, query: "?turn=right", shown: { width: 1280, height: 800 } },
+  { window: "a computer's 1280×800 window (upright, full height)", width: 1280, height: 800, query: "", shown: { width: 500, height: 800 } },
+  { window: "an 800×1280 portrait window", width: 800, height: 1280, query: "", shown: { width: 800, height: 1280 } },
+])("on the observatory in $window, a child picks themselves and a chore, and the printer gets the ticket", async ({ width, height, query, shown }) => {
   const grownUp = httpClient();
   const credentials = { email: uniqueEmail("smoke"), password: "correct horse battery staple" };
   await grownUp("POST", "/api/sign-up", { ...credentials, chartName: "Smoke Test", timeZone: "America/Chicago" });
@@ -118,7 +120,7 @@ test.each([
 
   const page = await browser.newPage({ viewport: { width, height } });
   await page.addInitScript((token) => localStorage.setItem("star-chart.observatory.deviceToken", token), screenToken);
-  await page.goto(`${base}/observatory.html`);
+  await page.goto(`${base}/observatory.html${query}`);
   await page.getByRole("button", { name: "Nova" }).click();
   await page.getByRole("button", { name: "Chores" }).click();
   await page.getByRole("button", { name: /Make your bed/ }).click();
@@ -126,8 +128,7 @@ test.each([
   await expect.poll(() => page.getByText("Printing your ticket!").isVisible()).toBe(true);
   expect(await printJob).toMatchObject({ childNickname: "Nova", title: "Make your bed" });
   expect(await stageFits(page)).toBe(true);
-  // Both windows are exactly the design's size, one way or the other, so the design fills it at full size.
-  expect(await stageOnScreen(page)).toEqual({ width, height });
+  expect(await stageOnScreen(page)).toEqual(shown);
   expect(await endlessAnimations(page)).toEqual([]);
   printer.close();
   await page.close();

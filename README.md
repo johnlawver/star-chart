@@ -55,21 +55,21 @@ The observatory screen is an AiMOR PF1007L picture frame, rooted and running the
 
 - **It's an old browser.** Android System WebView 106, on Android 6. The build targets `chrome106` for code and `chrome61` for CSS. Avoid `:has()`, CSS nesting, `dvh`, `oklch()`, `color-mix()`, JavaScript newer than ES2022, `alert`/`confirm`/`prompt`, `target="_blank"`, Web Push and the camera. 4- and 8-digit hex colours (`#fff8`) are ignored, so the build fails if any remain in the output.
 - **Animations must end.** One looping animation keeps a whole processor core busy for as long as it runs; a finished one costs nothing.
-- **It's portrait but says it's landscape.** The frame tells the page it's a 1280×800 window. The observatory and the Art Gallery draw an 800×1280 design on a stage that turns itself upright. Add `?turn=left` to the address if it comes out upside down (`right` is the default).
+- **It's portrait but says it's landscape.** The frame tells the page it's a 1280×800 window. The observatory and the Art Gallery draw an 800×1280 design on a stage, and the frame's address adds `?turn=right` so the stage turns a quarter turn to hang upright. Use `?turn=left` if it comes out upside down. Without `?turn`, as on a computer, the design stays upright and fits the window's height.
 - **Certificates.** It doesn't trust Let's Encrypt, so the public site uses a Google Trust Services certificate (see `docs/deployment.md`).
 - **Pages are never cached**, but built files are cached forever (their names change with their contents), so the frame picks up a release when it reloads.
 
 To point the kiosk at the observatory, with ADB connected:
 
 ```sh
-adb shell am start -n com.wesbos.homehq/.MainActivity --es url 'https://star-chart.johnlawver.com/observatory.html'
+adb shell am start -n com.wesbos.homehq/.MainActivity --es url 'https://star-chart.johnlawver.com/observatory.html?turn=right'
 ```
 
 To debug a development server live on the frame, forward the port over USB and open the page's own DevTools:
 
 ```sh
 adb reverse tcp:4310 tcp:4310
-adb shell am start -n com.wesbos.homehq/.MainActivity --es url 'http://localhost:4310/observatory.html' --ez debug true
+adb shell am start -n com.wesbos.homehq/.MainActivity --es url 'http://localhost:4310/observatory.html?turn=right' --ez debug true
 ```
 
 Then open `chrome://inspect` in Chrome on your computer and choose the frame's page.

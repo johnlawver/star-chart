@@ -34,8 +34,10 @@ To change a setting: edit Doppler `star-chart/prd`, then restart the app (`POST 
 
 ## Pointing the frame at it
 
+`?turn=right` turns the portrait design for the frame, which reports a landscape window (`?turn=left` if it comes out upside down).
+
 With ADB connected to the frame:
 
 ```sh
-adb shell am start -n com.wesbos.homehq/.MainActivity --es url 'https://star-chart.johnlawver.com/observatory.html'
+adb shell am start -n com.wesbos.homehq/.MainActivity --es url 'https://star-chart.johnlawver.com/observatory.html?turn=right'
 ```
