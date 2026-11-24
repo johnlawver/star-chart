@@ -41,6 +41,19 @@ export const domeCss = `
 .dome-sky-round { width: 100%; text-align: center; color: #ffcf4d; margin-bottom: 8px; }
 .dome-sky-tile { width: 200px; margin: 4px; text-align: center; }
 .dome-sky-label { font-size: 20px; line-height: 1.25; min-height: 50px; }
+.dome-shop { align-content: flex-start; }
+.dome-shelf-item { width: 200px; height: 215px; margin: 8px; padding: 12px; border-radius: 28px; border: none; background: #fff; color: #2b2140; font: inherit;
+  font-size: 22px; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: space-between; box-shadow: 0 8px 0 #c4b6ef; }
+.dome-shelf-item:active { transform: translateY(6px); box-shadow: 0 2px 0 #c4b6ef; }
+.dome-shelf-item[disabled] { opacity: 0.45; }
+.dome-shelf-item.dome-owned { opacity: 1; background: #e6f7e2; box-shadow: 0 8px 0 #9bd18f; }
+.dome-shelf-name { font-size: 20px; line-height: 1.1; }
+.dome-price { display: flex; align-items: center; font-size: 30px; }
+.dome-price img { margin-left: 4px; }
+.dome-book { top: 40px; bottom: 200px; background: #f6e7c8; border: 6px solid #d9b77a; display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; }
+.dome-book-sticker { display: inline-block; margin: 16px; }
+.dome-book-empty { width: 100%; margin-top: 200px; display: flex; flex-direction: column; align-items: center; color: #7c4f2a; }
+.dome-book-empty .dome-door { margin-top: 30px; }
 .dome-ticket { position: absolute; left: 230px; top: 260px; width: 340px; min-height: 480px; box-sizing: border-box; background: #fff; color: #000;
   border-radius: 6px; padding: 24px; text-align: center; font-size: 32px; }
 .dome-ticket-art { margin: 30px 0; }

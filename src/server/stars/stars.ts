@@ -3,18 +3,22 @@ import type { Clock } from "../clock.js";
 import type { Database } from "../database.js";
 import { isId } from "../ids.js";
 
+/**
+ * A child's balance inside a transaction. Anything that spends stars locks the child's row first and then calls this,
+ * so spends at the same moment (redemptions and store purchases alike) take turns and can't overspend.
+ */
+export async function balanceIn(trx: Database, chartId: string, childId: string): Promise<number> {
+  const { total } = await trx
+    .selectFrom("star_movements")
+    .select(sql<string>`coalesce(sum(amount), 0)`.as("total"))
+    .where("chart_id", "=", chartId)
+    .where("child_id", "=", childId)
+    .executeTakeFirstOrThrow();
+  return Number(total);
+}
+
 /** The stars module: an append-only record of every star each child earns or spends. */
 export function createStars(db: Database, clock: Clock) {
-  async function balanceIn(trx: Database, chartId: string, childId: string): Promise<number> {
-    const { total } = await trx
-      .selectFrom("star_movements")
-      .select(sql<string>`coalesce(sum(amount), 0)`.as("total"))
-      .where("chart_id", "=", chartId)
-      .where("child_id", "=", childId)
-      .executeTakeFirstOrThrow();
-    return Number(total);
-  }
-
   return {
     /**
      * A grown-up records that a child spent stars. Refused if it would take the balance below zero.

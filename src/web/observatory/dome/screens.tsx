@@ -4,7 +4,8 @@ import { Icon } from "../../shared/icons.js";
 import { StarHistoryList, type StarHistory } from "../../shared/star-history.js";
 import { Art, Confetti, Constellation, FlyingStars, Mascot, StarJar, jarCapacity } from "../art/components.js";
 import { skyFor } from "../art/constellations.js";
-import { jarSizes } from "../art/manifest.js";
+import { artUrl } from "../art/files.js";
+import { jarSizes, storeItemArt } from "../art/manifest.js";
 import { categoryColours, taskColours } from "./styles.js";
 
 export interface Child {
@@ -29,6 +30,14 @@ export interface MenuCategory {
   name: string;
   icon: string | null;
   choices: MenuChoice[];
+}
+
+/** Something in the chart's store. */
+export interface StoreItem {
+  id: string;
+  kind: "sticker" | "hat" | "hair";
+  name: string;
+  price: number;
 }
 
 /** What a child sees: their categories, and the tasks not in any category. */
@@ -118,8 +127,11 @@ export function ChildScreen({
   arriving,
   menu,
   history,
+  store,
+  owned,
   onArrived,
   onPrint,
+  onBuy,
   onShowHistory,
   onLeave,
 }: {
@@ -129,14 +141,23 @@ export function ChildScreen({
   arriving: number;
   menu: Menu | undefined;
   history: StarHistory | undefined;
+  store: StoreItem[] | undefined;
+  owned: string[];
   onArrived: () => void;
   onPrint: (choice: MenuChoice) => void;
+  /** Buys an item; resolves true if it was bought. */
+  onBuy: (item: StoreItem) => Promise<boolean>;
   onShowHistory: (show: boolean) => void;
   onLeave: () => void;
 }) {
   const [category, setCategory] = useState<MenuCategory | undefined>();
-  const [sky, setSky] = useState(false);
+  const [panel, setPanel] = useState<"planets" | "store" | "stickers" | "sky">("planets");
+  const [spending, setSpending] = useState(0);
   const pictures = child.displayStyle === "pictures";
+
+  const buy = async (item: StoreItem) => {
+    if (await onBuy(item)) setSpending(Math.min(item.price, 6));
+  };
 
   // A category with just one task for this child prints it straight away; otherwise the child picks one.
   const open = (chosen: MenuCategory) => {
@@ -145,8 +166,13 @@ export function ChildScreen({
     else setCategory(chosen);
   };
 
+  const show = (next: typeof panel) => {
+    if (history) onShowHistory(false);
+    setPanel(next);
+  };
+
   const back = () => {
-    if (sky) setSky(false);
+    if (panel !== "planets") setPanel("planets");
     else if (history) onShowHistory(false);
     else if (category) setCategory(undefined);
     else onLeave();
@@ -176,8 +202,12 @@ export function ChildScreen({
             </div>
           )}
         </div>
-      ) : sky && earned !== undefined ? (
+      ) : panel === "sky" && earned !== undefined ? (
         <MySky earned={earned} pictures={pictures} />
+      ) : panel === "stickers" ? (
+        <StickerBook owned={owned} store={store} pictures={pictures} onShop={() => setPanel("store")} />
+      ) : panel === "store" ? (
+        <Shop store={store} owned={owned} balance={balance ?? 0} pictures={pictures} onBuy={buy} />
       ) : history ? (
         <div className="dome-panel" style={{ top: 620, bottom: 190 }}>
           <StarHistoryList history={history} />
@@ -200,6 +230,8 @@ export function ChildScreen({
         </div>
       )}
 
+      {spending > 0 && <FlyingStars count={spending} from={[205, 360]} to={[400, 820]} direction="out" onDone={() => setSpending(0)} />}
+
       <div className="dome-dock" style={arriving ? { visibility: "hidden" } : undefined}>
         <button className="dome-door" onClick={back} aria-label="Back">
           <span className="dome-door-arrow" aria-hidden>
@@ -207,11 +239,80 @@ export function ChildScreen({
           </span>
           {!pictures && "Back"}
         </button>
-        <button className="dome-door" onClick={() => setSky(true)} aria-label="My sky" aria-pressed={sky}>
+        <button className="dome-door" onClick={() => show("store")} aria-label="Store" aria-pressed={panel === "store"}>
+          <Art id="dock/store" width={64} />
+          {!pictures && "Store"}
+        </button>
+        <button className="dome-door" onClick={() => show("stickers")} aria-label="Sticker Book" aria-pressed={panel === "stickers"}>
+          <Art id="dock/stickers" width={64} />
+          {!pictures && "Stickers"}
+        </button>
+        <button className="dome-door" onClick={() => show("sky")} aria-label="My sky" aria-pressed={panel === "sky"}>
           <Art id="dock/sky" width={64} />
           {!pictures && "My sky"}
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The store, under the dome so the jar stays in sight: every item at its real size with its price. Items the child
+ * can't afford yet are faded, and ones they own say so. Neither can be tapped.
+ */
+function Shop({ store, owned, balance, pictures, onBuy }: { store: StoreItem[] | undefined; owned: string[]; balance: number; pictures: boolean; onBuy: (item: StoreItem) => void }) {
+  return (
+    <div className="dome-planets dome-shop">
+      {store === undefined && <p className="dome-medium">Loading…</p>}
+      {store?.map((item) => {
+        const mine = owned.includes(item.id);
+        const label = mine ? `${item.name}, yours` : `Buy ${item.name} for ${item.price} ${item.price === 1 ? "star" : "stars"}`;
+        return (
+          <button key={item.id} className={`dome-shelf-item ${mine ? "dome-owned" : ""}`} disabled={mine || item.price > balance} onClick={() => onBuy(item)} aria-label={label}>
+            <Art id={storeItemArt(item)} width={110} />
+            {!pictures && <span className="dome-shelf-name">{item.name}</span>}
+            <span className="dome-price">
+              {mine ? (
+                "✓"
+              ) : (
+                <>
+                  {item.price} <Art id="star" width={30} />
+                </>
+              )}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Every sticker the child has bought, or a friendly empty page pointing to the store. */
+function StickerBook({ owned, store, pictures, onShop }: { owned: string[]; store: StoreItem[] | undefined; pictures: boolean; onShop: () => void }) {
+  // Stickers are what the store sells as stickers, or (for one no longer in the store) what has sticker art.
+  const isSticker = (id: string) => store?.find((item) => item.id === id)?.kind === "sticker" || Boolean(artUrl(`stickers/${id}`));
+  const stickers = owned.filter(isSticker);
+  const name = (id: string) => store?.find((item) => item.id === id)?.name ?? id;
+  return (
+    <div className="dome-panel dome-book">
+      {stickers.length === 0 ? (
+        <div className="dome-book-empty">
+          <div className="dome-medium">{pictures ? "" : "No stickers yet!"}</div>
+          <button className="dome-door" onClick={onShop} aria-label="Go to the store">
+            <Art id="dock/store" width={64} />
+            {!pictures && "Store"}
+          </button>
+        </div>
+      ) : (
+        stickers.map((id, i) => (
+          // Tilted on the outside, popping in on the inside: the animation would otherwise replace the tilt.
+          <span key={id} className="dome-book-sticker" style={{ transform: `rotate(${((i * 23) % 30) - 15}deg)` }} role="img" aria-label={name(id)}>
+            <span className="anim-pop" style={{ display: "inline-block", animationDelay: `${i * 60}ms` }}>
+              <Art id={storeItemArt({ kind: "sticker", id })} width={150} />
+            </span>
+          </span>
+        ))
+      )}
     </div>
   );
 }

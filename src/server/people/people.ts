@@ -6,6 +6,7 @@ import { hashToken, newToken } from "../tokens.js";
 import { isId } from "../ids.js";
 import { createGuests } from "./guests.js";
 import { isUniqueViolation } from "../database-errors.js";
+import { addStartingStore } from "../store/items.js";
 
 const phoneSetupCodeLifetimeMs = 5 * 60 * 1000;
 
@@ -45,6 +46,7 @@ export function createPeople(db: Database, clock: Clock) {
           .values({ name: input.chartName, time_zone: input.timeZone, created_at: now })
           .returning("id")
           .executeTakeFirstOrThrow();
+        await addStartingStore(trx, chart.id);
         const grownUp = await trx
           .insertInto("grown_ups")
           .values({

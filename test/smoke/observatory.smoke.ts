@@ -169,7 +169,7 @@ test.each([
   await page.close();
 });
 
-test("stars approved since a child's last visit fly into their jar once, when they next open their screen", async () => {
+test("stars approved since a child's last visit fly into their jar once, and she can see her sky and spend them in the store", async () => {
   const { printJobs, scanner, openScreen, approveHandedIn, close } = await observatoryWithNova();
   const { page, go } = await openScreen({ width: 800, height: 1280 });
   await go();
@@ -201,6 +201,15 @@ test("stars approved since a child's last visit fly into their jar once, when th
   expect(await page.getByRole("img", { name: /: 0 of / }).count()).toBe(11);
   await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("button", { name: /Chores/ }).waitFor();
+
+  // The store: Nova spends her 2 stars on the Rocket sticker, and finds it in her Sticker Book.
+  await page.getByRole("button", { name: "Store" }).click();
+  await page.getByRole("button", { name: "Buy Rocket for 2 stars" }).click();
+  await page.getByRole("button", { name: "My stars: 0" }).waitFor();
+  expect(await page.getByRole("button", { name: "Rocket, yours" }).isDisabled()).toBe(true);
+  expect(await page.getByRole("button", { name: "Buy Moon for 2 stars" }).isDisabled()).toBe(true);
+  await page.getByRole("button", { name: "Sticker Book" }).click();
+  await page.getByRole("img", { name: "Rocket" }).waitFor();
   close();
   await page.close();
 });

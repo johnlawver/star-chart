@@ -4,7 +4,19 @@ import { api, stored } from "../shared/api.js";
 import { useLiveConnection } from "../shared/live.js";
 import type { StarHistory } from "../shared/star-history.js";
 import { ArtStyles, NightSky } from "./art/components.js";
-import { ChildScreen, CouldNotPrint, Printing, Scanned, WhoAreYou, arrivalMs, type Child, type Menu, type MenuChoice, type ScanOutcome } from "./dome/screens.js";
+import {
+  ChildScreen,
+  CouldNotPrint,
+  Printing,
+  Scanned,
+  WhoAreYou,
+  arrivalMs,
+  type Child,
+  type Menu,
+  type MenuChoice,
+  type ScanOutcome,
+  type StoreItem,
+} from "./dome/screens.js";
 import { domeCss } from "./dome/styles.js";
 import { useIdle } from "./dome/use-idle.js";
 import { Stage } from "./stage.js";
@@ -192,16 +204,23 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
 function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; deviceToken: string; onPrint: (choice: MenuChoice) => void; onLeave: () => void }) {
   const [totals, setTotals] = useState<{ balance: number; earned: number; newStars: number } | undefined>();
   const [arrived, setArrived] = useState(false);
+  const [store, setStore] = useState<StoreItem[] | undefined>();
+  const [owned, setOwned] = useState<string[]>([]);
   const [menu, setMenu] = useState<Menu | undefined>();
   const [history, setHistory] = useState<StarHistory | undefined>();
 
   useEffect(() => {
     void (async () => {
-      const [view, choices] = await Promise.all([
+      const [view, choices, items] = await Promise.all([
         api("GET", `/api/observatory/children/${child.id}`, undefined, deviceToken),
         api("GET", `/api/observatory/children/${child.id}/menu`, undefined, deviceToken),
+        api("GET", "/api/observatory/store", undefined, deviceToken),
       ]);
-      if (view.ok) setTotals({ balance: view.data.child.balance, earned: view.data.child.earned, newStars: view.data.child.newStars });
+      if (view.ok) {
+        setTotals({ balance: view.data.child.balance, earned: view.data.child.earned, newStars: view.data.child.newStars });
+        setOwned(view.data.child.wardrobe.owned);
+      }
+      if (items.ok) setStore(items.data.items);
       if (choices.ok) setMenu(choices.data);
     })();
   }, [child.id]);
@@ -220,6 +239,15 @@ function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; dev
     if (arrived) void api("POST", `/api/observatory/children/${child.id}/visit`, undefined, deviceToken);
   }, [arrived]);
 
+  // Buying needs no grown-up. Whatever the answer, the screen shows what the server says the balance is now.
+  const buy = async (item: StoreItem) => {
+    const result = await api("POST", `/api/observatory/children/${child.id}/purchases`, { storeItemId: item.id }, deviceToken);
+    const balance = result.data?.balance;
+    if (typeof balance === "number") setTotals((current) => current && { ...current, balance });
+    if (result.ok) setOwned(result.data.wardrobe.owned);
+    return result.ok;
+  };
+
   const showHistory = async (show: boolean) => {
     if (!show) return setHistory(undefined);
     const result = await api("GET", `/api/observatory/children/${child.id}/star-history`, undefined, deviceToken);
@@ -233,6 +261,9 @@ function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; dev
       earned={totals?.earned}
       arriving={arriving}
       onArrived={() => setArrived(true)}
+      store={store}
+      owned={owned}
+      onBuy={buy}
       menu={menu}
       history={history}
       onPrint={onPrint}

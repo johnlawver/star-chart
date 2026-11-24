@@ -4,6 +4,7 @@ import type { Observatories } from "../observatories/observatories.js";
 import { requireGrownUp } from "../people/authenticate.js";
 import type { Children } from "../people/children.js";
 import type { People } from "../people/people.js";
+import type { Store } from "../store/store.js";
 import type { Stars } from "./stars.js";
 
 export async function starRoutes(
@@ -12,6 +13,7 @@ export async function starRoutes(
   observatories: Observatories,
   children: Children,
   stars: Stars,
+  store: Store,
 ) {
   // One child's view at the observatory: their balance, the stars they've ever earned (which sizes their jar), and their
   // new stars since they last opened their screen (which fly into the jar).
@@ -20,7 +22,8 @@ export async function starRoutes(
     if (!screen) return reply;
     const child = (await children.list(screen.chartId)).find((c) => c.id === request.params.childId);
     if (!child) return reply.code(404).send({ error: "no such child" });
-    return { child: { ...child, ...(await stars.totals(screen.chartId, child.id)) } };
+    const [totals, wardrobe] = await Promise.all([stars.totals(screen.chartId, child.id), store.wardrobe(screen.chartId, child.id)]);
+    return { child: { ...child, ...totals, wardrobe } };
   });
 
   // The child opened their screen and saw their new stars arrive, so they aren't new any more, on any observatory.

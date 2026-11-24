@@ -175,6 +175,22 @@ export interface Tables {
     last_sent_at: Date;
     held_back: Generated<number>;
   };
+  store_items: {
+    id: Generated<string>;
+    chart_id: string;
+    item_id: string;
+    price: number;
+    position: number;
+  };
+  purchases: {
+    id: Generated<string>;
+    chart_id: string;
+    child_id: string;
+    item_id: string;
+    price: number;
+    star_movement_id: string;
+    created_at: Date;
+  };
   star_movements: {
     id: Generated<string>;
     chart_id: string;
