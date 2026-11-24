@@ -87,6 +87,23 @@ export function createStars(db: Database, clock: Clock) {
       return { earned, spent, balance: earned - spent, entries };
     },
 
+    /**
+     * A child's totals from the record: their balance (everything earned minus everything spent) and everything they've
+     * ever earned, which spending never lowers.
+     */
+    async totals(chartId: string, childId: string): Promise<{ balance: number; earned: number }> {
+      const { balance, earned } = await db
+        .selectFrom("star_movements")
+        .select([
+          sql<string>`coalesce(sum(amount), 0)`.as("balance"),
+          sql<string>`coalesce(sum(amount) filter (where amount > 0), 0)`.as("earned"),
+        ])
+        .where("chart_id", "=", chartId)
+        .where("child_id", "=", childId)
+        .executeTakeFirstOrThrow();
+      return { balance: Number(balance), earned: Number(earned) };
+    },
+
     /** A child's balance: everything earned minus everything spent, always computed from the record. */
     async balance(chartId: string, childId: string): Promise<number> {
       const { total } = await db

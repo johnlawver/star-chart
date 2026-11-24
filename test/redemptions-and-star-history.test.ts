@@ -107,6 +107,29 @@ describe("the star history", () => {
   });
 });
 
+describe("lifetime stars on the observatory", () => {
+  test("a child's view shows every star they've ever earned, which spending never lowers", async () => {
+    const { chart, nova, earn, redeem, printer } = await novaWithStars();
+    await earn("Feed the cat", 2);
+    await earn("Tidy your room", 3);
+    await redeem(4, "Ice cream");
+
+    const { child } = (await chart.screen.get(`/api/observatory/children/${nova}`)).body;
+
+    expect(child).toMatchObject({ balance: 1, earned: 5 });
+    printer.close();
+  });
+
+  test("a child who hasn't earned anything yet has earned 0", async () => {
+    const chart = await chartWithObservatory(harness);
+    const pip = await chart.addChild("Pip");
+
+    const { child } = (await chart.screen.get(`/api/observatory/children/${pip}`)).body;
+
+    expect(child).toMatchObject({ balance: 0, earned: 0 });
+  });
+});
+
 describe("keeping charts apart", () => {
   test("another chart can't spend our child's stars or see their star history", async () => {
     const { nova, earn, balance, printer } = await novaWithStars();

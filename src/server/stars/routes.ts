@@ -13,13 +13,13 @@ export async function starRoutes(
   children: Children,
   stars: Stars,
 ) {
-  // One child's view at the observatory, with their balance.
+  // One child's view at the observatory, with their balance and the stars they've ever earned (which sizes their jar).
   app.get<{ Params: { childId: string } }>("/api/observatory/children/:childId", async (request, reply) => {
     const screen = await requireDevice(observatories, "screen", request, reply);
     if (!screen) return reply;
     const child = (await children.list(screen.chartId)).find((c) => c.id === request.params.childId);
     if (!child) return reply.code(404).send({ error: "no such child" });
-    return { child: { ...child, balance: await stars.balance(screen.chartId, child.id) } };
+    return { child: { ...child, ...(await stars.totals(screen.chartId, child.id)) } };
   });
 
   app.get<{ Params: { childId: string } }>("/api/children/:childId/star-history", async (request, reply) => {
