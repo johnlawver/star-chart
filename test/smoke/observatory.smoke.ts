@@ -136,7 +136,9 @@ async function observatoryWithNova() {
     const { tickets } = await grownUp("GET", "/api/tickets?state=handed-in");
     for (const ticket of tickets) await grownUp("POST", `/api/tickets/${ticket.id}/approve`, {});
   };
-  return { printJobs, scanner, openScreen, approveHandedIn, close };
+  /** A grown-up changes a store item's price. */
+  const setPrice = (itemId: string, price: number) => grownUp("PATCH", `/api/store-items/${itemId}`, { price });
+  return { printJobs, scanner, openScreen, approveHandedIn, setPrice, close };
 }
 
 // The frame presents itself as a 1280×800 landscape window though it hangs portrait, so its kiosk address asks the stage
@@ -169,8 +171,10 @@ test.each([
   await page.close();
 });
 
-test("stars approved since a child's last visit fly into their jar once, and she can see her sky and spend them in the store", async () => {
-  const { printJobs, scanner, openScreen, approveHandedIn, close } = await observatoryWithNova();
+test("stars approved since a child's last visit fly into their jar once, and she can see her sky, shop and dress her mascot", async () => {
+  const { printJobs, scanner, openScreen, approveHandedIn, setPrice, close } = await observatoryWithNova();
+  await setPrice("rocket", 1);
+  await setPrice("crown", 1);
   const { page, go } = await openScreen({ width: 800, height: 1280 });
   await go();
   await page.getByRole("button", { name: /Nova/ }).click();
@@ -202,14 +206,23 @@ test("stars approved since a child's last visit fly into their jar once, and she
   await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("button", { name: /Chores/ }).waitFor();
 
-  // The store: Nova spends her 2 stars on the Rocket sticker, and finds it in her Sticker Book.
+  // The store: Nova spends her 2 stars on the Rocket sticker and the Crown (both 1 star today), and puts the Crown on.
   await page.getByRole("button", { name: "Store" }).click();
-  await page.getByRole("button", { name: "Buy Rocket for 2 stars" }).click();
+  await page.getByRole("button", { name: "Buy Rocket for 1 star" }).click();
+  await page.getByRole("button", { name: "My stars: 1" }).waitFor();
+  await page.getByRole("button", { name: "Buy Crown for 1 star" }).click();
   await page.getByRole("button", { name: "My stars: 0" }).waitFor();
   expect(await page.getByRole("button", { name: "Rocket, yours" }).isDisabled()).toBe(true);
   expect(await page.getByRole("button", { name: "Buy Moon for 2 stars" }).isDisabled()).toBe(true);
+  await page.getByRole("button", { name: "Wear Crown" }).click();
+  await page.locator(".dome-mascot [data-hat='crown']").waitFor();
   await page.getByRole("button", { name: "Sticker Book" }).click();
   await page.getByRole("img", { name: "Rocket" }).waitFor();
+
+  // Her mascot wears the Crown on the Who are you screen too.
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: /Nova/ }).locator("[data-hat='crown']").waitFor();
   close();
   await page.close();
 });

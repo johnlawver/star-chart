@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Icon } from "../../shared/icons.js";
 import { StarHistoryList, type StarHistory } from "../../shared/star-history.js";
-import { Art, Confetti, Constellation, FlyingStars, Mascot, StarJar, jarCapacity } from "../art/components.js";
+import { Art, Confetti, Constellation, FlyingStars, Mascot, StarJar, jarCapacity, type Wearing } from "../art/components.js";
 import { skyFor } from "../art/constellations.js";
 import { artUrl } from "../art/files.js";
 import { jarSizes, storeItemArt } from "../art/manifest.js";
@@ -12,6 +12,8 @@ export interface Child {
   id: string;
   nickname: string;
   displayStyle: "pictures" | "words";
+  /** What their mascot is wearing (from the who-are-you list). */
+  wearing?: Wearing;
 }
 
 /** Something a child can print: a chore, or a quiz topic. */
@@ -58,11 +60,26 @@ function jarWidth(earned: number) {
   return 190 + (jarSizes as readonly number[]).indexOf(jarCapacity(earned)) * 14;
 }
 
-/** Until the store (tickets 07 and 09), every mascot is bare. */
-const bare = { hat: null, hair: null };
+/** A mascot wearing nothing in particular. */
+const bare: Wearing = { hat: null, hair: null };
+
+/** A family's own outfit pictures (by item id), from the store, so the mascot wears those instead of the built-in ones. */
+export function outfitPictures(store: StoreItem[] | undefined): Record<string, string> {
+  return Object.fromEntries((store ?? []).flatMap((item) => (item.kind !== "sticker" && item.art ? [[item.id, item.art]] : [])));
+}
 
 /** Who are you: every child as a big planet, with their mascot and nickname. */
-export function WhoAreYou({ children, onChoose, onGrownUps }: { children: Child[]; onChoose: (child: Child) => void; onGrownUps: () => void }) {
+export function WhoAreYou({
+  children,
+  pictures,
+  onChoose,
+  onGrownUps,
+}: {
+  children: Child[];
+  pictures: Record<string, string>;
+  onChoose: (child: Child) => void;
+  onGrownUps: () => void;
+}) {
   return (
     <div className="dome-screen">
       <div className="dome-big" style={{ top: 90 }}>
@@ -72,7 +89,7 @@ export function WhoAreYou({ children, onChoose, onGrownUps }: { children: Child[
         {children.length === 0 && <p className="dome-medium">No children yet. A grown-up can add them in the Control Center.</p>}
         {children.map((child, i) => (
           <button key={child.id} className="dome-planet" style={{ background: categoryColours[i % categoryColours.length] }} onClick={() => onChoose(child)}>
-            <Mascot wearing={bare} size={170} />
+            <Mascot wearing={child.wearing ?? bare} pictures={pictures} size={170} />
             <span>{child.nickname}</span>
           </button>
         ))}
@@ -136,9 +153,11 @@ export function ChildScreen({
   history,
   store,
   owned,
+  wearing,
   onArrived,
   onPrint,
   onBuy,
+  onWear,
   onShowHistory,
   onLeave,
 }: {
@@ -150,10 +169,13 @@ export function ChildScreen({
   history: StarHistory | undefined;
   store: StoreItem[] | undefined;
   owned: string[];
+  wearing: Wearing;
   onArrived: () => void;
   onPrint: (choice: MenuChoice) => void;
   /** Buys an item; resolves true if it was bought. */
   onBuy: (item: StoreItem) => Promise<boolean>;
+  /** Puts an owned outfit on, or takes it off if it's being worn. */
+  onWear: (item: StoreItem) => void;
   onShowHistory: (show: boolean) => void;
   onLeave: () => void;
 }) {
@@ -196,7 +218,7 @@ export function ChildScreen({
           </button>
         )}
         <div className="dome-mascot anim-hop">
-          <Mascot wearing={bare} mood={arriving ? "wow" : "happy"} size={230} />
+          <Mascot wearing={wearing} pictures={outfitPictures(store)} mood={arriving ? "wow" : "happy"} size={230} />
         </div>
       </div>
 
@@ -214,7 +236,7 @@ export function ChildScreen({
       ) : panel === "stickers" ? (
         <StickerBook owned={owned} store={store} pictures={pictures} onShop={() => setPanel("store")} />
       ) : panel === "store" ? (
-        <Shop store={store} owned={owned} balance={balance ?? 0} pictures={pictures} onBuy={buy} />
+        <Shop store={store} owned={owned} wearing={wearing} balance={balance ?? 0} pictures={pictures} onBuy={buy} onWear={onWear} />
       ) : history ? (
         <div className="dome-panel" style={{ top: 620, bottom: 190 }}>
           <StarHistoryList history={history} />
@@ -267,19 +289,62 @@ export function ChildScreen({
  * The store, under the dome so the jar stays in sight: every item at its real size with its price. Items the child
  * can't afford yet are faded, and ones they own say so. Neither can be tapped.
  */
-function Shop({ store, owned, balance, pictures, onBuy }: { store: StoreItem[] | undefined; owned: string[]; balance: number; pictures: boolean; onBuy: (item: StoreItem) => void }) {
+function Shop({
+  store,
+  owned,
+  wearing,
+  balance,
+  pictures,
+  onBuy,
+  onWear,
+}: {
+  store: StoreItem[] | undefined;
+  owned: string[];
+  wearing: Wearing;
+  balance: number;
+  pictures: boolean;
+  onBuy: (item: StoreItem) => void;
+  onWear: (item: StoreItem) => void;
+}) {
+  const outfits = outfitPictures(store);
   return (
     <div className="dome-planets dome-shop">
       {store === undefined && <p className="dome-medium">Loading…</p>}
       {store?.map((item) => {
         const mine = owned.includes(item.id);
-        const label = mine ? `${item.name}, yours` : `Buy ${item.name} for ${item.price} ${item.price === 1 ? "star" : "stars"}`;
+        const outfit = item.kind !== "sticker";
+        const worn = outfit && wearing[item.kind as "hat" | "hair"] === item.id;
+        // An owned outfit can be put on and taken off; an owned sticker is simply yours.
+        const label = !mine
+          ? `Buy ${item.name} for ${item.price} ${item.price === 1 ? "star" : "stars"}`
+          : outfit
+            ? `${worn ? "Take off" : "Wear"} ${item.name}`
+            : `${item.name}, yours`;
         return (
-          <button key={item.id} className={`dome-shelf-item ${mine ? "dome-owned" : ""}`} disabled={mine || item.price > balance} onClick={() => onBuy(item)} aria-label={label}>
-            <ItemPicture item={item} width={110} />
+          <button
+            key={item.id}
+            className={`dome-shelf-item ${mine ? "dome-owned" : ""} ${worn ? "dome-worn" : ""}`}
+            disabled={mine ? !outfit : item.price > balance}
+            onClick={() => (mine ? onWear(item) : onBuy(item))}
+            aria-label={label}
+            aria-pressed={outfit && mine ? worn : undefined}
+          >
+            {outfit ? (
+              <Mascot wearing={{ hat: item.kind === "hat" ? item.id : null, hair: item.kind === "hair" ? item.id : null }} pictures={outfits} size={110} />
+            ) : (
+              <ItemPicture item={item} width={110} />
+            )}
             {!pictures && <span className="dome-shelf-name">{item.name}</span>}
             <span className="dome-price">
-              {mine ? (
+              {mine && outfit ? (
+                pictures ? (
+                  worn ? "✓" : ""
+                ) : worn ? (
+                  "Wearing"
+                ) : (
+                  "Wear"
+                )
+              ) : mine ? (
                 "✓"
               ) : (
                 <>

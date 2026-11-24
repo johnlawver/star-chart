@@ -29,6 +29,8 @@ export interface Tables {
     display_style: DisplayStyle;
     created_at: Date;
     last_visit_at: Date | null;
+    wearing_hat: string | null;
+    wearing_hair: string | null;
   };
   observatories: {
     id: Generated<string>;

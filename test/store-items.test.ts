@@ -130,7 +130,7 @@ describe("adding to the store", () => {
 
     const { items, available } = (await chart.owner.get("/api/store-items")).body;
 
-    expect(items.map((item: { id: string }) => item.id)).toEqual(["rocket", "moon", "planet", "alien", "comet", "ufo"]);
+    expect(items.map((item: { id: string }) => item.id)).toEqual(["rocket", "moon", "planet", "alien", "comet", "crown", "wizard", "helmet", "spiky", "curly", "ufo"]);
     expect(available).toEqual([
       { id: "astronaut", kind: "sticker", name: "Astronaut", price: 5 },
       { id: "telescope", kind: "sticker", name: "Telescope", price: 4 },

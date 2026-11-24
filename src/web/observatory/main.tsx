@@ -14,6 +14,7 @@ import {
   type Child,
   type Menu,
   type MenuChoice,
+  outfitPictures,
   type ScanOutcome,
   type StoreItem,
 } from "./dome/screens.js";
@@ -102,6 +103,7 @@ type Showing =
 function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnpaired: () => void }) {
   const [children, setChildren] = useState<Child[]>([]);
   const [showing, setShowing] = useState<Showing>({ screen: "who" });
+  const [store, setStore] = useState<StoreItem[] | undefined>();
   const [scanned, setScanned] = useState<ScanOutcome | undefined>();
   const [parts, setParts] = useState<{ printer: string; scanner: string } | undefined>();
   const backToStart = () => setShowing({ screen: "who" });
@@ -133,13 +135,19 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
     return () => clearTimeout(timer);
   }, [scanned]);
 
+  // Who are you is shown fresh each time, so a mascot dressed a moment ago appears dressed on its planet.
   useEffect(() => {
+    if (showing.screen !== "who") return;
     void (async () => {
-      const result = await api("GET", "/api/observatory/children", undefined, deviceToken);
+      const [result, items] = await Promise.all([
+        api("GET", "/api/observatory/children", undefined, deviceToken),
+        api("GET", "/api/observatory/store", undefined, deviceToken),
+      ]);
       if (result.status === 401) return onUnpaired();
       if (result.ok) setChildren(result.data.children);
+      if (items.ok) setStore(items.data.items);
     })();
-  }, [deviceToken]);
+  }, [deviceToken, showing.screen]);
 
   // Printed tickets and messages about them go back to Who are you after a moment, ready for the next child.
   useEffect(() => {
@@ -177,7 +185,7 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
         </p>
       )}
       {showing.screen === "who" && (
-        <WhoAreYou children={children} onChoose={(child) => setShowing({ screen: "child", child })} onGrownUps={() => setShowing({ screen: "unlock" })} />
+        <WhoAreYou children={children} pictures={outfitPictures(store)} onChoose={(child) => setShowing({ screen: "child", child })} onGrownUps={() => setShowing({ screen: "unlock" })} />
       )}
       {showing.screen === "unlock" && <Unlock deviceToken={deviceToken} onCancel={backToStart} />}
       {showing.screen === "child" && (
@@ -206,6 +214,7 @@ function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; dev
   const [arrived, setArrived] = useState(false);
   const [store, setStore] = useState<StoreItem[] | undefined>();
   const [owned, setOwned] = useState<string[]>([]);
+  const [wearing, setWearing] = useState<{ hat: string | null; hair: string | null }>(child.wearing ?? { hat: null, hair: null });
   const [menu, setMenu] = useState<Menu | undefined>();
   const [history, setHistory] = useState<StarHistory | undefined>();
 
@@ -219,6 +228,7 @@ function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; dev
       if (view.ok) {
         setTotals({ balance: view.data.child.balance, earned: view.data.child.earned, newStars: view.data.child.newStars });
         setOwned(view.data.child.wardrobe.owned);
+        setWearing(view.data.child.wardrobe.wearing);
       }
       if (items.ok) setStore(items.data.items);
       if (choices.ok) setMenu(choices.data);
@@ -248,6 +258,15 @@ function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; dev
     return result.ok;
   };
 
+  // Tapping an owned outfit puts it on (replacing whatever was in its place), or takes it off if it's being worn.
+  const wear = async (item: StoreItem) => {
+    if (item.kind === "sticker") return;
+    const place = item.kind;
+    const next = { ...wearing, [place]: wearing[place] === item.id ? null : item.id };
+    const result = await api("PUT", `/api/observatory/children/${child.id}/mascot`, next, deviceToken);
+    if (result.ok) setWearing(result.data.wearing);
+  };
+
   const showHistory = async (show: boolean) => {
     if (!show) return setHistory(undefined);
     const result = await api("GET", `/api/observatory/children/${child.id}/star-history`, undefined, deviceToken);
@@ -263,7 +282,9 @@ function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; dev
       onArrived={() => setArrived(true)}
       store={store}
       owned={owned}
+      wearing={wearing}
       onBuy={buy}
+      onWear={wear}
       menu={menu}
       history={history}
       onPrint={onPrint}

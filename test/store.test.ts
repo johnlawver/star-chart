@@ -24,7 +24,7 @@ async function nova() {
 }
 
 describe("the store", () => {
-  test("a new chart's store starts with the stickers, in order, at their starting prices", async () => {
+  test("a new chart's store starts with the stickers and outfits, in order, at their starting prices", async () => {
     const { chart, printer } = await nova();
 
     const store = await chart.screen.get("/api/observatory/store");
@@ -36,6 +36,11 @@ describe("the store", () => {
       { id: "planet", kind: "sticker", name: "Ringed planet", price: 3, art: null },
       { id: "alien", kind: "sticker", name: "Friendly alien", price: 4, art: null },
       { id: "comet", kind: "sticker", name: "Comet", price: 3, art: null },
+      { id: "crown", kind: "hat", name: "Crown", price: 6, art: null },
+      { id: "wizard", kind: "hat", name: "Wizard hat", price: 5, art: null },
+      { id: "helmet", kind: "hat", name: "Space helmet", price: 8, art: null },
+      { id: "spiky", kind: "hair", name: "Spiky hair", price: 4, art: null },
+      { id: "curly", kind: "hair", name: "Curly hair", price: 4, art: null },
     ]);
     printer.close();
   });
@@ -138,13 +143,7 @@ describe("buying from the store", () => {
     printer.close();
   });
 
-  test("outfits aren't for sale yet (they arrive with the mascot's wardrobe)", async () => {
-    const { buy, earn, printer } = await nova();
-    await earn(10);
 
-    expect((await buy("crown")).status).toBe(404);
-    printer.close();
-  });
 });
 
 describe("keeping charts apart", () => {

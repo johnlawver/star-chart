@@ -1,3 +1,4 @@
+import type { Store } from "../store/store.js";
 import type { FastifyInstance } from "fastify";
 import { requireGrownUp, sessionCookie, sessionCookieOptions } from "../people/authenticate.js";
 import type { Children } from "../people/children.js";
@@ -24,6 +25,7 @@ export async function observatoryRoutes(
   children: Children,
   observatories: Observatories,
   liveParts: LiveParts,
+  store: Store,
 ) {
   // Pairing an observatory's screen. The grown-up who signed in on it is then signed out,
   // so the children are never left in a grown-up's session.
@@ -247,7 +249,9 @@ export async function observatoryRoutes(
   app.get("/api/observatory/children", async (request, reply) => {
     const screen = await requireDevice(observatories, "screen", request, reply);
     if (!screen) return reply;
-    return { children: await children.list(screen.chartId) };
+    // Who are you: every child, with what their mascot is wearing, so their planet shows them dressed.
+    const [list, wearing] = await Promise.all([children.list(screen.chartId), store.wearingByChild(screen.chartId)]);
+    return { children: list.map((child) => ({ ...child, wearing: wearing.get(child.id) ?? { hat: null, hair: null } })) };
   });
 }
 

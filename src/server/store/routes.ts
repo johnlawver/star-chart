@@ -92,6 +92,29 @@ export async function storeRoutes(app: FastifyInstance, people: People, observat
     },
   );
 
+  // A child dresses their mascot at the observatory: a hat and a hairstyle they own, or nothing.
+  app.put<{ Params: { childId: string }; Body: { hat: string | null; hair: string | null } }>(
+    "/api/observatory/children/:childId/mascot",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { hat: { type: ["string", "null"], maxLength: 40 }, hair: { type: ["string", "null"], maxLength: 40 } },
+          required: ["hat", "hair"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const screen = await requireDevice(observatories, "screen", request, reply);
+      if (!screen) return reply;
+      const dressed = await store.wear(screen.chartId, request.params.childId, request.body);
+      if (dressed === "not-found") return reply.code(404).send({ error: "no such child" });
+      if (dressed === "not-theirs") return reply.code(409).send({ error: "they can only wear outfits they own, each in its place" });
+      return dressed;
+    },
+  );
+
   // A child buys something with their stars, at the observatory. No grown-up needed.
   app.post<{ Params: { childId: string }; Body: { storeItemId: string } }>(
     "/api/observatory/children/:childId/purchases",

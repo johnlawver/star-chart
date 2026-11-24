@@ -36,19 +36,37 @@ export interface Wearing {
   hair: string | null;
 }
 
-/** The mascot: hair behind the body, then the body, the face for its mood, and a hat on top, all on one canvas. */
-export function Mascot({ wearing, mood = "happy", size = 220 }: { wearing: Wearing; mood?: "happy" | "wow"; size?: number }) {
-  const layers = [
-    wearing.hair && `outfits/hair-${wearing.hair}`,
-    "mascot/body",
-    `mascot/mood-${mood}`,
-    wearing.hat && `outfits/hat-${wearing.hat}`,
-  ].filter((id): id is string => Boolean(id));
+/**
+ * The mascot: hair behind the body, then the body, the face for its mood, and a hat on top, all on one canvas.
+ * `pictures` holds a family's own pictures for outfits (by item id), which replace the built-in ones.
+ */
+export function Mascot({
+  wearing,
+  mood = "happy",
+  size = 220,
+  pictures = {},
+}: {
+  wearing: Wearing;
+  mood?: "happy" | "wow";
+  size?: number;
+  pictures?: Record<string, string>;
+}) {
+  const outfit = (itemId: string | null, kind: "hat" | "hair") => itemId && { id: `outfits/${kind}-${itemId}`, url: pictures[itemId] };
+  const layers = [outfit(wearing.hair, "hair"), { id: "mascot/body" }, { id: `mascot/mood-${mood}` }, outfit(wearing.hat, "hat")].filter(
+    (layer): layer is { id: string; url?: string } => Boolean(layer),
+  );
   return (
-    <div className="art-layers" style={{ width: size, height: size }} role="img" aria-label="Your mascot, Comet">
-      {layers.map((id) => (
-        <Art key={id} id={id} width={size} />
-      ))}
+    <div
+      className="art-layers"
+      style={{ width: size, height: size }}
+      role="img"
+      aria-label="Your mascot, Comet"
+      data-hat={wearing.hat ?? undefined}
+      data-hair={wearing.hair ?? undefined}
+    >
+      {layers.map((layer) =>
+        layer.url ? <img key={layer.id} src={layer.url} width={size} height={size} alt="" draggable={false} /> : <Art key={layer.id} id={layer.id} width={size} />,
+      )}
     </div>
   );
 }

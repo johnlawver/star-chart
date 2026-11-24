@@ -47,6 +47,7 @@ export const domeCss = `
 .dome-shelf-item:active { transform: translateY(6px); box-shadow: 0 2px 0 #c4b6ef; }
 .dome-shelf-item[disabled] { opacity: 0.45; }
 .dome-shelf-item.dome-owned { opacity: 1; background: #e6f7e2; box-shadow: 0 8px 0 #9bd18f; }
+.dome-shelf-item.dome-worn { background: #fff3c4; box-shadow: 0 8px 0 #e6c24d; }
 .dome-shelf-name { font-size: 20px; line-height: 1.1; }
 .dome-price { display: flex; align-items: center; font-size: 30px; }
 .dome-price img { margin-left: 4px; }

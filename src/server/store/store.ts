@@ -7,8 +7,8 @@ import { isId } from "../ids.js";
 import { balanceIn } from "../stars/stars.js";
 import { builtInItem, builtInItems, type StoreItemKind } from "./items.js";
 
-/** What the store sells for now. Outfits join when the mascot can wear them (ticket 09). */
-const forSale: StoreItemKind[] = ["sticker"];
+/** What the store sells: stickers, and outfits for the mascot. */
+const forSale: StoreItemKind[] = ["sticker", "hat", "hair"];
 
 export interface StoreItem {
   id: string;
@@ -54,14 +54,11 @@ export function createStore(db: Database, clock: Clock) {
   }
 
   async function wardrobeIn(trx: Database, chartId: string, childId: string): Promise<Wardrobe> {
-    const owned = await trx
-      .selectFrom("purchases")
-      .select("item_id")
-      .where("chart_id", "=", chartId)
-      .where("child_id", "=", childId)
-      .orderBy("created_at")
-      .execute();
-    return { owned: owned.map((row) => row.item_id), wearing: { hat: null, hair: null } };
+    const [owned, child] = await Promise.all([
+      trx.selectFrom("purchases").select("item_id").where("chart_id", "=", chartId).where("child_id", "=", childId).orderBy("created_at").execute(),
+      trx.selectFrom("children").select(["wearing_hat", "wearing_hair"]).where("chart_id", "=", chartId).where("id", "=", childId).executeTakeFirst(),
+    ]);
+    return { owned: owned.map((row) => row.item_id), wearing: { hat: child?.wearing_hat ?? null, hair: child?.wearing_hair ?? null } };
   }
 
   /** Puts an item at the end of the chart's store. False if it's already there. */
@@ -130,6 +127,32 @@ export function createStore(db: Database, clock: Clock) {
 
     /** The chart's store, in order. */
     list: (chartId: string) => itemsFor(db, chartId),
+
+    /**
+     * Dresses a child's mascot: each of hat and hair is an item they own of that kind, or null to take it off. The
+     * screen only offers what they own; this guards against anything else.
+     */
+    async wear(chartId: string, childId: string, wearing: Wardrobe["wearing"]): Promise<Wardrobe | "not-found" | "not-theirs"> {
+      if (!isId(childId)) return "not-found";
+      const child = await db.selectFrom("children").select("id").where("chart_id", "=", chartId).where("id", "=", childId).executeTakeFirst();
+      if (!child) return "not-found";
+      const { owned } = await wardrobeIn(db, chartId, childId);
+      const fits = (itemId: string | null, kind: StoreItemKind) => itemId === null || (owned.includes(itemId) && builtInItem(itemId)?.kind === kind);
+      if (!fits(wearing.hat, "hat") || !fits(wearing.hair, "hair")) return "not-theirs";
+      await db
+        .updateTable("children")
+        .set({ wearing_hat: wearing.hat, wearing_hair: wearing.hair })
+        .where("chart_id", "=", chartId)
+        .where("id", "=", childId)
+        .execute();
+      return wardrobeIn(db, chartId, childId);
+    },
+
+    /** What each of the chart's children is wearing, by child id. */
+    async wearingByChild(chartId: string): Promise<Map<string, Wardrobe["wearing"]>> {
+      const rows = await db.selectFrom("children").select(["id", "wearing_hat", "wearing_hair"]).where("chart_id", "=", chartId).execute();
+      return new Map(rows.map((row) => [row.id, { hat: row.wearing_hat, hair: row.wearing_hair }]));
+    },
 
     /** What a child owns and wears. */
     wardrobe: (chartId: string, childId: string) => wardrobeIn(db, chartId, childId),
