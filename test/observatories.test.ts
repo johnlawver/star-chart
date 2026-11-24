@@ -18,8 +18,8 @@ describe("pairing an observatory", () => {
     screen.useDeviceToken(paired.body.deviceToken);
     const children = (await screen.get("/api/observatory/children")).body.children;
     expect(children).toEqual([
-      { id: expect.any(String), nickname: "Pip", displayStyle: "pictures" },
       { id: expect.any(String), nickname: "Nova", displayStyle: "words" },
+      { id: expect.any(String), nickname: "Pip", displayStyle: "pictures" },
     ]);
   });
 

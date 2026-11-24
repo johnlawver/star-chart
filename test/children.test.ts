@@ -14,8 +14,8 @@ describe("children", () => {
     expect(added.status).toBe(201);
     const children = (await grownUp.get("/api/children")).body.children;
     expect(children).toEqual([
-      { id: expect.any(String), nickname: "Pip", displayStyle: "pictures" },
       { id: expect.any(String), nickname: "Nova", displayStyle: "words" },
+      { id: expect.any(String), nickname: "Pip", displayStyle: "pictures" },
     ]);
   });
 

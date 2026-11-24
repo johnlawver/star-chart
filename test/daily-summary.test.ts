@@ -36,7 +36,7 @@ describe("the daily summary", () => {
     expect(summaries()).toEqual([
       {
         title: "Today at Our House",
-        body: "Pip: 0 ★, nothing open. Nova: 5 ★, 1 open ticket.",
+        body: "Nova: 5 ★, 1 open ticket. Pip: 0 ★, nothing open.",
         url: "https://star-chart.test/",
         tag: "daily-summary",
         badge: 0,
