@@ -194,3 +194,39 @@ test("the Art Gallery shows every piece of observatory art, and none of it is mi
   expect(errors).toEqual([]);
   await page.close();
 });
+
+test("in the Control Center, removing and renaming ask in the page (the frame's kiosk ignores browser dialogs)", async () => {
+  const page = await browser.newPage({ viewport: { width: 800, height: 1280 } });
+  const browserDialogs: string[] = [];
+  page.on("dialog", (dialog) => {
+    browserDialogs.push(dialog.message());
+    void dialog.dismiss();
+  });
+  const credentials = { email: uniqueEmail("dialogs"), password: "correct horse battery staple" };
+  await page.request.post(`${base}/api/sign-up`, { data: { ...credentials, chartName: "Dialogs", timeZone: "America/Chicago" } });
+  await page.request.post(`${base}/api/children`, { data: { nickname: "Nova", displayStyle: "words" } });
+  await page.goto(`${base}/`);
+  const children = page.locator("section", { has: page.getByRole("heading", { name: "Children" }) });
+  await children.getByText("Nova", { exact: true }).waitFor();
+
+  // Renaming asks for the new nickname, filled in with the old one.
+  await children.getByRole("button", { name: "Rename" }).click();
+  const rename = page.getByRole("dialog", { name: "New nickname" });
+  await expect.poll(() => rename.getByRole("textbox").inputValue()).toBe("Nova");
+  await rename.getByRole("textbox").fill("Luna");
+  await rename.getByRole("button", { name: "Rename" }).click();
+  await children.getByText("Luna", { exact: true }).waitFor();
+
+  // Removing asks first. Cancelling keeps the child; confirming removes them.
+  await children.getByRole("button", { name: "Remove" }).click();
+  const remove = page.getByRole("dialog", { name: /Remove Luna\?/ });
+  await remove.getByRole("button", { name: "Cancel" }).click();
+  await expect.poll(() => remove.count()).toBe(0);
+  expect(await children.getByText("Luna", { exact: true }).count()).toBe(1);
+
+  await children.getByRole("button", { name: "Remove" }).click();
+  await remove.getByRole("button", { name: "Remove Luna" }).click();
+  await expect.poll(() => children.getByText("No children yet.").isVisible()).toBe(true);
+  expect(browserDialogs).toEqual([]);
+  await page.close();
+});

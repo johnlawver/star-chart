@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import QRCode from "qrcode";
+import { askForText, confirmFirst, Dialogs } from "../shared/dialog.js";
 import { stored } from "../shared/api.js";
 import { Icon, IconPicker } from "../shared/icons.js";
 import { StarHistoryList, type StarHistory } from "../shared/star-history.js";
@@ -168,16 +169,16 @@ function ChildrenSection() {
               <option value="words">words</option>
             </select>{" "}
             <button
-              onClick={() => {
-                const nickname = window.prompt("New nickname", child.nickname);
+              onClick={async () => {
+                const nickname = await askForText("New nickname", { action: "Rename", defaultValue: child.nickname });
                 if (nickname) void run(api("PATCH", `/api/children/${child.id}`, { nickname }));
               }}
             >
               Rename
             </button>{" "}
             <button
-              onClick={() => {
-                if (window.confirm(`Remove ${child.nickname}? This permanently deletes their stars, tickets and history. It can't be undone.`)) {
+              onClick={async () => {
+                if (await confirmFirst(`Remove ${child.nickname}? This permanently deletes their stars, tickets and history. It can't be undone.`, { action: `Remove ${child.nickname}` })) {
                   void run(api("DELETE", `/api/children/${child.id}`));
                 }
               }}
@@ -252,21 +253,21 @@ function GrownUpsSection({ me }: { me: Me }) {
     (mine === "owner" && theirs !== "owner") || (mine === "admin" && theirs === "grown-up");
 
   const remove = async (grownUp: { id: string; email: string }) => {
-    if (!window.confirm(`Remove ${grownUp.email}? Their login is deleted.`)) return;
+    if (!(await confirmFirst(`Remove ${grownUp.email}? Their login is deleted.`, { action: "Remove" }))) return;
     const result = await api("DELETE", `/api/grown-ups/${grownUp.id}`);
     setMessage(result.ok ? undefined : result.data?.error);
     await load();
   };
 
   const handOver = async (grownUp: { id: string; email: string }) => {
-    if (!window.confirm(`Make ${grownUp.email} the owner? You'll become an admin.`)) return;
+    if (!(await confirmFirst(`Make ${grownUp.email} the owner? You'll become an admin.`, { action: "Make them the owner" }))) return;
     const result = await api("POST", "/api/ownership", { grownUpId: grownUp.id });
     if (result.ok) location.reload();
     else setMessage(result.data?.error);
   };
 
   const leave = async () => {
-    if (!window.confirm("Leave this chart? Your login is deleted.")) return;
+    if (!(await confirmFirst("Leave this chart? Your login is deleted.", { action: "Leave" }))) return;
     const result = await api("DELETE", "/api/me");
     if (result.ok) location.reload();
     else setMessage(result.data?.error);
@@ -429,7 +430,7 @@ function ObservatoriesSection() {
             {observatory.parts.map((part) => `${part.online ? "🟢" : "⚪"} ${part.kind}`).join(", ")}{" "}
             <button
               onClick={async () => {
-                if (window.confirm("Unpair this observatory? Its screen, printer and scanner will all need pairing again.")) {
+                if (await confirmFirst("Unpair this observatory? Its screen, printer and scanner will all need pairing again.", { action: "Unpair" })) {
                   await api("DELETE", `/api/observatories/${observatory.id}`);
                   await load();
                 }
@@ -542,14 +543,14 @@ function WaitingSection() {
     );
   };
 
-  const reject = (ticket: WaitingTicket) => {
-    const note = window.prompt(`Why isn't "${ticket.title}" done yet? (optional)`);
+  const reject = async (ticket: WaitingTicket) => {
+    const note = await askForText(`Why isn't "${ticket.title}" done yet? (optional)`, { action: "Not done yet", optional: true });
     if (note === null) return;
-    return act(api("POST", `/api/tickets/${ticket.id}/reject`, note.trim() ? { note } : {}));
+    return act(api("POST", `/api/tickets/${ticket.id}/reject`, note ? { note } : {}));
   };
 
-  const dismiss = (ticket: WaitingTicket) => {
-    if (!window.confirm(`Dismiss ${ticket.childNickname}'s "${ticket.title}" ticket? No stars will be given.`)) return;
+  const dismiss = async (ticket: WaitingTicket) => {
+    if (!(await confirmFirst(`Dismiss ${ticket.childNickname}'s "${ticket.title}" ticket? No stars will be given.`, { action: "Dismiss" }))) return;
     return act(api("POST", `/api/tickets/${ticket.id}/dismiss`, {}));
   };
 
@@ -909,5 +910,6 @@ if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw.js"
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ControlCenter />
+    <Dialogs />
   </StrictMode>,
 );

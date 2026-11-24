@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../shared/api.js";
+import { confirmFirst } from "../shared/dialog.js";
 import { Icon, IconPicker } from "../shared/icons.js";
 import { WriteQuiz } from "./quizzes.js";
 
@@ -117,8 +118,8 @@ export function TasksSection() {
               <IconPicker initial={category.icon} /> <button type="submit">Save</button>{" "}
               <button
                 type="button"
-                onClick={() => {
-                  if (window.confirm(`Remove the ${category.name} category? Its tasks stay, on the main screen.`)) {
+                onClick={async () => {
+                  if (await confirmFirst(`Remove the ${category.name} category? Its tasks stay, on the main screen.`, { action: "Remove" })) {
                     void run(api("DELETE", `/api/categories/${category.id}`), "Category removed; its tasks are on the main screen.");
                   }
                 }}
@@ -157,8 +158,8 @@ export function TasksSection() {
             />
             <button
               type="button"
-              onClick={() => {
-                if (window.confirm(`Remove "${chore.name}"? Stars already earned stay.`)) {
+              onClick={async () => {
+                if (await confirmFirst(`Remove "${chore.name}"? Stars already earned stay.`, { action: "Remove" })) {
                   void run(api("DELETE", `/api/chores/${chore.id}`), "Chore removed.");
                 }
               }}
@@ -183,8 +184,8 @@ export function TasksSection() {
             />
             <button
               type="button"
-              onClick={() => {
-                if (window.confirm(`Remove the "${topic.name}" topic? Stars already earned stay.`)) {
+              onClick={async () => {
+                if (await confirmFirst(`Remove the "${topic.name}" topic? Stars already earned stay.`, { action: "Remove" })) {
                   void run(api("DELETE", `/api/topics/${topic.id}`), "Topic removed.");
                 }
               }}

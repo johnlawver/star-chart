@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { animations } from "../src/web/observatory/art/animations.js";
 import { findFrameUnsafeColours } from "../vite/frame-safe.js";
@@ -37,5 +39,28 @@ describe("colours the frame can read", () => {
     const qrcode = "dark:hex2rgba(e.color.dark||\"#000000ff\"),light:hex2rgba(e.color.light||\"#ffffffff\")";
 
     expect(findFrameUnsafeColours(qrcode)).toEqual([]);
+  });
+});
+
+describe("pages that work in the frame's kiosk", () => {
+  // The kiosk silently ignores browser dialogs, and a new window would strand you with no way back.
+  const webFiles = readdirSync("src/web", { recursive: true, encoding: "utf8" })
+    .filter((path) => /\.(tsx?|html)$/.test(path))
+    .map((path) => join("src/web", path));
+
+  test("nothing uses alert, confirm or prompt", () => {
+    const uses = webFiles.flatMap((file) =>
+      readFileSync(file, "utf8")
+        .split("\n")
+        .flatMap((line, index) => (/\b(alert|confirm|prompt)\s*\(/.test(line) && !/^\s*(\/\/|\*)/.test(line) ? [`${file}:${index + 1}`] : [])),
+    );
+
+    expect(uses).toEqual([]);
+  });
+
+  test("nothing opens a new window", () => {
+    const uses = webFiles.filter((file) => /target=["']_blank|window\.open\s*\(/.test(readFileSync(file, "utf8")));
+
+    expect(uses).toEqual([]);
   });
 });
