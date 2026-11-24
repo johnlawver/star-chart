@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { sql } from "kysely";
 import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
@@ -69,6 +70,11 @@ export async function buildApp({ db, clock, mailer, push, config }: AppDependenc
   const app = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
   await app.register(cookie);
   await app.register(websocket);
+  // For the host's health checks: up, and able to reach the database.
+  app.get("/api/health", async () => {
+    await sql`select 1`.execute(db);
+    return { ok: true };
+  });
   const people = createPeople(db, clock);
   await peopleRoutes(app, people, config, mailer);
   const children = createChildren(db, clock);
