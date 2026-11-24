@@ -4,7 +4,7 @@
 
 **Blocked by:** None (needs the hosting and domain choices below)
 
-**Status:** in progress. Deployed 2026-11-23; the frame certificate is the remaining blocker.
+**Status:** in progress. Deployed 2026-11-23. A Google Trust Services certificate (chaining to GlobalSign Root CA) has been served since 2026-11-24 (see `docs/deployment.md`). Next: confirm on the frame.
 
 **The certificate catch:** Android 6 lacks ISRG Root X1, so **Let's Encrypt certificates fail on the frame** (`net_error -202`). Most hosts (Fly, Render, Railway, Vercel, Tailscale Funnel) use Let's Encrypt. The frame report shows certificates from **Google Trust Services** loading (`*.workers.dev`). The public address must serve a certificate the frame trusts, which is why Cloudflare sits in front. Prove this on the frame before building on it. A throwaway Cloudflare quick tunnel to the dev server (`cloudflared tunnel --url http://localhost:4310`, random `trycloudflare.com` address) opened in the kiosk is a five-minute check.
 

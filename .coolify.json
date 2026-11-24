@@ -1,0 +1,17 @@
+{
+  "appName": "star-chart",
+  "domain": "star-chart.johnlawver.com",
+  "coolifyProjectId": "q4vtx1uer8ye3d9j4jbweljh",
+  "coolifyEnvironmentId": "dqhynxdrkzvkgn0qbudopo2k",
+  "coolifyAppId": "sbws0pz4ridedgmngflgj1uh",
+  "coolifyDatabaseId": "llo9mvgmx4aehjyopqf5yxho",
+  "secrets": "doppler",
+  "dopplerProject": "star-chart",
+  "codeAtRoot": true,
+  "repository": "https://github.com/johnlawver/star-chart",
+  "stack": {
+    "frontend": "react + vite",
+    "backend": "node + fastify (Dockerfile build pack, port 4310)",
+    "database": "postgresql 17 + kysely"
+  }
+}
