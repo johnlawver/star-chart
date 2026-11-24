@@ -262,7 +262,7 @@ The frame has been rooted and measured. Its report is "PF1007L Frame Dashboard R
   - HTML is served `Cache-Control: no-cache` (assets have hashed names), so a deploy shows up on the next reload.
 - **Idle:** after a minute with no taps, the child's screen goes back to Who are you, so the next child starts fresh and nothing sits still all day.
 - **Grown-ups on the frame:** the Control Center also opens on the frame, behind a PIN. Its `confirm()` and `prompt()` calls (removing a child, rejecting with a note, unpairing and so on) silently do nothing there, so they're replaced with in-page dialogs.
-- **Reaching the server:** the frame can't run Tailscale, can't resolve `.local` names, and doesn't trust Let's Encrypt certificates (no ISRG Root X1), so today's `https://…ts.net` address won't load on it. How it reaches the server is an open decision; see the "reaching the server" ticket.
+- **Reaching the server:** the frame can't run Tailscale or resolve `.local` names, so Star Chart is deployed as a public HTTPS website that everything reaches over Wi-Fi. The frame doesn't trust Let's Encrypt certificates (no ISRG Root X1), so the site sits behind Cloudflare, with a certificate from Google Trust Services, which the frame loads. See the "deploy as a public website" ticket.
 
 ## Testing Decisions
 
