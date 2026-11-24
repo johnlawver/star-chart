@@ -42,6 +42,14 @@ export async function chartWithObservatory(harness: Harness, chartName = "Our Ho
     screen,
     pairingCode,
 
+    /** Pairs a second observatory in the same chart (the owner signs in on it), and returns its screen. */
+    async pairAnotherScreen() {
+      const another = harness.newClient();
+      await another.post("/api/sign-in", { email: owner.email, password: owner.password });
+      another.useDeviceToken((await another.post("/api/observatories")).body.deviceToken);
+      return another;
+    },
+
     /** Pairs a printer to this observatory and opens its live connection, ready to receive print jobs. */
     connectPrinter: () => connectPart("printer"),
     /** Pairs a scanner to this observatory and opens its live connection, ready to send scanned codes. */

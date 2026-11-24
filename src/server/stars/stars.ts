@@ -88,20 +88,26 @@ export function createStars(db: Database, clock: Clock) {
     },
 
     /**
-     * A child's totals from the record: their balance (everything earned minus everything spent) and everything they've
-     * ever earned, which spending never lowers.
+     * A child's totals from the record: their balance (everything earned minus everything spent), everything they've
+     * ever earned (which spending never lowers), and their new stars: those earned since they last opened their screen,
+     * or since they were added if they never have.
      */
-    async totals(chartId: string, childId: string): Promise<{ balance: number; earned: number }> {
-      const { balance, earned } = await db
-        .selectFrom("star_movements")
+    async totals(chartId: string, childId: string): Promise<{ balance: number; earned: number; newStars: number }> {
+      const { balance, earned, newStars } = await db
+        .selectFrom("children")
+        .leftJoin("star_movements", (join) =>
+          join.onRef("star_movements.child_id", "=", "children.id").onRef("star_movements.chart_id", "=", "children.chart_id"),
+        )
         .select([
-          sql<string>`coalesce(sum(amount), 0)`.as("balance"),
-          sql<string>`coalesce(sum(amount) filter (where amount > 0), 0)`.as("earned"),
+          sql<string>`coalesce(sum(star_movements.amount), 0)`.as("balance"),
+          sql<string>`coalesce(sum(star_movements.amount) filter (where star_movements.amount > 0), 0)`.as("earned"),
+          sql<string>`coalesce(sum(star_movements.amount) filter (where star_movements.amount > 0
+            and star_movements.created_at > coalesce(children.last_visit_at, children.created_at)), 0)`.as("newStars"),
         ])
-        .where("chart_id", "=", chartId)
-        .where("child_id", "=", childId)
+        .where("children.chart_id", "=", chartId)
+        .where("children.id", "=", childId)
         .executeTakeFirstOrThrow();
-      return { balance: Number(balance), earned: Number(earned) };
+      return { balance: Number(balance), earned: Number(earned), newStars: Number(newStars) };
     },
 
     /** A child's balance: everything earned minus everything spent, always computed from the record. */

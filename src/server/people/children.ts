@@ -53,6 +53,21 @@ export function createChildren(db: Database, clock: Clock) {
     },
 
     /**
+     * Records that a child opened their screen at an observatory now, so stars approved before it are no longer new.
+     * Returns false if there's no such child in this chart.
+     */
+    async recordVisit(chartId: string, childId: string): Promise<boolean> {
+      if (!isId(childId)) return false;
+      const result = await db
+        .updateTable("children")
+        .set({ last_visit_at: clock.now() })
+        .where("chart_id", "=", chartId)
+        .where("id", "=", childId)
+        .executeTakeFirst();
+      return result.numUpdatedRows > 0n;
+    },
+
+    /**
      * Removes a child and, through the database's cascading deletes, everything that belongs to them.
      * Returns false if there's no such child in this chart.
      */

@@ -28,6 +28,7 @@ export interface Tables {
     nickname: string;
     display_style: DisplayStyle;
     created_at: Date;
+    last_visit_at: Date | null;
   };
   observatories: {
     id: Generated<string>;

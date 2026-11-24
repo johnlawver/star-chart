@@ -28,6 +28,7 @@ import * as quizOrder from "./0026-quiz-order.js";
 import * as feedKeys from "./0027-feed-keys.js";
 import * as tasksStandAlone from "./0028-tasks-stand-alone.js";
 import * as tasksKnowTheirChart from "./0029-tasks-know-their-chart.js";
+import * as childVisits from "./0030-child-visits.js";
 
 // Every schema change is a migration, listed here in order. Never edit one that has shipped; add a new one.
 export const migrations: Record<string, Migration> = {
@@ -60,4 +61,5 @@ export const migrations: Record<string, Migration> = {
   "0027-feed-keys": feedKeys,
   "0028-tasks-stand-alone": tasksStandAlone,
   "0029-tasks-know-their-chart": tasksKnowTheirChart,
+  "0030-child-visits": childVisits,
 };
