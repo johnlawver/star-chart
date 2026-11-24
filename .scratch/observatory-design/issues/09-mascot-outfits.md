@@ -1,8 +1,8 @@
-# 08: Mascot outfits
+# 09: Mascot outfits
 
 **What to build:** Children buy hats and hairstyles (**Outfits**) in the store and dress their **Mascot**: at most one hat and one hairstyle, removable again. The mascot wears the choice everywhere it appears, on every observatory.
 
-**Blocked by:** 06 (Store with stickers, and the Sticker Book)
+**Blocked by:** 07 (Store with stickers, and the Sticker Book)
 
 **Status:** ready-for-agent
 

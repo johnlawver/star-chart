@@ -1,4 +1,4 @@
-# 03: The Dome
+# 04: The Dome
 
 **What to build:** The real children's Observatory becomes design A ("The Dome"), using the art from 02 and the existing observatory actions:
 - Who are you: each child is a planet with their mascot on it.
@@ -10,7 +10,7 @@
 
 Same layout for every child; only words versus pictures differs.
 
-**Blocked by:** 02 (Art folder and Art Gallery)
+**Blocked by:** 02 (Art folder and Art Gallery), 03 (Ready for the frame)
 
 **Status:** ready-for-agent
 
@@ -24,6 +24,7 @@ Same layout for every child; only words versus pictures differs.
 - [ ] Tapping a task prints it: the ticket slides out with confetti. Print refusals show a friendly message: already have one of that kind out, printer offline, done for now.
 - [ ] Scan outcomes from the live connection get big celebrations or messages: handed in ("Great job! A grown-up will check it."), already done, waiting for a grown-up. Reprint requests still work.
 - [ ] The dock has big icon buttons, with words for children who see words. Back and the PIN button work now. Store, Sticker Book and My sky appear as their tickets land.
-- [ ] An 800×1280 portrait stage, scaled to fit, built for Chrome 101. Animations use only transform and opacity, and there are no unsupported CSS features or emoji.
+- [ ] It's built on the turning, scaling 800×1280 stage from 03, and follows the frame rules there: animations that end, single taps only, no `confirm`/`alert`, no new windows.
+- [ ] After a minute with no taps, a child's screen goes back to Who are you.
 - [ ] The smoke test drives it at 800×1280: pick a child, print a task, scan it, see the celebration.
 - [ ] CLAUDE.md's "keep the observatory screen plain until its design phase" is replaced by "the observatory follows The Dome (variant A); see `.scratch/observatory-design/verdict.md`".

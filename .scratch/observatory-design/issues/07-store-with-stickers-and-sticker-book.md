@@ -1,8 +1,8 @@
-# 06: Store with stickers, and the Sticker Book
+# 07: Store with stickers, and the Sticker Book
 
 **What to build:** A **Store** button on the dock opens the chart's store, where a child buys **Store Items** with stars. Stars fly out of the jar, and the purchase shows in their **Star History**. A **Sticker Book** button shows every sticker they've bought. Purchases come out of the same Balance as redemptions and need no approval. Each item can be bought once. This ticket sells the stickers; outfits come in 08.
 
-**Blocked by:** 01 (Star History rename), 03 (The Dome)
+**Blocked by:** 01 (Star History rename), 04 (The Dome)
 
 **Status:** ready-for-agent
 

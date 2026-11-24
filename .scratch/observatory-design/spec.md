@@ -122,10 +122,18 @@ The store comes with a built-in set of items and prices. For now, an admin adds 
 59. As the project owner, I want to open the Art Gallery on the real picture frame and my phone, so that I can judge size and smoothness on the hardware itself.
 60. As the project owner, I want the Art Gallery to flag an item whose file is missing, so that a replacement never silently breaks the observatory.
 
+### Living on the frame
+
+61. As a child, I want the observatory to be working when I walk up to it, even after a power cut or the server restarting, so that I never find a broken screen.
+62. As a child, I want my screen to go back to Who are you if I wander off, so that my brother doesn't land on my screen.
+63. As a grown-up, I want the observatory to fill the frame upright whichever way it reports itself, and to match how we hung it, so that nothing is sideways.
+64. As a grown-up, I want new versions of the observatory to show up on the frame by themselves, so that I never have to climb up and reload it.
+65. As a grown-up, I want the Control Center's "are you sure?" questions to work on the frame as they do on my phone, so that I can manage things there.
+
 ### Grown-ups and the screen
 
-61. As a grown-up, I want the Control Center on the observatory to open behind my PIN exactly as before, so that the redesign changes nothing for grown-ups.
-62. As a grown-up, I want the redesigned screen to run on an old Android 6 picture frame (about Chrome 101) and to keep its animations light, so that it works on the hardware we have.
+66. As a grown-up, I want the Control Center on the observatory to open behind my PIN exactly as before, so that the redesign changes nothing for grown-ups.
+67. As a grown-up, I want the redesigned screen to run on our Android 6 picture frame (WebView 106) and to keep its animations light, so that it works on the hardware we have.
 
 ## Implementation Decisions
 
@@ -221,12 +229,40 @@ The store comes with a built-in set of items and prices. For now, an admin adds 
 - **Jar size** is presentation, worked out from `earned` (from the prototype): capacity is the first of 10, 25, 50, 100, 200 that is greater than lifetime earned, otherwise 500. The fill shows the balance. Since balance ≤ earned, the jar never overflows.
 - **Constellations** are presentation, worked out from `earned`. There's an ordered built-in list of real constellations, starting with the prototype's five (Cassiopeia, Cygnus, Little Dipper, Big Dipper, Orion), extended to about 12. Stars fill them in order. Past the last one, the sky starts over as a second, golden round, so it never runs out.
 - **Fixed stage:** an 800×1280 portrait stage, scaled to fit the screen as in the prototype.
-- **Platform limits:**
-  - Build target stays `chrome101`.
-  - Animations use only transform and opacity.
-  - No `:has`, container queries, CSS nesting, view transitions or `dvh`.
-  - No emoji the Android 6 font lacks: use SVG.
+- **Platform limits:** these follow the frame measurements below.
 - **Grown-up actions:** the PIN button for grown-ups stays reachable and unobtrusive, in a corner of the who-are-you screen.
+
+### The frame (measured)
+
+The frame has been rooted and measured. Its report is "PF1007L Frame Dashboard Reference" (https://claude.ai/artifact/Rk9mZeTULqefEDywTJKrdD). It's an Allwinner A33 (ARMv7, about 1.3 GHz), with an OpenGL ES 2.0 GPU, about 1 GiB RAM and Android 6.0.1. It runs the full-screen WebView kiosk app `com.wesbos.homehq`, which loads one saved URL. Decisions that follow from it:
+
+- **Browser:**
+  - The engine is Android System WebView 106. The build target is `chrome106`, with CSS target `chrome61`, which stops the minifier emitting 4- and 8-digit hex colours. This WebView rejects those.
+  - Not available: `:has()` (failed on the frame), CSS nesting, `dvh`, `oklch()` and `color-mix()`, `toSorted` and the other ES2023+ helpers, and `alert`/`confirm`/`prompt` (they silently do nothing).
+  - Also unavailable: Web Push, the Fullscreen API, the camera, and new windows (`target="_blank"` strands the kiosk).
+- **Portrait:**
+  - The OS presents the screen as 1280×800 landscape (the panel is physically portrait).
+  - The observatory's stage turns itself: when the window is wider than tall, the 800×1280 stage is rotated a quarter turn to fill it. Touch follows CSS transforms, so taps still land.
+  - Which way it turns is a setting on the observatory's URL (`?turn=left` or `?turn=right`, default `right`), so it matches how the frame hangs. The kiosk app needs no change.
+- **Animations must end:**
+  - On the frame, one looping CSS animation costs about a whole CPU core, and a finished one costs nothing.
+  - So nothing animates forever: no endless twinkle, bob or spin. The animations module only allows a finite repeat count, enforced by its type.
+  - The starry background is a static picture (`sky`, a replaceable file).
+  - The mascot does a short bounce when something happens, not a constant bob.
+  - Finished constellations sparkle once when My sky opens.
+  - At most about 15 things animate at once, so confetti is 12 pieces.
+  - Big blurs, `backdrop-filter`, animated shadows, video and canvas or WebGL are out.
+- **Touch:** single taps only. Two fingers close together register as one touch, and a two-finger hold opens the kiosk's own menu, so nothing uses multi-touch or long-press.
+- **Pictures:** the screen is 1× (density 160), so art is drawn at display size with no 2× images. The art folder takes SVG, WebP, PNG or JPEG, in that order of preference. A self-hosted rounded font (OFL licence, woff2) lives in the art folder, because Android 6 lacks the prototype's fonts and the frame can't use font CDNs.
+- **Looking after itself:** the frame runs for weeks with no keyboard or reload button, and its Wi-Fi comes up after the kiosk has loaded the page.
+  - Every observatory request retries with backoff.
+  - It keeps showing the last good data, quietly marked as stale.
+  - The live connection reconnects with backoff.
+  - The page reloads itself once a night, at 3am in the chart's time zone.
+  - HTML is served `Cache-Control: no-cache` (assets have hashed names), so a deploy shows up on the next reload.
+- **Idle:** after a minute with no taps, the child's screen goes back to Who are you, so the next child starts fresh and nothing sits still all day.
+- **Grown-ups on the frame:** the Control Center also opens on the frame, behind a PIN. Its `confirm()` and `prompt()` calls (removing a child, rejecting with a note, unpairing and so on) silently do nothing there, so they're replaced with in-page dialogs.
+- **Reaching the server:** the frame can't run Tailscale, can't resolve `.local` names, and doesn't trust Let's Encrypt certificates (no ISRG Root X1), so today's `https://…ts.net` address won't load on it. How it reaches the server is an open decision; see the "reaching the server" ticket.
 
 ## Testing Decisions
 
@@ -259,11 +295,12 @@ The store comes with a built-in set of items and prices. For now, an admin adds 
 - Selling items back, refunds, or grown-ups undoing a purchase. A grown-up can't reverse a purchase yet. If needed, that's a later "give stars" feature.
 - Mascot naming, choosing a different mascot, or more outfit kinds than hats and hair.
 - Sound.
-- Real hardware: the picture frame, kiosk app, printer and scanner. Performance tuning happens on the real frame once it arrives.
+- A night-time dim mode against burn-in. The idle return to Who are you keeps the screen changing for now.
+- The printer and scanner hardware. The frame has no usable camera for the page, so the scanner will be a separate part as planned.
 - Changes to tickets, approvals, chores, quizzes or the Control Center beyond renaming the Star History.
 
 ## Further Notes
 
 - The verdict was unanimous for A, with nothing borrowed from B or C.
-- The frame is expected to be an AiMOR / PF1007L (Allwinner A33, Android 6), rooted and running a WebView kiosk app. Keep the number of moving things modest: the sky's twinkle count and the confetti pieces should be easy to turn down.
+- The frame is an AiMOR PF1007L (Allwinner A33, Android 6.0.1, WebView 106), rooted and running the `com.wesbos.homehq` kiosk app. See "The frame (measured)" above and the frame report for details.
 - Prices are deliberately low (2–8 stars) so the first purchase comes within a day or two of chores.

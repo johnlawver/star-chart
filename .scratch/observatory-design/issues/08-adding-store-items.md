@@ -1,8 +1,8 @@
-# 07: Adding store items
+# 08: Adding store items
 
 **What to build:** An owner or admin adds another item from the built-in list to their chart's store, optionally at a different price, through an API endpoint. There's no Control Center screen for it yet.
 
-**Blocked by:** 06 (Store with stickers, and the Sticker Book)
+**Blocked by:** 07 (Store with stickers, and the Sticker Book)
 
 **Status:** ready-for-agent
 

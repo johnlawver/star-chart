@@ -1,8 +1,8 @@
-# 04: New stars since last visit
+# 05: New stars since last visit
 
 **What to build:** When a child opens their screen, the stars approved since their last visit (**New Stars**) fly into their star jar one by one, with "You earned 3 stars!" for children who see words. They arrive once, on whichever observatory the child opens first.
 
-**Blocked by:** 03 (The Dome)
+**Blocked by:** 04 (The Dome)
 
 **Status:** ready-for-agent
 
