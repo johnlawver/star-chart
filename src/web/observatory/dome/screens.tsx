@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { Icon } from "../../shared/icons.js";
 import { StarHistoryList, type StarHistory } from "../../shared/star-history.js";
-import { Art, Confetti, FlyingStars, Mascot, StarJar, jarCapacity } from "../art/components.js";
+import { Art, Confetti, Constellation, FlyingStars, Mascot, StarJar, jarCapacity } from "../art/components.js";
+import { skyFor } from "../art/constellations.js";
 import { jarSizes } from "../art/manifest.js";
 import { categoryColours, taskColours } from "./styles.js";
 
@@ -134,6 +135,7 @@ export function ChildScreen({
   onLeave: () => void;
 }) {
   const [category, setCategory] = useState<MenuCategory | undefined>();
+  const [sky, setSky] = useState(false);
   const pictures = child.displayStyle === "pictures";
 
   // A category with just one task for this child prints it straight away; otherwise the child picks one.
@@ -144,7 +146,8 @@ export function ChildScreen({
   };
 
   const back = () => {
-    if (history) onShowHistory(false);
+    if (sky) setSky(false);
+    else if (history) onShowHistory(false);
     else if (category) setCategory(undefined);
     else onLeave();
   };
@@ -173,6 +176,8 @@ export function ChildScreen({
             </div>
           )}
         </div>
+      ) : sky && earned !== undefined ? (
+        <MySky earned={earned} pictures={pictures} />
       ) : history ? (
         <div className="dome-panel" style={{ top: 620, bottom: 190 }}>
           <StarHistoryList history={history} />
@@ -202,7 +207,43 @@ export function ChildScreen({
           </span>
           {!pictures && "Back"}
         </button>
+        <button className="dome-door" onClick={() => setSky(true)} aria-label="My sky" aria-pressed={sky}>
+          <Art id="dock/sky" width={64} />
+          {!pictures && "My sky"}
+        </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * My sky: every star the child has ever earned lights real constellations, one star at a time, in order. Built from
+ * lifetime stars, so spending never empties one. Finished ones sparkle once as the sky opens. Past the last
+ * constellation the sky starts again in gold.
+ */
+function MySky({ earned, pictures }: { earned: number; pictures: boolean }) {
+  const { round, constellations } = skyFor(earned);
+  const golden = round > 0;
+  return (
+    <div className="dome-panel dome-sky">
+      {golden && !pictures && <div className="dome-medium dome-sky-round">Golden sky, round {round + 1}!</div>}
+      {constellations.map((pattern, i) => {
+        const done = pattern.filled === pattern.stars.length;
+        return (
+          <div key={pattern.name} className="dome-sky-tile">
+            <div className={done ? "anim-sparkle" : undefined} style={done ? { animationDelay: `${i * 80}ms` } : undefined}>
+              <Constellation pattern={pattern} filled={pattern.filled} size={170} golden={golden} />
+            </div>
+            {!pictures && (
+              <div className="dome-sky-label">
+                {pattern.name}
+                <br />
+                {done ? "✓" : `${pattern.filled} / ${pattern.stars.length}`}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

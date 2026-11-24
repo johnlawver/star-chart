@@ -193,6 +193,14 @@ test("stars approved since a child's last visit fly into their jar once, when th
   await jar.waitFor();
   expect(await page.getByText(/You earned/).count()).toBe(0);
   expect(await jar.getAttribute("aria-label")).toBe("My stars: 2");
+
+  // My sky: every star Nova has earned lights up a constellation, in order.
+  await page.getByRole("button", { name: "My sky" }).click();
+  await page.getByRole("img", { name: "Cassiopeia: 2 of 5" }).waitFor();
+  expect(await page.getByText("2 / 5").isVisible()).toBe(true);
+  expect(await page.getByRole("img", { name: /: 0 of / }).count()).toBe(11);
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: /Chores/ }).waitFor();
   close();
   await page.close();
 });

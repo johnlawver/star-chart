@@ -4,11 +4,15 @@
 
 **Blocked by:** 04 (The Dome)
 
-**Status:** ready-for-agent
+**Status:** done (2026-11-24)
 
-- [ ] My sky uses the built-in ordered constellations from the art folder and the child's lifetime `earned`.
-- [ ] Each constellation shows filled and empty stars. Children who see words get its name and progress ("4 / 7"), or a tick when it's finished.
-- [ ] Finished constellations sparkle once when My sky opens, not forever (frame rule).
-- [ ] Spending stars never empties a constellation, because it's based on lifetime earned.
-- [ ] Earning more than the whole sky holds starts a golden second round.
-- [ ] The smoke test opens My sky.
+- [x] My sky uses the built-in ordered constellations from the art folder and the child's lifetime `earned`.
+- [x] Each constellation shows filled and empty stars. Children who see words get its name and progress ("4 / 7"), or a tick when it's finished.
+- [x] Finished constellations sparkle once when My sky opens, not forever (frame rule).
+- [x] Spending stars never empties a constellation, because it's based on lifetime earned.
+- [x] Earning more than the whole sky holds starts a golden second round.
+- [x] The smoke test opens My sky.
+
+## Comments
+
+2026-11-24: Done. The dock gains My sky, using the `dock/sky` art. The sky panel shows all 12 constellations from lifetime `earned` (`skyFor`), with the name and "n / m" or a tick for words. Finished ones sparkle once each, staggered, and `Constellation` no longer animates every star itself, to keep the number of simultaneous animations low on the frame. Later rounds are drawn in gold with "Golden sky, round N!". The smoke test opens My sky with 2 stars earned: Cassiopeia shows 2 of 5 and the other 11 are empty.

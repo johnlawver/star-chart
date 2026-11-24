@@ -37,6 +37,10 @@ export const domeCss = `
 
 .dome-panel { position: absolute; left: 40px; right: 40px; top: 120px; bottom: 210px; border-radius: 40px; background: rgba(255,255,255,0.1);
   padding: 30px; overflow-x: hidden; overflow-y: auto; }
+.dome-sky { top: 40px; bottom: 200px; background: #080b26; border: 6px solid #8b6bd9; display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; }
+.dome-sky-round { width: 100%; text-align: center; color: #ffcf4d; margin-bottom: 8px; }
+.dome-sky-tile { width: 200px; margin: 4px; text-align: center; }
+.dome-sky-label { font-size: 20px; line-height: 1.25; min-height: 50px; }
 .dome-ticket { position: absolute; left: 230px; top: 260px; width: 340px; min-height: 480px; box-sizing: border-box; background: #fff; color: #000;
   border-radius: 6px; padding: 24px; text-align: center; font-size: 32px; }
 .dome-ticket-art { margin: 30px 0; }

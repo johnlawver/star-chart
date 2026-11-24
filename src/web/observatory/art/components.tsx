@@ -116,9 +116,11 @@ export function StarJar({ balance, earned, width = 220 }: { balance: number; ear
   );
 }
 
-/** One constellation, with its first `filled` stars lit. The golden look is for the sky's later rounds. */
+/**
+ * One constellation, with its first `filled` stars lit. The golden look is for the sky's later rounds. It doesn't
+ * animate itself: a screen can sparkle a finished one once (each star sparkling would be dozens of animations at once).
+ */
 export function Constellation({ pattern, filled, size = 260, golden = false }: { pattern: ConstellationPattern; filled: number; size?: number; golden?: boolean }) {
-  const done = filled === pattern.stars.length;
   const lit = golden ? "#ffb319" : "#ffe680";
   const star = artUrl("star");
   return (
@@ -133,7 +135,7 @@ export function Constellation({ pattern, filled, size = 260, golden = false }: {
       })}
       {pattern.stars.map(([x, y], i) =>
         i < filled && star ? (
-          <image key={i} href={star} x={x - 6} y={y - 6} width={12} height={12} className={done ? "anim-sparkle" : undefined} style={{ transformOrigin: `${x}px ${y}px`, transformBox: "view-box" }} />
+          <image key={i} href={star} x={x - 6} y={y - 6} width={12} height={12} />
         ) : (
           <circle key={i} cx={x} cy={y} r="2.2" fill={i < filled ? lit : "none"} stroke="rgba(255,255,255,0.45)" strokeWidth="0.8" />
         ),
