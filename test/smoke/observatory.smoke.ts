@@ -7,6 +7,7 @@ import { systemClock } from "../../src/server/clock.js";
 import { FakeMailer } from "../support/fake-mailer.js";
 import { FakePushSender } from "../support/fake-push.js";
 import { uniqueEmail } from "../support/test-app.js";
+import { makeHandshake } from "../../src/web/shared/unit-setup.js";
 
 // The one browser smoke test: the real observatory page, in a real (headless) browser, against the real server.
 // It only checks the page loads, a child can be chosen, and a tap produces a print job. Everything else is
@@ -99,7 +100,7 @@ async function observatoryWithNova() {
   await grownUp("POST", "/api/sign-up", { ...credentials, chartName: "Smoke Test", timeZone: "America/Chicago" });
   const { child } = await grownUp("POST", "/api/children", { nickname: "Nova", displayStyle: "words" });
   const { category } = await grownUp("POST", "/api/categories", { name: "Chores", kind: "chore" });
-  await grownUp("POST", "/api/chores", { categoryId: category.id, name: "Make your bed", stars: 1, childIds: [child.id] });
+  const { chore: makeYourBed } = await grownUp("POST", "/api/chores", { categoryId: category.id, name: "Make your bed", stars: 1, childIds: [child.id] });
   // A second chore, so tapping Chores shows the chores to pick from (a category with one task prints it at once).
   await grownUp("POST", "/api/chores", { categoryId: category.id, name: "Feed the cat", stars: 2, childIds: [child.id] });
   const screenSetup = httpClient();
@@ -139,7 +140,15 @@ async function observatoryWithNova() {
   };
   /** A grown-up changes a store item's price. */
   const setPrice = (itemId: string, price: number) => grownUp("PATCH", `/api/store-items/${itemId}`, { price });
-  return { printJobs, scanner, openScreen, approveHandedIn, setPrice, close };
+  /** A pairing code for this observatory, made from the Control Center. */
+  const pairingCode = async (): Promise<string> => {
+    const { observatories } = await grownUp("GET", "/api/observatories");
+    return (await grownUp("POST", `/api/observatories/${observatories[0].id}/pairing-codes`)).code;
+  };
+  /** Nova prints "Make your bed", as if she'd tapped it at the observatory. */
+  const printMakeYourBed = () =>
+    httpClient()("POST", `/api/observatory/children/${child.id}/tickets`, { kind: "chore", taskId: makeYourBed.id }, screenToken);
+  return { printJobs, scanner, openScreen, approveHandedIn, setPrice, close, pairingCode, printMakeYourBed };
 }
 
 // The frame presents itself as a 1280×800 landscape window though it hangs portrait, so its kiosk address asks the stage
@@ -301,6 +310,39 @@ test("the observatory reloads itself once a night, at 3am in the chart's time zo
   await expect.poll(() => page.evaluate(() => (window as any).beforeTheReload ?? false)).toBe(false);
   await page.getByRole("button", { name: /Nova/ }).waitFor();
   close();
+  await page.close();
+});
+
+test("the fake unit prints a Setup Guide, refuses bad codes with a slip, then pairs from a Handshake and prints and scans", async () => {
+  const { close, pairingCode, printMakeYourBed } = await observatoryWithNova();
+  close(); // the separate printer and scanner go; the unit does both jobs
+  const page = await browser.newPage({ viewport: { width: 800, height: 1000 } });
+  await page.goto(`${base}/fake-unit.html`);
+  const guide = await page.getByAltText("Setup Guide QR").getAttribute("data-link");
+  const paste = async (text: string) => {
+    await page.getByLabel("Paste its text").fill(text);
+    await page.getByRole("button", { name: "Read it" }).click();
+  };
+
+  await paste("SC-NOTAHANDSHAKE");
+  await page.getByText("That's not a setup code").waitFor();
+  await paste(makeHandshake({ network: "HomeWiFi", password: "pw", server: base, code: "WRONG234" }));
+  await page.getByText("That code didn't work").waitFor();
+  await paste(makeHandshake({ network: "HomeWiFi", password: "pw", server: "http://127.0.0.1:9", code: "ABCD2345" }));
+  await page.getByText("I couldn't reach the server").waitFor();
+  await paste(makeHandshake({ network: "HomeWiFi", password: "pw", server: base, code: await pairingCode() }));
+  await page.getByText("All set!").waitFor();
+  await page.getByText("connected", { exact: true }).waitFor();
+
+  await printMakeYourBed();
+  const receipt = page.getByTestId("receipt");
+  await receipt.waitFor();
+  const code = (await receipt.locator("div").last().textContent())!;
+  await page.getByLabel(/Scan a ticket/).fill(code);
+  await page.getByRole("button", { name: "Scan" }).click();
+
+  expect(guide).toMatch(new RegExp(`^${base}/setup-unit.html#u=[0-9A-F]{4}&n=HomeWiFi&`));
+  await page.getByText("Last scan: handed-in").waitFor();
   await page.close();
 });
 

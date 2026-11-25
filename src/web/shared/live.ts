@@ -14,6 +14,8 @@ export function useLiveConnection(
   deviceToken: string,
   onMessage: (message: any) => void,
   onUnpaired: () => void,
+  /** The server to connect to, such as https://star-chart.example; this page's own server if not given. */
+  server?: string,
 ): { status: LiveStatus; send: (message: unknown) => void } {
   const [status, setStatus] = useState<LiveStatus>("connecting");
   const socketRef = useRef<WebSocket | undefined>(undefined);
@@ -27,8 +29,9 @@ export function useLiveConnection(
 
     const connect = () => {
       setStatus("connecting");
-      const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-      const socket = new WebSocket(`${protocol}//${location.host}/api/parts/live`);
+      const base = new URL(server ?? location.origin);
+      const protocol = base.protocol === "https:" ? "wss:" : "ws:";
+      const socket = new WebSocket(`${protocol}//${base.host}/api/parts/live`);
       socketRef.current = socket;
       socket.onopen = () => socket.send(JSON.stringify({ type: "hello", deviceToken }));
       socket.onmessage = (event) => {
@@ -53,7 +56,7 @@ export function useLiveConnection(
       clearTimeout(retry);
       socketRef.current?.close();
     };
-  }, [deviceToken]);
+  }, [deviceToken, server]);
 
   return { status, send: (message) => socketRef.current?.send(JSON.stringify(message)) };
 }
