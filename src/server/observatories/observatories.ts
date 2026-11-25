@@ -1,5 +1,5 @@
 import type { Clock } from "../clock.js";
-import type { Database, DeviceKind } from "../database.js";
+import type { Database, DeviceKind, PartKind } from "../database.js";
 import { isId } from "../ids.js";
 import { hashToken, newPairingCode, newToken } from "../tokens.js";
 
@@ -47,8 +47,8 @@ export function createObservatories(db: Database, clock: Clock) {
       return { code, expiresAt };
     },
 
-    /** Pairs a printer or scanner using a pairing code. Undefined if the code isn't valid. */
-    async pairPart(code: string, kind: "printer" | "scanner"): Promise<{ deviceToken: string } | undefined> {
+    /** Pairs a printer, scanner or unit using a pairing code. Undefined if the code isn't valid. */
+    async pairPart(code: string, kind: PartKind): Promise<{ deviceToken: string } | undefined> {
       return db.transaction().execute(async (trx) => {
         const now = clock.now();
         const used = await trx

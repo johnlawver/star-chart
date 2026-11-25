@@ -4,7 +4,7 @@ import type { LiveParts } from "../observatories/live-parts.js";
 import type { Observatories } from "../observatories/observatories.js";
 import { decidedBy, requireActor } from "../people/authenticate.js";
 import type { People } from "../people/people.js";
-import type { TaskKindName, TicketState } from "../database.js";
+import { scans, type TaskKindName, type TicketState } from "../database.js";
 import type { FastifyReply } from "fastify";
 import type { Decision, Tickets } from "./tickets.js";
 import type { Notifications } from "../notifications/notifications.js";
@@ -29,13 +29,13 @@ export async function ticketRoutes(
   tickets: Tickets,
   notifications: Notifications,
 ) {
-  // A scanner read a ticket's code: hand it in, and tell the observatory's screen (and the scanner) what happened.
+  // A scanner (or unit) read a ticket's code: hand it in, and tell the observatory's screen and scanners what happened.
   liveParts.on("scan", async (device, message) => {
-    if (device.kind !== "scanner" || typeof message.code !== "string") return;
+    if (!scans(device.kind) || typeof message.code !== "string") return;
     const outcome = await tickets.handIn(device.chartId, message.code.trim());
     const result = { type: "scan-result", ...outcome };
-    liveParts.sendTo(device.observatoryId, "screen", result);
-    liveParts.sendTo(device.observatoryId, "scanner", result);
+    liveParts.sendTo(device.observatoryId, (kind) => kind === "screen", result);
+    liveParts.sendTo(device.observatoryId, scans, result);
     if (outcome.result === "handed-in") await notifications.handedIn(device.chartId, outcome);
   });
 

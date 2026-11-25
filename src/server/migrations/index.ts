@@ -32,6 +32,7 @@ import * as childVisits from "./0030-child-visits.js";
 import * as store from "./0031-store.js";
 import * as artFiles from "./0032-art-files.js";
 import * as mascotOutfits from "./0033-mascot-outfits.js";
+import * as units from "./0034-units.js";
 
 // Every schema change is a migration, listed here in order. Never edit one that has shipped; add a new one.
 export const migrations: Record<string, Migration> = {
@@ -68,4 +69,5 @@ export const migrations: Record<string, Migration> = {
   "0031-store": store,
   "0032-art-files": artFiles,
   "0033-mascot-outfits": mascotOutfits,
+  "0034-units": units,
 };

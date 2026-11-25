@@ -257,7 +257,20 @@ export interface Tables {
 
 export type Role = "owner" | "admin" | "grown-up";
 export type DisplayStyle = "pictures" | "words";
-export type DeviceKind = "screen" | "printer" | "scanner";
+export type DeviceKind = "screen" | "printer" | "scanner" | "unit";
+
+/** The kinds of part an observatory's screen can pair: a printer, a scanner, or a unit that is both. */
+export type PartKind = Exclude<DeviceKind, "screen">;
+
+/** Whether a part of this kind prints tickets: a printer, or a unit. */
+export function prints(kind: DeviceKind): boolean {
+  return kind === "printer" || kind === "unit";
+}
+
+/** Whether a part of this kind scans tickets: a scanner, or a unit. */
+export function scans(kind: DeviceKind): boolean {
+  return kind === "scanner" || kind === "unit";
+}
 export type TaskKindName = "chore" | "quiz";
 export type TicketState = "open" | "handed-in" | "approved" | "dismissed";
 export type SampleSet = "addition" | "subtraction" | "letters" | "numbers" | "spelling";

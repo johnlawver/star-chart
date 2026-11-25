@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { requireGrownUp, sessionCookie, sessionCookieOptions } from "../people/authenticate.js";
 import type { Children } from "../people/children.js";
 import type { People } from "../people/people.js";
-import type { Role } from "../database.js";
+import { prints, scans, type PartKind, type Role } from "../database.js";
 import { requireDevice } from "./authenticate-device.js";
 import { notPairedCloseCode, type LiveParts } from "./live-parts.js";
 import type { Observatories } from "./observatories.js";
@@ -81,12 +81,13 @@ export async function observatoryRoutes(
     const screen = await requireDevice(observatories, "screen", request, reply);
     if (!screen) return reply;
     const parts = await observatories.partsOf(screen.observatoryId);
-    const statusOf = (kind: "printer" | "scanner") => {
-      const paired = parts.filter((part) => part.kind === kind);
+    // A unit counts as both its printer and its scanner.
+    const statusOf = (does: typeof prints) => {
+      const paired = parts.filter((part) => does(part.kind));
       if (paired.length === 0) return "not-paired";
       return paired.some((part) => liveParts.isOnline(part.deviceId)) ? "online" : "offline";
     };
-    return { printer: statusOf("printer"), scanner: statusOf("scanner") };
+    return { printer: statusOf(prints), scanner: statusOf(scans) };
   });
 
   // The owner deletes the whole chart, typing its name to be sure. Lives here because its devices must be
@@ -213,7 +214,7 @@ export async function observatoryRoutes(
     return reply.code(201).send(await observatories.newPairingCode(screen.observatoryId));
   });
 
-  app.post<{ Body: { code: string; kind: "printer" | "scanner" } }>(
+  app.post<{ Body: { code: string; kind: PartKind } }>(
     "/api/parts",
     {
       schema: {
@@ -221,7 +222,7 @@ export async function observatoryRoutes(
           type: "object",
           properties: {
             code: { type: "string", minLength: 1, maxLength: 20 },
-            kind: { type: "string", enum: ["printer", "scanner"] },
+            kind: { type: "string", enum: ["printer", "scanner", "unit"] },
           },
           required: ["code", "kind"],
           additionalProperties: false,

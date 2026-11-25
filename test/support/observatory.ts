@@ -33,7 +33,7 @@ export async function chartWithObservatory(harness: Harness, chartName = "Our Ho
     return (await unlockedScreen.post("/api/observatory/pairing-codes")).body.code;
   }
 
-  async function connectPart(kind: "printer" | "scanner"): Promise<LiveConnection> {
+  async function connectPart(kind: "printer" | "scanner" | "unit"): Promise<LiveConnection> {
     const code = await pairingCode();
     const { deviceToken } = (await harness.newClient().post("/api/parts", { code, kind })).body;
     return connect(deviceToken);
@@ -66,6 +66,8 @@ export async function chartWithObservatory(harness: Harness, chartName = "Our Ho
     connectPrinter: () => connectPart("printer"),
     /** Pairs a scanner to this observatory and opens its live connection, ready to send scanned codes. */
     connectScanner: () => connectPart("scanner"),
+    /** Pairs a unit (one box that prints and scans) to this observatory and opens its live connection. */
+    connectUnit: () => connectPart("unit"),
     /** Opens the observatory screen's own live connection, on which it hears what happened at a scan. */
     connectScreen: () => connect(screenToken),
 

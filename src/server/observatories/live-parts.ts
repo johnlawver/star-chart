@@ -1,4 +1,5 @@
 import type { WebSocket } from "ws";
+import { prints } from "../database.js";
 import type { PairedDevice } from "./observatories.js";
 
 /** Close code for a connection whose credential isn't (or is no longer) valid. */
@@ -72,10 +73,10 @@ export class LiveParts {
     return false;
   }
 
-  /** Sends a message to an observatory's printer. Returns false if no printer of that observatory is connected. */
+  /** Sends a message to an observatory's printer (or unit). Returns false if none of that observatory's is connected. */
   sendToPrinter(observatoryId: string, message: unknown): boolean {
     for (const [socket, device] of this.connections) {
-      if (device.observatoryId === observatoryId && device.kind === "printer") {
+      if (device.observatoryId === observatoryId && prints(device.kind)) {
         socket.send(JSON.stringify(message));
         return true;
       }
@@ -83,10 +84,10 @@ export class LiveParts {
     return false;
   }
 
-  /** Sends a message to every connected device of an observatory of the given kind. */
-  sendTo(observatoryId: string, kind: PairedDevice["kind"], message: unknown): void {
+  /** Sends a message to every connected device of an observatory that `which` picks, such as its screens. */
+  sendTo(observatoryId: string, which: (kind: PairedDevice["kind"]) => boolean, message: unknown): void {
     for (const [socket, device] of this.connections) {
-      if (device.observatoryId === observatoryId && device.kind === kind) socket.send(JSON.stringify(message));
+      if (device.observatoryId === observatoryId && which(device.kind)) socket.send(JSON.stringify(message));
     }
   }
 

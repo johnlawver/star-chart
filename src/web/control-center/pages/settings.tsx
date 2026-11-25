@@ -169,7 +169,7 @@ function ObservatoryTools() {
 
 interface ObservatorySummary {
   id: string;
-  parts: { kind: "screen" | "printer" | "scanner"; online: boolean }[];
+  parts: { kind: "screen" | "printer" | "scanner" | "unit"; online: boolean }[];
 }
 
 function Observatories() {
@@ -197,9 +197,9 @@ function Observatories() {
           <li key={observatory.id}>
             <span className="row-main">
               Observatory {index + 1}:{" "}
-              {observatory.parts.map((part) => (
-                <span key={part.kind} className={`chip ${part.online ? "online" : "offline"}`}>
-                  {part.kind} {part.online ? "online" : "offline"}
+              {observatory.parts.map((part, partIndex) => (
+                <span key={partIndex} className={`chip ${part.online ? "online" : "offline"}`}>
+                  {part.kind === "unit" ? "printer + scanner" : part.kind} {part.online ? "online" : "offline"}
                 </span>
               ))}
             </span>
