@@ -408,6 +408,10 @@ button[disabled] {
 .chip.online {
   background: var(--ok-soft);
 }
+.pairing-code {
+  width: 100%;
+  margin: 0;
+}
 .big-code {
   font-size: 28px;
   letter-spacing: 0.15em;

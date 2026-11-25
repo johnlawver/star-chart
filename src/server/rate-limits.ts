@@ -19,6 +19,8 @@ export const limits = {
   resetEmailsPerAccount: { tries: 3, windowMs: minutes(60) },
   /** Password-reset requests from one address. */
   resetRequestsPerAddress: { tries: 10, windowMs: minutes(60) },
+  /** Pairing codes made by one grown-up. */
+  pairingCodesPerGrownUp: { tries: 20, windowMs: minutes(60) },
   /** New charts from one address. */
   signUpsPerAddress: { tries: 5, windowMs: minutes(60) },
 } as const;

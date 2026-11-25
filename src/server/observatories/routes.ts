@@ -211,7 +211,21 @@ export async function observatoryRoutes(
     if (signedIn.chart.id !== screen.chartId || !managesDevices(signedIn.grownUp.role)) {
       return reply.code(403).send({ error: "Ask an admin to pair a printer or scanner." });
     }
+    if (rateLimits.refuse(reply, [["pairingCodesPerGrownUp", signedIn.grownUp.id]])) return reply;
+    rateLimits.count("pairingCodesPerGrownUp", signedIn.grownUp.id);
     return reply.code(201).send(await observatories.newPairingCode(screen.observatoryId));
+  });
+
+  // The same code, made from the Control Center (on a phone, say) for an observatory the grown-up chooses.
+  app.post<{ Params: { observatoryId: string } }>("/api/observatories/:observatoryId/pairing-codes", async (request, reply) => {
+    const signedIn = await requireGrownUp(people, request, reply);
+    if (!signedIn) return reply;
+    if (!managesDevices(signedIn.grownUp.role)) return reply.code(403).send({ error: "Ask an admin to pair a printer or scanner." });
+    const { observatoryId } = request.params;
+    if (!(await observatories.isInChart(signedIn.chart.id, observatoryId))) return reply.code(404).send({ error: "no such observatory" });
+    if (rateLimits.refuse(reply, [["pairingCodesPerGrownUp", signedIn.grownUp.id]])) return reply;
+    rateLimits.count("pairingCodesPerGrownUp", signedIn.grownUp.id);
+    return reply.code(201).send(await observatories.newPairingCode(observatoryId));
   });
 
   app.post<{ Body: { code: string; kind: PartKind } }>(

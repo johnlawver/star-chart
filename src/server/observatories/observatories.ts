@@ -47,6 +47,18 @@ export function createObservatories(db: Database, clock: Clock) {
       return { code, expiresAt };
     },
 
+    /** Whether an observatory belongs to a chart. */
+    async isInChart(chartId: string, observatoryId: string): Promise<boolean> {
+      if (!isId(observatoryId)) return false;
+      const row = await db
+        .selectFrom("observatories")
+        .select("id")
+        .where("chart_id", "=", chartId)
+        .where("id", "=", observatoryId)
+        .executeTakeFirst();
+      return row !== undefined;
+    },
+
     /** Pairs a printer, scanner or unit using a pairing code. Undefined if the code isn't valid. */
     async pairPart(code: string, kind: PartKind): Promise<{ deviceToken: string } | undefined> {
       return db.transaction().execute(async (trx) => {

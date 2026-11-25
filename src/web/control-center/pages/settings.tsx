@@ -174,6 +174,12 @@ interface ObservatorySummary {
 
 function Observatories() {
   const [observatories, setObservatories] = useState<ObservatorySummary[]>([]);
+  const [codes, setCodes] = useState<Record<string, { code: string; expiresAt: string } | { error: string }>>({});
+
+  const makeCode = async (observatoryId: string) => {
+    const result = await api("POST", `/api/observatories/${observatoryId}/pairing-codes`);
+    setCodes({ ...codes, [observatoryId]: result.ok ? result.data : { error: result.data?.error ?? "Couldn't make a code." } });
+  };
 
   const load = async () => {
     const result = await api("GET", "/api/observatories");
@@ -203,21 +209,36 @@ function Observatories() {
                 </span>
               ))}
             </span>
-            <button
-              className="danger"
-              onClick={async () => {
-                if (await confirmFirst("Unpair this observatory? Its screen, printer and scanner will all need pairing again.", { action: "Unpair" })) {
-                  await api("DELETE", `/api/observatories/${observatory.id}`);
-                  await load();
-                }
-              }}
-            >
-              Unpair
-            </button>
+            <span className="row-actions">
+              <button onClick={() => makeCode(observatory.id)}>Pair a printer or scanner</button>
+              <button
+                className="danger"
+                onClick={async () => {
+                  if (await confirmFirst("Unpair this observatory? Its screen, printer and scanner will all need pairing again.", { action: "Unpair" })) {
+                    await api("DELETE", `/api/observatories/${observatory.id}`);
+                    await load();
+                  }
+                }}
+              >
+                Unpair
+              </button>
+            </span>
+            {codes[observatory.id] && <PairingCode made={codes[observatory.id]!} />}
           </li>
         ))}
       </ul>
     </section>
+  );
+}
+
+/** A pairing code for a printer, scanner or unit to type (or read), and until when it works. */
+function PairingCode({ made }: { made: { code: string; expiresAt: string } | { error: string } }) {
+  if ("error" in made) return <p role="alert">{made.error}</p>;
+  const until = new Date(made.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return (
+    <p className="pairing-code">
+      Pairing code: <strong className="big-code">{made.code}</strong> (works once, until {until})
+    </p>
   );
 }
 

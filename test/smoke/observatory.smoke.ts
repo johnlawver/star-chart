@@ -428,6 +428,23 @@ test("each Control Center page has its own address, and Back and Forward move be
   await page.close();
 });
 
+test("from the Control Center on a phone, the owner makes a pairing code for an observatory, and a unit pairs with it", async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const credentials = { email: uniqueEmail("pairing"), password: "correct horse battery staple" };
+  await page.request.post(`${base}/api/sign-up`, { data: { ...credentials, chartName: "Pairing", timeZone: "America/Chicago" } });
+  const screenSetup = httpClient();
+  await screenSetup("POST", "/api/sign-in", credentials);
+  await screenSetup("POST", "/api/observatories");
+
+  await page.goto(`${base}/settings`);
+  await page.getByRole("button", { name: "Pair a printer or scanner" }).click();
+  const code = await page.locator(".pairing-code strong").textContent();
+  const paired = await httpClient()("POST", "/api/parts", { code, kind: "unit" });
+
+  expect(paired.deviceToken).toEqual(expect.any(String));
+  await page.close();
+});
+
 test("in the Control Center, the store has its own page: upload and add stickers, change prices, replace pictures", async () => {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
