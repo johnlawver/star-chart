@@ -6,6 +6,7 @@ import websocket from "@fastify/websocket";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Clock } from "./clock.js";
+import { createRateLimits } from "./rate-limits.js";
 import type { Database } from "./database.js";
 import type { Mailer } from "./email.js";
 import type { PushSender } from "./push.js";
@@ -52,6 +53,13 @@ export interface AppConfig {
   handInGroupingMs?: number;
   /** How often scheduled jobs run. Defaults to 30 seconds; null means only when asked (tests). */
   scheduledJobsEveryMs?: number | null;
+  /**
+   * How many proxies in front of the server to trust for the visitor's real address (X-Forwarded-For), which rate
+   * limits count by. 0 (the default) when people connect straight to the server; 1 behind the host's proxy.
+   */
+  trustProxyHops?: number;
+  /** Limits on guessing and on emails (see rate-limits.ts). On unless turned off, as for the one-address smoke test. */
+  rateLimits?: boolean;
 }
 
 declare module "fastify" {
@@ -72,9 +80,15 @@ export interface AppDependencies {
 /** The Control Center's pages, which must match `Page` in src/web/control-center/shell.tsx. */
 const controlCenterPages = ["/tickets", "/kids", "/tasks", "/store", "/family", "/settings"];
 
+/** Trusts the nearest `hops` proxies (counting from this server) to say who connected to them. */
+function trustHops(hops: number) {
+  return hops > 0 ? (_address: string, hop: number) => hop < hops : false;
+}
+
 export async function buildApp({ db, clock, mailer, push, config }: AppDependencies) {
   // Unexpected fields in a request are refused, not silently dropped (we never store more than we asked for).
-  const app = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
+  const app = Fastify({ ajv: { customOptions: { removeAdditional: false } }, trustProxy: trustHops(config.trustProxyHops ?? 0) });
+  const rateLimits = createRateLimits(clock, config.rateLimits !== false);
   await app.register(cookie);
   await app.register(websocket);
   // For the host's health checks: up, and able to reach the database.
@@ -83,7 +97,7 @@ export async function buildApp({ db, clock, mailer, push, config }: AppDependenc
     return { ok: true };
   });
   const people = createPeople(db, clock);
-  await peopleRoutes(app, people, config, mailer);
+  await peopleRoutes(app, people, config, mailer, rateLimits);
   const children = createChildren(db, clock);
   await childrenRoutes(app, people, children);
   const observatories = createObservatories(db, clock);
@@ -121,7 +135,7 @@ export async function buildApp({ db, clock, mailer, push, config }: AppDependenc
   const liveParts = new LiveParts(config.heartbeatMs ?? 15_000);
   app.addHook("onClose", async () => await liveParts.stop());
   const store = createStore(db, clock);
-  await observatoryRoutes(app, people, children, observatories, liveParts, store, clock);
+  await observatoryRoutes(app, people, children, observatories, liveParts, store, clock, rateLimits);
   await catalogRoutes(app, people, observatories, createCatalog(db, clock));
   const stars = createStars(db, clock);
   await ticketRoutes(app, people, observatories, liveParts, createTickets(db, clock, stars), notifications);

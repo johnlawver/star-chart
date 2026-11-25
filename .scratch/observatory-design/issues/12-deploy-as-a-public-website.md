@@ -28,6 +28,8 @@ Once decided:
 - [ ] Live connections (WebSockets) work through Cloudflare, including the heartbeat.
 - [x] Production has its own Doppler config and database. Migrations run on deploy. Still to do: `ALLOW_NEW_CHARTS` is off once our chart exists, emails go through a real sender, and the database is backed up nightly with a restore that has been tried once.
 - [x] Release builds (`STAR_CHART_RELEASE=true`) leave out the Art Gallery and other development-only pages.
-- [ ] Sign-in, PINs and pairing have rate limits suited to the open internet (check the existing ones against public exposure).
-- [ ] The README describes deploying, and setting the frame's kiosk URL over ADB.
-- [ ] The CLAUDE.md conventions are updated: it now runs on the public internet, not just Tailscale.
+- [x] Sign-in, PINs and pairing have rate limits suited to the open internet (check the existing ones against public exposure).
+- [x] The README describes deploying, and setting the frame's kiosk URL over ADB.
+- [x] The CLAUDE.md conventions are updated: it now runs on the public internet, not just Tailscale.
+
+2026-11-24: Rate limits added (`src/server/rate-limits.ts`, `test/rate-limits.test.ts`; the table is in `docs/deployment.md`). The limits cover wrong passwords per account and per address, wrong codes and links per address, password-reset emails per account and per address, and new charts per address. The visitor's address comes through Traefik (`TRUST_PROXY_HOPS=1` in the Dockerfile); the app's port was confirmed not to be published on the host. Observatory PINs keep their existing lockout. The README points to `docs/deployment.md`, and CLAUDE.md already describes the public site. What's left needs the user: the frame, phones and push on the public address, and WebSockets through the proxy. (Cloudflare isn't in front: the domain points straight at the VPS.)

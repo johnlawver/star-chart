@@ -3,11 +3,12 @@ import type { AppConfig } from "../app.js";
 import { requireActor, requireGrownUp, sessionCookie, sessionCookieOptions as cookieOptions } from "./authenticate.js";
 import type { People } from "./people.js";
 import type { Mailer } from "../email.js";
+import type { Limit, RateLimits } from "../rate-limits.js";
 
 // A password needs to be at least this long.
 const passwordField = { type: "string", minLength: 8, maxLength: 200 } as const;
 
-export async function peopleRoutes(app: FastifyInstance, people: People, config: AppConfig, mailer: Mailer) {
+export async function peopleRoutes(app: FastifyInstance, people: People, config: AppConfig, mailer: Mailer, rateLimits: RateLimits) {
   app.post<{ Body: { email: string; password: string; chartName: string; timeZone: string } }>(
     "/api/sign-up",
     {
@@ -27,6 +28,8 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
     },
     async (request, reply) => {
       if (!config.allowNewCharts) return reply.code(403).send({ error: "new charts can't be created on this server" });
+      if (rateLimits.refuse(reply, [["signUpsPerAddress", request.ip]])) return reply;
+      rateLimits.count("signUpsPerAddress", request.ip);
       const result = await people.signUp(request.body);
       if ("refused" in result) {
         if (result.refused === "email-in-use") return reply.code(409).send({ error: "that email is already in use" });
@@ -38,8 +41,17 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
   );
 
   app.post<{ Body: { email: string; password: string } }>("/api/sign-in", async (request, reply) => {
+    const email = String(request.body?.email ?? "").trim();
+    const limitsHere: [Limit, string][] = [
+      ["wrongPasswordsPerAccount", email],
+      ["wrongPasswordsPerAddress", request.ip],
+    ];
+    if (rateLimits.refuse(reply, limitsHere)) return reply;
     const token = await people.signIn(request.body);
-    if (!token) return reply.code(401).send({ error: "email or password is wrong" });
+    if (!token) {
+      for (const [limit, who] of limitsHere) rateLimits.count(limit, who);
+      return reply.code(401).send({ error: "email or password is wrong" });
+    }
     reply.setCookie(sessionCookie, token, cookieOptions);
     return {};
   });
@@ -84,7 +96,9 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
       },
     },
     async (request, reply) => {
+      if (rateLimits.refuse(reply, [["wrongCodesPerAddress", request.ip]])) return reply;
       const token = await people.claimPhoneSetupCode(request.body.code);
+      if (!token) rateLimits.count("wrongCodesPerAddress", request.ip);
       if (!token) return reply.code(404).send({ error: "That code has expired or was already used. Show a new one." });
       reply.setCookie(sessionCookie, token, cookieOptions);
       return {};
@@ -143,11 +157,13 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
       },
     },
     async (request, reply) => {
+      if (rateLimits.refuse(reply, [["wrongCodesPerAddress", request.ip]])) return reply;
       const result = await people.acceptInvitation(request.body.token, request.body.password);
       if ("refused" in result) {
         if (result.refused === "email-in-use") {
           return reply.code(409).send({ error: "That email already belongs to a chart. Ask for an invitation to another email." });
         }
+        rateLimits.count("wrongCodesPerAddress", request.ip);
         return reply.code(404).send({ error: "That invitation has expired or was already used. Ask for a new one." });
       }
       reply.setCookie(sessionCookie, result.token, cookieOptions);
@@ -204,6 +220,12 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
       },
     },
     async (request, reply) => {
+      if (rateLimits.refuse(reply, [["resetRequestsPerAddress", request.ip]])) return reply;
+      rateLimits.count("resetRequestsPerAddress", request.ip);
+      // Past an account's limit the answer looks the same, but no email (and no new link) is made.
+      const email = request.body.email.trim();
+      if (rateLimits.waitFor("resetEmailsPerAccount", email) !== undefined) return reply.code(204).send();
+      rateLimits.count("resetEmailsPerAccount", email);
       const token = await people.requestPasswordReset(request.body.email);
       if (token) {
         // Sent in the background, so the reply takes as long whether or not the email exists.
@@ -239,7 +261,9 @@ export async function peopleRoutes(app: FastifyInstance, people: People, config:
       },
     },
     async (request, reply) => {
+      if (rateLimits.refuse(reply, [["wrongCodesPerAddress", request.ip]])) return reply;
       const session = await people.completePasswordReset(request.body.token, request.body.password);
+      if (!session) rateLimits.count("wrongCodesPerAddress", request.ip);
       if (!session) return reply.code(404).send({ error: "That link has expired or was already used. Ask for a new one." });
       reply.setCookie(sessionCookie, session, cookieOptions);
       return {};

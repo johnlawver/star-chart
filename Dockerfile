@@ -10,7 +10,7 @@ RUN STAR_CHART_RELEASE=true npx vite build
 
 FROM node:26-slim
 WORKDIR /app
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=4310
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=4310 TRUST_PROXY_HOPS=1
 # CA certificates so Doppler can reach its API over HTTPS; curl for the host's health check.
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
 COPY --from=dopplerhq/cli:3 /bin/doppler /usr/local/bin/doppler

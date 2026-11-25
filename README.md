@@ -33,6 +33,10 @@ You need Node 24+, Docker, the Doppler CLI and Tailscale.
 
 Every email sent in development lands in Mailpit's inbox at `http://127.0.0.1:8025` on the dev server (`ssh -L 8025:127.0.0.1:8025 <server>` to open it from a laptop).
 
+## Deploying
+
+The public site runs on Coolify, with settings from Doppler `prd`. How it's built, its certificate, and how to deploy are in [docs/deployment.md](docs/deployment.md).
+
 ## Observatory art
 
 Every picture on the children's observatory is a file in `src/web/observatory/art/files/`, named by its id: for example `stickers/rocket.svg`, `outfits/hat-crown.svg` or `mascot/body.svg`.

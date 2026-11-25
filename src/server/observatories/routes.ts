@@ -9,6 +9,7 @@ import { notPairedCloseCode, type LiveParts } from "./live-parts.js";
 import type { Observatories } from "./observatories.js";
 import type { Clock } from "../clock.js";
 import { nextLocalHour } from "../time.js";
+import type { RateLimits } from "../rate-limits.js";
 
 /** Admins and the owner pair and unpair observatories and their parts; other grown-ups can't. */
 function managesDevices(role: Role): boolean {
@@ -32,6 +33,7 @@ export async function observatoryRoutes(
   liveParts: LiveParts,
   store: Store,
   clock: Clock,
+  rateLimits: RateLimits,
 ) {
   // Pairing an observatory's screen. The grown-up who signed in on it is then signed out,
   // so the children are never left in a grown-up's session.
@@ -227,7 +229,9 @@ export async function observatoryRoutes(
       },
     },
     async (request, reply) => {
+      if (rateLimits.refuse(reply, [["wrongCodesPerAddress", request.ip]])) return reply;
       const paired = await observatories.pairPart(request.body.code, request.body.kind);
+      if (!paired) rateLimits.count("wrongCodesPerAddress", request.ip);
       if (!paired) return reply.code(404).send({ error: "that pairing code isn't valid; ask for a new one" });
       return reply.code(201).send(paired);
     },

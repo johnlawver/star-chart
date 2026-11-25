@@ -41,3 +41,20 @@ With ADB connected to the frame:
 ```sh
 adb shell am start -n com.wesbos.homehq/.MainActivity --es url 'https://star-chart.johnlawver.com/observatory.html?turn=right'
 ```
+
+## Rate limits
+
+The site is on the open internet, so `src/server/rate-limits.ts` limits whatever can be guessed or sends email. Limits count per account and per visitor address, and are kept in memory, so a restart clears them.
+
+| What | Limit |
+| --- | --- |
+| Wrong passwords for one account | 10 per 15 minutes (then even the right one waits) |
+| Wrong passwords from one address | 30 per 15 minutes |
+| Wrong pairing codes, phone-setup codes, invitation and reset links from one address | 20 per 15 minutes |
+| Password-reset emails to one account | 3 an hour (more requests get the same answer, but send nothing) |
+| Password-reset requests from one address | 10 an hour |
+| New charts from one address | 5 an hour |
+
+Observatory PINs already lock the observatory after repeated wrong tries (migration 0017).
+
+The visitor's address comes from Traefik's `X-Forwarded-For`, because the Dockerfile sets `TRUST_PROXY_HOPS=1`. That's safe only while the app's port isn't published on the host: Traefik is the only way in, which was checked on 2026-11-24. If the app is ever reachable directly, set it to 0, or anyone could make up an address.

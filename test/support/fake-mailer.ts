@@ -13,6 +13,11 @@ export class FakeMailer implements Mailer {
     return this.sent.filter((email) => email.to === address).at(-1);
   }
 
+  /** Every email sent to an address, oldest first. */
+  sentTo(address: string): Email[] {
+    return this.sent.filter((email) => email.to === address);
+  }
+
   /** The value of a "#name=…" part in the link inside an email, such as an invitation's token. */
   static linkParameter(email: Email, name: string): string {
     const match = email.text.match(new RegExp(`#${name}=([^\\s]+)`));

@@ -19,7 +19,8 @@ const app = await buildApp({
   clock: systemClock,
   mailer: new FakeMailer(),
   push: new FakePushSender(),
-  config: { allowNewCharts: true, appUrl: "https://star-chart.test", vapidPublicKey: "test", scheduledJobsEveryMs: null },
+  // Every journey here signs up from the one address, so the limits on that are off.
+  config: { allowNewCharts: true, appUrl: "https://star-chart.test", vapidPublicKey: "test", scheduledJobsEveryMs: null, rateLimits: false },
 });
 let base = "";
 let browser: Browser;

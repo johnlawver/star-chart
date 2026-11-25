@@ -26,13 +26,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     },
     smtpUrl: required("SMTP_URL"),
     emailFrom: required("EMAIL_FROM"),
-    // Listen on the loopback address only; Tailscale (`tailscale serve`) provides HTTPS in front of it.
+    // Locally, listen on the loopback address only (Tailscale provides HTTPS in front of it). The Dockerfile sets 0.0.0.0
+    // for the host's proxy.
     host: env.HOST ?? "127.0.0.1",
     port: Number(env.PORT ?? 4310),
     app: {
       allowNewCharts: env.ALLOW_NEW_CHARTS === "true",
       appUrl: required("APP_URL").replace(/\/$/, ""),
       vapidPublicKey: required("VAPID_PUBLIC_KEY"),
+      // Set in the Dockerfile: deployed, the host's proxy (Traefik) is the one hop in front.
+      trustProxyHops: Number(env.TRUST_PROXY_HOPS ?? 0),
     },
   };
 }
