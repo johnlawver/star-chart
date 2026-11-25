@@ -23,6 +23,7 @@ export default defineConfig({
         "fake-printer": "src/web/fake-printer.html",
         "fake-scanner": "src/web/fake-scanner.html",
         "phone-setup": "src/web/phone-setup.html",
+        "setup-unit": "src/web/setup-unit.html",
         "accept-invitation": "src/web/accept-invitation.html",
         "reset-password": "src/web/reset-password.html",
         ...(release ? {} : { "art-gallery": "src/web/art-gallery.html", "fake-unit": "src/web/fake-unit.html" }),

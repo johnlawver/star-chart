@@ -538,3 +538,33 @@ details summary {
   display: block;
   margin: 12px 0;
 }
+
+/* Setting up a unit, on a phone. */
+.setup-unit {
+  margin: 0 auto;
+}
+.setup-unit-form section {
+  margin: 0;
+}
+.setup-unit label.inline {
+  padding: 8px 0;
+}
+.password-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.handshake {
+  text-align: center;
+}
+.handshake img {
+  display: block;
+  margin: 16px auto;
+  max-width: 100%;
+  height: auto;
+  background: #ffffff;
+  border-radius: 8px;
+}
+.handshake .actions {
+  justify-content: center;
+}

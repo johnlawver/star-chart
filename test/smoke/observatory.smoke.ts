@@ -148,7 +148,7 @@ async function observatoryWithNova() {
   /** Nova prints "Make your bed", as if she'd tapped it at the observatory. */
   const printMakeYourBed = () =>
     httpClient()("POST", `/api/observatory/children/${child.id}/tickets`, { kind: "chore", taskId: makeYourBed.id }, screenToken);
-  return { printJobs, scanner, openScreen, approveHandedIn, setPrice, close, pairingCode, printMakeYourBed };
+  return { printJobs, scanner, openScreen, approveHandedIn, setPrice, close, pairingCode, printMakeYourBed, credentials };
 }
 
 // The frame presents itself as a 1280×800 landscape window though it hangs portrait, so its kiosk address asks the stage
@@ -344,6 +344,39 @@ test("the fake unit prints a Setup Guide, refuses bad codes with a slip, then pa
   expect(guide).toMatch(new RegExp(`^${base}/setup-unit.html#u=[0-9A-F]{4}&n=HomeWiFi&`));
   await page.getByText("Last scan: handed-in").waitFor();
   await page.close();
+});
+
+test("setting up a unit from a phone: open its Setup Guide, sign in, pick a network, type a password, and it pairs", async () => {
+  const { close, credentials } = await observatoryWithNova();
+  close();
+  const unit = await browser.newPage({ viewport: { width: 800, height: 1000 } });
+  await unit.goto(`${base}/fake-unit.html`);
+  const setupLink = (await unit.getByAltText("Setup Guide QR").getAttribute("data-link"))!;
+  const phone = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const wifiPassword = "our secret wifi password";
+  const sent: string[] = [];
+  for (const page of [phone, unit]) page.on("request", (request) => sent.push(`${request.url()} ${request.postData() ?? ""}`));
+
+  await phone.goto(setupLink);
+  await phone.getByRole("heading", { name: /^Setting up unit [0-9A-F]{4}$/ }).waitFor();
+  await phone.getByLabel("Email").fill(credentials.email);
+  await phone.getByLabel("Password").fill(credentials.password);
+  await phone.getByRole("button", { name: "Sign in" }).click();
+  await phone.getByLabel("Neighbours 2.4").check();
+  await phone.getByLabel("Password").fill(wifiPassword);
+  await phone.getByRole("button", { name: "Make the code" }).click();
+  await phone.getByText("Hold this up to the unit's camera").waitFor();
+  const handshake = (await phone.getByAltText("Handshake QR for the unit").getAttribute("data-handshake"))!;
+  await unit.getByLabel("Paste its text").fill(handshake);
+  await unit.getByRole("button", { name: "Read it" }).click();
+
+  await unit.getByText("All set!").waitFor();
+  await phone.getByRole("heading", { name: "All set" }).waitFor({ timeout: 10_000 });
+  expect(handshake).toContain("S:Neighbours 2.4;");
+  expect(sent.some((request) => request.includes("Neighbours"))).toBe(false); // the networks stay after the #
+  expect(sent.filter((request) => request.includes("wifi") || request.includes(encodeURIComponent(wifiPassword)))).toEqual([]);
+  await unit.close();
+  await phone.close();
 });
 
 test("pages are always checked for a newer version, while built files (named by their contents) are kept", async () => {
