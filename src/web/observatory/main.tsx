@@ -1,7 +1,9 @@
 import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
-import { api, stored } from "../shared/api.js";
+import { stored } from "../shared/api.js";
 import { useLiveConnection } from "../shared/live.js";
+import { ask, forgetLastGood, isReachable, keepAsking, keepLoading, serverDown, useReachable } from "./connection.js";
+import { useNightlyReload } from "./nightly-reload.js";
 import type { StarHistory } from "../shared/star-history.js";
 import { ArtStyles, NightSky } from "./art/components.js";
 import {
@@ -31,11 +33,14 @@ const tokenKey = "star-chart.observatory.deviceToken";
 const idleMs = 60_000;
 /** How long a printed ticket, or a message about one, stays up before going back to Who are you. */
 const messageMs = 4_000;
+/** What a child sees if they try to print while the server can't be reached. */
+const wakingUp = "The observatory is waking up. Try again in a minute!";
 
 function Observatory() {
   const [deviceToken, setDeviceToken] = useState(stored.get(tokenKey));
 
   const onPaired = (token: string | undefined) => {
+    if (!token) forgetLastGood();
     stored.set(tokenKey, token);
     setDeviceToken(token);
   };
@@ -52,11 +57,12 @@ function Unpaired({ onPaired }: { onPaired: (token: string) => void }) {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = Object.fromEntries(new FormData(event.currentTarget));
-    const signedIn = await api("POST", creating ? "/api/sign-up" : "/api/sign-in", form);
+    const signedIn = await ask("POST", creating ? "/api/sign-up" : "/api/sign-in", form, "");
+    if (serverDown(signedIn.status)) return setError("Can't reach the server. Check the Wi-Fi and try again.");
     if (!signedIn.ok) return setError(signedIn.data?.error ?? "Couldn't sign in.");
-    const paired = await api("POST", "/api/observatories");
+    const paired = await ask("POST", "/api/observatories", undefined, "");
     if (!paired.ok) {
-      await api("POST", "/api/sign-out");
+      await ask("POST", "/api/sign-out", undefined, "");
       return setError(paired.data?.error ?? "Couldn't pair this observatory.");
     }
     onPaired(paired.data.deviceToken);
@@ -108,11 +114,15 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
   const [parts, setParts] = useState<{ printer: string; scanner: string } | undefined>();
   const backToStart = () => setShowing({ screen: "who" });
 
-  useIdle(showing.screen !== "who", idleMs, backToStart);
+  const reachable = useReachable();
 
+  useIdle(showing.screen !== "who", idleMs, backToStart);
+  useNightlyReload(deviceToken, showing.screen === "who" && !scanned);
+
+  // Asked every few seconds, which also notices the server going away and coming back.
   useEffect(() => {
     const check = async () => {
-      const result = await api("GET", "/api/observatory/parts", undefined, deviceToken);
+      const result = await ask("GET", "/api/observatory/parts", undefined, deviceToken);
       if (result.ok) setParts(result.data);
     };
     void check();
@@ -137,16 +147,14 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
 
   // Who are you is shown fresh each time, so a mascot dressed a moment ago appears dressed on its planet.
   useEffect(() => {
+    // Asked until the server answers; meanwhile the children it last saw are shown, even straight after a reload.
     if (showing.screen !== "who") return;
-    void (async () => {
-      const [result, items] = await Promise.all([
-        api("GET", "/api/observatory/children", undefined, deviceToken),
-        api("GET", "/api/observatory/store", undefined, deviceToken),
-      ]);
-      if (result.status === 401) return onUnpaired();
-      if (result.ok) setChildren(result.data.children);
-      if (items.ok) setStore(items.data.items);
-    })();
+    const stop = new AbortController();
+    void keepLoading("/api/observatory/children", deviceToken, stop.signal, (data) => setChildren(data.children)).then(
+      (status) => status === 401 && onUnpaired(),
+    );
+    void keepLoading("/api/observatory/store", deviceToken, stop.signal, (data) => setStore(data.items));
+    return () => stop.abort();
   }, [deviceToken, showing.screen]);
 
   // Printed tickets and messages about them go back to Who are you after a moment, ready for the next child.
@@ -156,9 +164,13 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
     return () => clearTimeout(timer);
   }, [showing]);
 
+  // Printing is never tried again by itself (a child would get a ticket long after walking away), and isn't tried at
+  // all while the server is known to be away.
   const print = async (child: Child, choice: MenuChoice) => {
-    const result = await api("POST", `/api/observatory/children/${child.id}/tickets`, { kind: choice.kind, taskId: choice.id }, deviceToken);
+    if (!isReachable()) return setShowing({ screen: "could-not-print", child, message: wakingUp });
+    const result = await ask("POST", `/api/observatory/children/${child.id}/tickets`, { kind: choice.kind, taskId: choice.id }, deviceToken);
     if (result.ok) return setShowing({ screen: "printing", child, choice });
+    if (serverDown(result.status)) return setShowing({ screen: "could-not-print", child, message: wakingUp });
     const message = result.data?.error ?? "That didn't work. Ask a grown-up.";
     // Already holding a ticket of this kind? Offer to ask a grown-up for a new copy, in case it's lost.
     const lostKind = result.status === 409 && /already have/i.test(message) ? choice.kind : undefined;
@@ -166,11 +178,11 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
   };
 
   const askForReprint = async (child: Child, kind: "chore" | "quiz") => {
-    const result = await api("POST", `/api/observatory/children/${child.id}/reprint-requests`, { kind }, deviceToken);
+    const result = await ask("POST", `/api/observatory/children/${child.id}/reprint-requests`, { kind }, deviceToken);
     setShowing({
       screen: "could-not-print",
       child,
-      message: result.ok ? "OK! A grown-up will check, then print it again." : (result.data?.error ?? "Ask a grown-up."),
+      message: result.ok ? "OK! A grown-up will check, then print it again." : serverDown(result.status) ? wakingUp : (result.data?.error ?? "Ask a grown-up."),
     });
   };
 
@@ -179,6 +191,11 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
   return (
     <>
       <NightSky />
+      {!reachable && (
+        <p className="dome-offline" role="status">
+          Waking up…
+        </p>
+      )}
       {napping.length > 0 && (
         <p className="dome-banner" role="alert">
           The {napping.join(" and ")} {napping.length > 1 ? "are" : "is"} napping. Ask a grown-up!
@@ -210,7 +227,9 @@ function ChildrensView({ deviceToken, onUnpaired }: { deviceToken: string; onUnp
  * into the jar (or straight away, if there are none) it records the visit, so they arrive only once.
  */
 function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; deviceToken: string; onPrint: (choice: MenuChoice) => void; onLeave: () => void }) {
-  const [totals, setTotals] = useState<{ balance: number; earned: number; newStars: number } | undefined>();
+  // `fresh` is false while showing the last good copy: new stars only fly in, and the visit is only recorded, once the
+  // server has answered.
+  const [totals, setTotals] = useState<{ balance: number; earned: number; newStars: number; fresh: boolean } | undefined>();
   const [arrived, setArrived] = useState(false);
   const [store, setStore] = useState<StoreItem[] | undefined>();
   const [owned, setOwned] = useState<string[]>([]);
@@ -219,39 +238,39 @@ function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; dev
   const [history, setHistory] = useState<StarHistory | undefined>();
 
   useEffect(() => {
-    void (async () => {
-      const [view, choices, items] = await Promise.all([
-        api("GET", `/api/observatory/children/${child.id}`, undefined, deviceToken),
-        api("GET", `/api/observatory/children/${child.id}/menu`, undefined, deviceToken),
-        api("GET", "/api/observatory/store", undefined, deviceToken),
-      ]);
-      if (view.ok) {
-        setTotals({ balance: view.data.child.balance, earned: view.data.child.earned, newStars: view.data.child.newStars });
-        setOwned(view.data.child.wardrobe.owned);
-        setWearing(view.data.child.wardrobe.wearing);
-      }
-      if (items.ok) setStore(items.data.items);
-      if (choices.ok) setMenu(choices.data);
-    })();
+    const stop = new AbortController();
+    void keepLoading(`/api/observatory/children/${child.id}`, deviceToken, stop.signal, (data, fresh) => {
+      const { balance, earned, newStars, wardrobe } = data.child;
+      setTotals({ balance, earned, newStars: fresh ? newStars : 0, fresh });
+      setOwned(wardrobe.owned);
+      setWearing(wardrobe.wearing);
+    });
+    void keepLoading(`/api/observatory/children/${child.id}/menu`, deviceToken, stop.signal, (data) => setMenu(data));
+    void keepLoading("/api/observatory/store", deviceToken, stop.signal, (data) => setStore(data.items));
+    return () => stop.abort();
   }, [child.id]);
 
   const arriving = totals && !arrived ? totals.newStars : 0;
 
   useEffect(() => {
-    if (!totals || arrived) return;
+    if (!totals?.fresh || arrived) return;
     if (totals.newStars === 0) return setArrived(true);
     // In case the frame never reports the last star landing, carry on once they should all be in.
     const timer = setTimeout(() => setArrived(true), arrivalMs(totals.newStars) + 1500);
     return () => clearTimeout(timer);
   }, [totals, arrived]);
 
+  // Recorded even if the server blinks just then, so the same stars don't fly in again next time.
   useEffect(() => {
-    if (arrived) void api("POST", `/api/observatory/children/${child.id}/visit`, undefined, deviceToken);
+    if (!arrived) return;
+    const stop = new AbortController();
+    void keepAsking("POST", `/api/observatory/children/${child.id}/visit`, undefined, deviceToken, stop.signal);
+    return () => stop.abort();
   }, [arrived]);
 
   // Buying needs no grown-up. Whatever the answer, the screen shows what the server says the balance is now.
   const buy = async (item: StoreItem) => {
-    const result = await api("POST", `/api/observatory/children/${child.id}/purchases`, { storeItemId: item.id }, deviceToken);
+    const result = await ask("POST", `/api/observatory/children/${child.id}/purchases`, { storeItemId: item.id }, deviceToken);
     const balance = result.data?.balance;
     if (typeof balance === "number") setTotals((current) => current && { ...current, balance });
     if (result.ok) setOwned(result.data.wardrobe.owned);
@@ -263,13 +282,13 @@ function ChildView({ child, deviceToken, onPrint, onLeave }: { child: Child; dev
     if (item.kind === "sticker") return;
     const place = item.kind;
     const next = { ...wearing, [place]: wearing[place] === item.id ? null : item.id };
-    const result = await api("PUT", `/api/observatory/children/${child.id}/mascot`, next, deviceToken);
+    const result = await ask("PUT", `/api/observatory/children/${child.id}/mascot`, next, deviceToken);
     if (result.ok) setWearing(result.data.wearing);
   };
 
   const showHistory = async (show: boolean) => {
     if (!show) return setHistory(undefined);
-    const result = await api("GET", `/api/observatory/children/${child.id}/star-history`, undefined, deviceToken);
+    const result = await ask("GET", `/api/observatory/children/${child.id}/star-history`, undefined, deviceToken);
     if (result.ok) setHistory(result.data);
   };
 
@@ -306,7 +325,7 @@ function Unlock({ deviceToken, onCancel }: { deviceToken: string; onCancel: () =
 
   useEffect(() => {
     void (async () => {
-      const result = await api("GET", "/api/observatory/grown-ups", undefined, deviceToken);
+      const result = await ask("GET", "/api/observatory/grown-ups", undefined, deviceToken);
       if (result.ok) setGrownUps(result.data.grownUps);
     })();
   }, [deviceToken]);
@@ -315,8 +334,8 @@ function Unlock({ deviceToken, onCancel }: { deviceToken: string; onCancel: () =
     if (!chosen) return;
     const result =
       chosen.id === guestChoice.id
-        ? await api("POST", "/api/observatory/unlock-guest", { pin }, deviceToken)
-        : await api("POST", "/api/observatory/unlock", { grownUpId: chosen.id, pin }, deviceToken);
+        ? await ask("POST", "/api/observatory/unlock-guest", { pin }, deviceToken)
+        : await ask("POST", "/api/observatory/unlock", { grownUpId: chosen.id, pin }, deviceToken);
     if (result.ok) {
       location.href = "/?on=observatory";
       return;

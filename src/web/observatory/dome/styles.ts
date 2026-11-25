@@ -68,6 +68,10 @@ export const domeCss = `
 .dome-banner { position: absolute; left: 120px; right: 120px; top: 8px; z-index: 40; padding: 12px 18px; border-radius: 20px;
   background: #ffd84d; color: #2b2140; text-align: center; font-size: 26px; font-weight: 700; }
 
+/* Out of date while the server can't be reached: small and quiet, for grown-ups to notice, not children. */
+.dome-offline { position: absolute; left: 16px; top: 2px; z-index: 45; margin: 0; padding: 2px 12px; border-radius: 12px;
+  background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.7); font-size: 18px; }
+
 .plain { position: relative; padding: 48px; font-size: 28px; }
 .plain h1 { font-size: 48px; margin: 0 0 24px; }
 .plain label { display: block; margin: 0 0 18px; }

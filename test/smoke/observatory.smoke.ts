@@ -246,6 +246,63 @@ test("a child's screen goes back to Who are you after a minute with no taps", as
   await page.close();
 });
 
+test("an observatory started before its Wi-Fi is up says it's waking up, then shows the children once the server answers", async () => {
+  const { openScreen, close } = await observatoryWithNova();
+  const { page, go } = await openScreen({ width: 800, height: 1280 });
+  await page.route("**/api/**", (route) => route.abort("internetdisconnected"));
+  await go();
+  await page.getByRole("status").getByText("Waking up").waitFor();
+
+  await page.unroute("**/api/**");
+
+  await page.getByRole("button", { name: /Nova/ }).waitFor({ timeout: 10_000 });
+  await expect.poll(() => page.getByRole("status").count()).toBe(0);
+  close();
+  await page.close();
+});
+
+test("when the server goes away, the screen keeps what it last showed and won't print, and comes back by itself", async () => {
+  const { printJobs, openScreen, close } = await observatoryWithNova();
+  const { page, go } = await openScreen({ width: 800, height: 1280 });
+  await go();
+  await page.getByRole("button", { name: /Nova/ }).click();
+  await page.getByRole("button", { name: /Chores/ }).click();
+
+  await page.route("**/api/**", (route) => route.abort("internetdisconnected"));
+  await page.getByRole("button", { name: /Make your bed/ }).click();
+  await page.getByText("The observatory is waking up").waitFor();
+  await page.reload(); // even after a reload, the children it last saw are still there
+  await page.getByRole("button", { name: /Nova/ }).waitFor();
+  await page.getByRole("status").getByText("Waking up").waitFor();
+  expect(printJobs).toHaveLength(0);
+
+  await page.unroute("**/api/**");
+  await expect.poll(() => page.getByRole("status").count(), { timeout: 10_000 }).toBe(0);
+  await page.getByRole("button", { name: /Nova/ }).click();
+  await page.getByRole("button", { name: /Chores/ }).click();
+  await page.getByRole("button", { name: /Make your bed/ }).click();
+  await expect.poll(() => printJobs.length).toBe(1);
+  close();
+  await page.close();
+});
+
+test("the observatory reloads itself once a night, at 3am in the chart's time zone", async () => {
+  const { openScreen, close } = await observatoryWithNova();
+  const { page, go } = await openScreen({ width: 800, height: 1280 });
+  await page.clock.install();
+  await go();
+  await page.getByRole("button", { name: /Nova/ }).waitFor();
+  await page.evaluate(() => ((window as any).beforeTheReload = true));
+
+  await page.clock.fastForward("23:59:00"); // 3am comes round within a day, whatever time it is now
+  await page.clock.fastForward("01:00");
+
+  await expect.poll(() => page.evaluate(() => (window as any).beforeTheReload ?? false)).toBe(false);
+  await page.getByRole("button", { name: /Nova/ }).waitFor();
+  close();
+  await page.close();
+});
+
 test("pages are always checked for a newer version, while built files (named by their contents) are kept", async () => {
   const pages = await Promise.all(["/", "/observatory.html", "/kids"].map((path) => fetch(base + path)));
   const html = await pages[1]!.text();

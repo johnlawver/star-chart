@@ -7,6 +7,8 @@ import type { Role } from "../database.js";
 import { requireDevice } from "./authenticate-device.js";
 import { notPairedCloseCode, type LiveParts } from "./live-parts.js";
 import type { Observatories } from "./observatories.js";
+import type { Clock } from "../clock.js";
+import { nextLocalHour } from "../time.js";
 
 /** Admins and the owner pair and unpair observatories and their parts; other grown-ups can't. */
 function managesDevices(role: Role): boolean {
@@ -15,6 +17,9 @@ function managesDevices(role: Role): boolean {
 
 // The longest a Control Center unlocked on an observatory stays open, even if nobody closes it.
 const unlockedSessionMs = 10 * 60 * 1000;
+
+// The hour (in the chart's time zone) the screen reloads itself each night, when the family is asleep.
+const nightlyReloadHour = 3;
 
 // How long a newly opened connection has to say hello before it is closed.
 const helloTimeoutMs = 10_000;
@@ -26,6 +31,7 @@ export async function observatoryRoutes(
   observatories: Observatories,
   liveParts: LiveParts,
   store: Store,
+  clock: Clock,
 ) {
   // Pairing an observatory's screen. The grown-up who signed in on it is then signed out,
   // so the children are never left in a grown-up's session.
@@ -108,6 +114,16 @@ export async function observatoryRoutes(
       return reply.code(204).send();
     },
   );
+
+  // The screen reloads itself once a night, to pick up a new release and start fresh. The server says when (3am in the
+  // chart's time zone) and what time it is now, so a frame whose own clock is wrong still reloads at the right time.
+  app.get("/api/observatory/schedule", async (request, reply) => {
+    const screen = await requireDevice(observatories, "screen", request, reply);
+    if (!screen) return reply;
+    const now = clock.now();
+    const nightlyReload = nextLocalHour(now, await people.timeZoneOf(screen.chartId), nightlyReloadHour);
+    return { now: now.toISOString(), nightlyReload: nightlyReload.toISOString() };
+  });
 
   // The grown-ups a screen offers for unlocking the Control Center: only those who have set a PIN.
   app.get("/api/observatory/grown-ups", async (request, reply) => {

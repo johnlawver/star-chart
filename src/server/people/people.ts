@@ -332,6 +332,12 @@ export function createPeople(db: Database, clock: Clock) {
       await db.updateTable("charts").set({ quiz_pool_target: changes.quizPoolTarget }).where("id", "=", chartId).execute();
     },
 
+    /** A chart's time zone, for working out the family's own days and nights. */
+    async timeZoneOf(chartId: string): Promise<string> {
+      const chart = await db.selectFrom("charts").select("time_zone").where("id", "=", chartId).executeTakeFirstOrThrow();
+      return chart.time_zone;
+    },
+
     /** Permanently deletes a chart and everything in it: grown-ups, children, tickets, stars, observatories, devices. */
     async deleteChart(chartId: string): Promise<void> {
       await db.deleteFrom("charts").where("id", "=", chartId).execute();
