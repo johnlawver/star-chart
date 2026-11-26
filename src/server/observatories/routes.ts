@@ -50,6 +50,58 @@ export async function observatoryRoutes(
     return reply.code(201).send({ observatory: { id: observatoryId }, deviceToken });
   });
 
+  // Setting up a fresh screen from a phone (.scratch/easy-install/issues/01). The screen starts a setup and shows its
+  // code as a QR; a grown-up approves the code on their phone; the screen collects its credential with its secret.
+  app.post("/api/screen-setups", async (request, reply) => {
+    if (rateLimits.refuse(reply, [["screenSetupsPerAddress", request.ip]])) return reply;
+    rateLimits.count("screenSetupsPerAddress", request.ip);
+    return reply.code(201).send(await observatories.newScreenSetup());
+  });
+
+  app.post<{ Body: { code: string } }>(
+    "/api/screen-setups/approve",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { code: { type: "string", minLength: 1, maxLength: 20 } },
+          required: ["code"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const signedIn = await requireGrownUp(people, request, reply);
+      if (!signedIn) return reply;
+      if (!managesDevices(signedIn.grownUp.role)) return reply.code(403).send({ error: "Ask the chart's owner or an admin to set up this screen." });
+      if (rateLimits.refuse(reply, [["wrongCodesPerAddress", request.ip]])) return reply;
+      if (!(await observatories.approveScreenSetup(request.body.code, signedIn.chart.id))) {
+        rateLimits.count("wrongCodesPerAddress", request.ip);
+        return reply.code(404).send({ error: "That code has run out or was already used. The screen will show a new one." });
+      }
+      return {};
+    },
+  );
+
+  app.post<{ Body: { secret: string } }>(
+    "/api/screen-setups/collect",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: { secret: { type: "string", minLength: 1, maxLength: 100 } },
+          required: ["secret"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const collected = await observatories.collectScreenSetup(request.body.secret);
+      if (!collected) return reply.code(404).send({ error: "this setup has run out; start a new one" });
+      return reply.code("deviceToken" in collected ? 201 : 200).send(collected);
+    },
+  );
+
   app.get("/api/observatories", async (request, reply) => {
     const signedIn = await requireGrownUp(people, request, reply);
     if (!signedIn) return reply;

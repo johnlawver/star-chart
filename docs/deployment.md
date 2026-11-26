@@ -50,9 +50,11 @@ The site is on the open internet, so `src/server/rate-limits.ts` limits whatever
 | --- | --- |
 | Wrong passwords for one account | 10 per 15 minutes (then even the right one waits) |
 | Wrong passwords from one address | 30 per 15 minutes |
-| Wrong pairing codes, phone-setup codes, invitation and reset links from one address | 20 per 15 minutes |
+| Wrong pairing codes, screen and phone-setup codes, invitation and reset links from one address | 20 per 15 minutes |
 | Password-reset emails to one account | 3 an hour (more requests get the same answer, but send nothing) |
 | Password-reset requests from one address | 10 an hour |
+| Pairing codes made by one grown-up | 20 an hour |
+| Screen setups (the QR a fresh observatory screen shows) from one address | 30 an hour |
 | New charts from one address | 5 an hour |
 
 Observatory PINs already lock the observatory after repeated wrong tries (migration 0017).

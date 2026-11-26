@@ -209,7 +209,7 @@ _Avoid_: Costume, skin, accessory, wardrobe
 ### Places and devices
 
 **Observatory**:
-The unit that children use: a screen, a printer and a scanner working together. A brand-new chart's first observatory is paired when its creator signs in on it; that person becomes the chart's owner. After that, only admins and the owner can pair more observatories. An observatory stays signed in once paired. A chart can have any number of observatories, and they all show the same children. A child first picks themselves, then sees their own balance and chooses a task category to print.
+The unit that children use: a screen, a printer and a scanner working together. A fresh observatory's screen shows a QR code: a grown-up scans it with their phone, signs in there (or creates a chart) and approves it, which pairs the observatory to their chart. Signing in on the screen itself also works. Whoever creates a chart becomes its owner. After that, only admins and the owner can pair more observatories. An observatory stays signed in once paired. A chart can have any number of observatories, and they all show the same children. A child first picks themselves, then sees their own balance and chooses a task category to print.
 _Avoid_: Kiosk, station, device, star chart, kid app
 
 **Screen**:

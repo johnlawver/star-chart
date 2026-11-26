@@ -1,9 +1,13 @@
 import type { Clock } from "../clock.js";
-import type { Database, DeviceKind, PartKind } from "../database.js";
+import type { Transaction } from "kysely";
+import type { Database, DeviceKind, PartKind, Tables } from "../database.js";
 import { isId } from "../ids.js";
 import { hashToken, newPairingCode, newToken } from "../tokens.js";
 
 const pairingCodeLifetimeMs = 10 * 60 * 1000;
+const screenSetupLifetimeMs = 10 * 60 * 1000;
+/** How long a screen has to collect its credential once its setup is approved. */
+const collectWithinMs = 5 * 60 * 1000;
 const wrongPinsBeforeLockout = 5;
 const pinLockoutMs = 5 * 60 * 1000;
 
@@ -17,22 +21,76 @@ export interface PairedDevice {
 
 /** The observatories-and-devices module: observatories, their parts, and how they pair. */
 export function createObservatories(db: Database, clock: Clock) {
+  /** Creates an observatory in a chart, within a transaction, and returns the credential for its screen. */
+  async function pairIn(trx: Transaction<Tables>, chartId: string): Promise<{ observatoryId: string; deviceToken: string }> {
+    const now = clock.now();
+    const observatory = await trx
+      .insertInto("observatories")
+      .values({ chart_id: chartId, created_at: now })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const deviceToken = newToken();
+    await trx
+      .insertInto("devices")
+      .values({ observatory_id: observatory.id, kind: "screen", token_hash: hashToken(deviceToken), created_at: now })
+      .execute();
+    return { observatoryId: observatory.id, deviceToken };
+  }
+
   return {
     /** Creates an observatory in a chart and returns the credential for its screen. */
     async pair(chartId: string): Promise<{ observatoryId: string; deviceToken: string }> {
+      return db.transaction().execute((trx) => pairIn(trx, chartId));
+    },
+
+    /** A fresh screen starts setting itself up: a code to show (as a QR), and a secret it keeps to collect with. */
+    async newScreenSetup(): Promise<{ code: string; secret: string; expiresAt: Date }> {
+      const now = clock.now();
+      await db.deleteFrom("screen_setups").where("expires_at", "<=", now).execute();
+      const code = newPairingCode();
+      const secret = newToken();
+      const expiresAt = new Date(now.getTime() + screenSetupLifetimeMs);
+      await db
+        .insertInto("screen_setups")
+        .values({ code_hash: hashToken(code), secret_hash: hashToken(secret), expires_at: expiresAt })
+        .execute();
+      return { code, secret, expiresAt };
+    },
+
+    /**
+     * Approves a screen setup for a chart, from the code the screen shows. False if the code is wrong, has run out or
+     * was already approved. The screen then has a few minutes to collect, even if its code was about to run out.
+     */
+    async approveScreenSetup(code: string, chartId: string): Promise<boolean> {
+      const now = clock.now();
+      const approved = await db
+        .updateTable("screen_setups")
+        .set({ chart_id: chartId, expires_at: new Date(now.getTime() + collectWithinMs) })
+        .where("code_hash", "=", hashToken(code.replace(/[\s-]/g, "").toUpperCase()))
+        .where("chart_id", "is", null)
+        .where("expires_at", ">", now)
+        .executeTakeFirst();
+      return approved.numUpdatedRows > 0n;
+    },
+
+    /**
+     * What a screen gets for its setup's secret: still waiting, or (once, after approval) its credential for a new
+     * observatory in the approving grown-up's chart. Undefined if the setup has run out or was already collected.
+     */
+    async collectScreenSetup(secret: string): Promise<{ waiting: true } | { deviceToken: string } | undefined> {
       return db.transaction().execute(async (trx) => {
-        const now = clock.now();
-        const observatory = await trx
-          .insertInto("observatories")
-          .values({ chart_id: chartId, created_at: now })
-          .returning("id")
-          .executeTakeFirstOrThrow();
-        const deviceToken = newToken();
-        await trx
-          .insertInto("devices")
-          .values({ observatory_id: observatory.id, kind: "screen", token_hash: hashToken(deviceToken), created_at: now })
-          .execute();
-        return { observatoryId: observatory.id, deviceToken };
+        const setup = await trx
+          .selectFrom("screen_setups")
+          .select(["code_hash", "chart_id"])
+          .where("secret_hash", "=", hashToken(secret))
+          .where("expires_at", ">", clock.now())
+          .forUpdate()
+          .executeTakeFirst();
+        if (!setup) return undefined;
+        if (!setup.chart_id) return { waiting: true };
+        await trx.deleteFrom("screen_setups").where("code_hash", "=", setup.code_hash).execute();
+        const { deviceToken } = await pairIn(trx, setup.chart_id);
+        return { deviceToken };
       });
     },
 

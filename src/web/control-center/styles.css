@@ -568,3 +568,28 @@ details summary {
 .handshake .actions {
   justify-content: center;
 }
+/* Connecting an observatory's screen from a phone (connect-screen.html). */
+.connect-screen form.stack {
+  align-items: stretch;
+}
+.connect-screen p {
+  margin: 0;
+}
+.screen-code {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  text-align: center;
+  margin: 8px 0;
+}
+a.button-link {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  text-decoration: none;
+}

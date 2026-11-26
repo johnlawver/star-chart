@@ -13,7 +13,7 @@ export const limits = {
   wrongPasswordsPerAccount: { tries: 10, windowMs: minutes(15) },
   /** Wrong passwords from one address, for any accounts. */
   wrongPasswordsPerAddress: { tries: 30, windowMs: minutes(15) },
-  /** Wrong codes and links from one address: pairing codes, phone setup codes, invitations, password resets. */
+  /** Wrong codes and links from one address: pairing codes, screen and phone setup codes, invitations, password resets. */
   wrongCodesPerAddress: { tries: 20, windowMs: minutes(15) },
   /** Password-reset emails to one account. */
   resetEmailsPerAccount: { tries: 3, windowMs: minutes(60) },
@@ -21,6 +21,8 @@ export const limits = {
   resetRequestsPerAddress: { tries: 10, windowMs: minutes(60) },
   /** Pairing codes made by one grown-up. */
   pairingCodesPerGrownUp: { tries: 20, windowMs: minutes(60) },
+  /** Screen setups (the QR a fresh observatory screen shows) started from one address. */
+  screenSetupsPerAddress: { tries: 30, windowMs: minutes(60) },
   /** New charts from one address. */
   signUpsPerAddress: { tries: 5, windowMs: minutes(60) },
 } as const;

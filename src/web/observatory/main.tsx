@@ -1,5 +1,6 @@
 import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
+import QRCode from "qrcode";
 import { stored } from "../shared/api.js";
 import { useLiveConnection } from "../shared/live.js";
 import { ask, forgetLastGood, isReachable, keepAsking, keepLoading, serverDown, useReachable } from "./connection.js";
@@ -49,8 +50,92 @@ function Observatory() {
   return <ChildrensView deviceToken={deviceToken} onUnpaired={() => onPaired(undefined)} />;
 }
 
-/** A fresh observatory: the chart's owner signs in (or creates a chart) to pair it. */
+/** A fresh observatory, set up from a grown-up's phone (a QR code) or, if they'd rather, by signing in on it. */
 function Unpaired({ onPaired }: { onPaired: (token: string) => void }) {
+  const [signingInHere, setSigningInHere] = useState(false);
+  if (signingInHere) return <SignInHere onPaired={onPaired} onBack={() => setSigningInHere(false)} />;
+  return <SetUpFromPhone onPaired={onPaired} onSignInHere={() => setSigningInHere(true)} />;
+}
+
+/** How often a screen showing its setup QR asks whether a grown-up has approved it. */
+const collectEveryMs = 2000;
+
+/** Waits, unless stopped first. */
+function pause(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+/** The code as people read it off the screen: two groups of four. */
+const spacedCode = (code: string) => `${code.slice(0, 4)} ${code.slice(4)}`;
+
+/**
+ * Shows a QR code (and its code, to type) that a grown-up scans with their phone to connect this screen to their chart
+ * (.scratch/easy-install/issues/01). Only the code is shown; the secret the screen collects its credential with stays
+ * here. A code that runs out is replaced with a new one.
+ */
+function SetUpFromPhone({ onPaired, onSignInHere }: { onPaired: (token: string) => void; onSignInHere: () => void }) {
+  const [setup, setSetup] = useState<{ code: string; link: string; qr: string } | undefined>();
+  const reachable = useReachable();
+
+  useEffect(() => {
+    const stop = new AbortController();
+    const { signal } = stop;
+    void (async () => {
+      while (!signal.aborted) {
+        const made = await keepAsking("POST", "/api/screen-setups", undefined, "", signal);
+        if (!made) return;
+        if (!made.ok) {
+          await pause(60_000, signal); // too many setups from here for now
+          continue;
+        }
+        const { code, secret } = made.data as { code: string; secret: string };
+        const link = `${location.origin}/connect-screen.html#c=${code}`;
+        const qr = await QRCode.toDataURL(link, { errorCorrectionLevel: "M", margin: 4, width: 440, color: { dark: "#000000", light: "#ffffff" } });
+        if (signal.aborted) return;
+        setSetup({ code, link, qr });
+        for (;;) {
+          await pause(collectEveryMs, signal);
+          const answer = await keepAsking("POST", "/api/screen-setups/collect", { secret }, "", signal);
+          if (!answer) return;
+          if (answer.status === 201) return onPaired(answer.data.deviceToken);
+          if (!answer.ok) break; // ran out: show a new code
+        }
+        setSetup(undefined);
+      }
+    })();
+    return () => stop.abort();
+  }, []);
+
+  return (
+    <main className="plain setup-from-phone">
+      <h1>Set up this observatory</h1>
+      <p>Scan this with your phone's camera to connect it to your chart.</p>
+      {setup ? (
+        <>
+          <img className="setup-qr" src={setup.qr} alt="QR code to set up this observatory" data-link={setup.link} width={440} height={440} />
+          <p>
+            Or open <strong>{location.host}/connect-screen.html</strong> on your phone and type
+          </p>
+          <p className="setup-code" data-code={setup.code}>
+            {spacedCode(setup.code)}
+          </p>
+        </>
+      ) : (
+        <p role="status">{reachable ? "Getting a code…" : "Can't reach the server yet. Check the Wi-Fi; this screen will keep trying."}</p>
+      )}
+      <button onClick={onSignInHere}>Sign in on this screen instead</button>
+    </main>
+  );
+}
+
+/** Signing in on the screen itself, with an email and password (or creating a chart), to pair it. */
+function SignInHere({ onPaired, onBack }: { onPaired: (token: string) => void; onBack: () => void }) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -95,6 +180,7 @@ function Unpaired({ onPaired }: { onPaired: (token: string) => void }) {
       <button onClick={() => setCreating(!creating)}>
         {creating ? "I already have a chart" : "New here? Create a chart"}
       </button>
+      <button onClick={onBack}>Set up with a phone instead</button>
     </main>
   );
 }

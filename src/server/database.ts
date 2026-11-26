@@ -227,6 +227,12 @@ export interface Tables {
     grown_up_id: string;
     expires_at: Date;
   };
+  screen_setups: {
+    code_hash: string;
+    secret_hash: string;
+    expires_at: Date;
+    chart_id: string | null;
+  };
   phone_setup_codes: {
     code_hash: string;
     grown_up_id: string;

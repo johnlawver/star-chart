@@ -379,6 +379,50 @@ test("setting up a unit from a phone: open its Setup Guide, sign in, pick a netw
   await phone.close();
 });
 
+test("setting up a fresh screen from a phone: scan its QR, sign in, check the code, connect, and it shows the chart", async () => {
+  const { close, credentials } = await observatoryWithNova();
+  close();
+  const screen = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  await screen.goto(`${base}/observatory.html?turn=right`);
+  const qr = screen.getByAltText("QR code to set up this observatory");
+  const link = (await qr.getAttribute("data-link"))!;
+  const code = (await screen.locator("[data-code]").getAttribute("data-code"))!;
+  const phone = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const sent: string[] = [];
+  phone.on("request", (request) => sent.push(request.url()));
+
+  await phone.goto(link);
+  await phone.getByLabel("Email").fill(credentials.email);
+  await phone.getByLabel("Password").fill(credentials.password);
+  await phone.getByRole("button", { name: "Sign in" }).click();
+  await phone.getByText(`${code.slice(0, 4)} ${code.slice(4)}`).waitFor();
+  expect(phone.url()).toBe(`${base}/connect-screen.html`); // the code is gone from the address bar
+  await phone.getByRole("button", { name: "Connect the screen" }).click();
+
+  await phone.getByRole("heading", { name: "Connected" }).waitFor();
+  await screen.getByRole("button", { name: /Nova/ }).waitFor({ timeout: 10_000 });
+  expect(link).toBe(`${base}/connect-screen.html#c=${code}`);
+  expect(sent.filter((url) => url.includes(code))).toEqual([]); // the code went in a request body, never a URL
+  expect(await screen.evaluate(() => localStorage.getItem("star-chart.observatory.deviceToken"))).toBeTruthy();
+  await screen.close();
+  await phone.close();
+});
+
+test("a fresh screen can still be set up by signing in on it", async () => {
+  const { close, credentials } = await observatoryWithNova();
+  close();
+  const screen = await browser.newPage({ viewport: { width: 800, height: 1280 } });
+  await screen.goto(`${base}/observatory.html`);
+
+  await screen.getByRole("button", { name: "Sign in on this screen instead" }).click();
+  await screen.getByLabel("Email").fill(credentials.email);
+  await screen.getByLabel("Password").fill(credentials.password);
+  await screen.getByRole("button", { name: "Sign in and set up" }).click();
+
+  await screen.getByRole("button", { name: /Nova/ }).waitFor({ timeout: 10_000 });
+  await screen.close();
+});
+
 test("pages are always checked for a newer version, while built files (named by their contents) are kept", async () => {
   const pages = await Promise.all(["/", "/observatory.html", "/kids"].map((path) => fetch(base + path)));
   const html = await pages[1]!.text();

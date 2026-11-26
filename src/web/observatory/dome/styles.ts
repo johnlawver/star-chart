@@ -76,6 +76,9 @@ export const domeCss = `
 .plain h1 { font-size: 48px; margin: 0 0 24px; }
 .plain label { display: block; margin: 0 0 18px; }
 .plain input { display: block; width: 100%; box-sizing: border-box; font: inherit; padding: 12px; border-radius: 12px; border: none; margin-top: 6px; }
+.setup-from-phone { text-align: center; }
+.setup-qr { display: block; margin: 24px auto; background: #fff; border-radius: 12px; }
+.setup-code { font-size: 64px; font-weight: bold; letter-spacing: 8px; margin: 8px 0 32px; }
 .plain button { font: inherit; min-height: 64px; padding: 0 24px; margin: 8px 12px 8px 0; border-radius: 18px; border: none; background: #8b6bd9; color: #fff; }
 .plain-keys { display: flex; flex-wrap: wrap; width: 560px; }
 .plain-keys button { width: 160px; height: 110px; font-size: 44px; }
