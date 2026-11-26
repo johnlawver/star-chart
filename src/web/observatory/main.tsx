@@ -1,6 +1,5 @@
 import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
-import QRCode from "qrcode";
 import { stored } from "../shared/api.js";
 import { useLiveConnection } from "../shared/live.js";
 import { ask, forgetLastGood, isReachable, keepAsking, keepLoading, serverDown, useReachable } from "./connection.js";
@@ -94,11 +93,9 @@ function SetUpFromPhone({ onPaired, onSignInHere }: { onPaired: (token: string) 
           await pause(60_000, signal); // too many setups from here for now
           continue;
         }
-        const { code, secret } = made.data as { code: string; secret: string };
-        const link = `${location.origin}/connect-screen.html#c=${code}`;
-        const qr = await QRCode.toDataURL(link, { errorCorrectionLevel: "M", margin: 4, width: 440, color: { dark: "#000000", light: "#ffffff" } });
-        if (signal.aborted) return;
-        setSetup({ code, link, qr });
+        // The server draws the QR (as SVG): the frame's old browser can't draw one itself.
+        const { code, secret, link, qr } = made.data as { code: string; secret: string; link: string; qr: string };
+        setSetup({ code, link, qr: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(qr)}` });
         for (;;) {
           await pause(collectEveryMs, signal);
           const answer = await keepAsking("POST", "/api/screen-setups/collect", { secret }, "", signal);
@@ -120,7 +117,7 @@ function SetUpFromPhone({ onPaired, onSignInHere }: { onPaired: (token: string) 
         <>
           <img className="setup-qr" src={setup.qr} alt="QR code to set up this observatory" data-link={setup.link} width={440} height={440} />
           <p>
-            Or open <strong>{location.host}/connect-screen.html</strong> on your phone and type
+            Or open <strong>{setup.link.replace(/^https?:\/\//, "").replace(/#.*$/, "")}</strong> on your phone and type
           </p>
           <p className="setup-code" data-code={setup.code}>
             {spacedCode(setup.code)}

@@ -135,7 +135,7 @@ export async function buildApp({ db, clock, mailer, push, config }: AppDependenc
   const liveParts = new LiveParts(config.heartbeatMs ?? 15_000);
   app.addHook("onClose", async () => await liveParts.stop());
   const store = createStore(db, clock);
-  await observatoryRoutes(app, people, children, observatories, liveParts, store, clock, rateLimits);
+  await observatoryRoutes(app, people, children, observatories, liveParts, store, clock, rateLimits, config.appUrl);
   await catalogRoutes(app, people, observatories, createCatalog(db, clock));
   const stars = createStars(db, clock);
   await ticketRoutes(app, people, observatories, liveParts, createTickets(db, clock, stars), notifications);

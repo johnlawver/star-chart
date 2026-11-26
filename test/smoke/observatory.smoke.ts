@@ -387,11 +387,12 @@ test("setting up a fresh screen from a phone: scan its QR, sign in, check the co
   const qr = screen.getByAltText("QR code to set up this observatory");
   const link = (await qr.getAttribute("data-link"))!;
   const code = (await screen.locator("[data-code]").getAttribute("data-code"))!;
+  expect(await qr.getAttribute("src")).toMatch(/^data:image\/svg\+xml/); // drawn by the server, not the frame
   const phone = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const sent: string[] = [];
   phone.on("request", (request) => sent.push(request.url()));
 
-  await phone.goto(link);
+  await phone.goto(link.replace("https://star-chart.test", base)); // the server's address, as the test app knows it
   await phone.getByLabel("Email").fill(credentials.email);
   await phone.getByLabel("Password").fill(credentials.password);
   await phone.getByRole("button", { name: "Sign in" }).click();
@@ -401,7 +402,7 @@ test("setting up a fresh screen from a phone: scan its QR, sign in, check the co
 
   await phone.getByRole("heading", { name: "Connected" }).waitFor();
   await screen.getByRole("button", { name: /Nova/ }).waitFor({ timeout: 10_000 });
-  expect(link).toBe(`${base}/connect-screen.html#c=${code}`);
+  expect(link).toBe(`https://star-chart.test/connect-screen.html#c=${code}`);
   expect(sent.filter((url) => url.includes(code))).toEqual([]); // the code went in a request body, never a URL
   expect(await screen.evaluate(() => localStorage.getItem("star-chart.observatory.deviceToken"))).toBeTruthy();
   await screen.close();

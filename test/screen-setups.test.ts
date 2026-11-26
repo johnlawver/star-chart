@@ -24,8 +24,17 @@ describe("setting up a screen from a phone", () => {
       code: expect.stringMatching(/^[2-9A-HJ-NP-Z]{8}$/),
       secret: expect.stringMatching(/^[\w-]{40,}$/),
       expiresAt: "2026-10-20T08:10:00.000Z",
+      link: `https://star-chart.test/connect-screen.html#c=${made.body.code}`,
+      qr: expect.stringMatching(/^<svg[^>]*>.*<\/svg>\s*$/s),
     });
     expect((await collect()).body).toEqual({ waiting: true });
+  });
+
+  test("the QR comes drawn by the server, as plain SVG paths, because the frame's old browser can't draw one", async () => {
+    const { made } = await freshScreen();
+
+    expect(made.body.qr).toContain("<path");
+    expect(made.body.qr).not.toMatch(/<script|<image|<foreignObject|href=/i);
   });
 
   test("once the owner approves the code, the screen collects a credential for a new observatory in their chart, once", async () => {

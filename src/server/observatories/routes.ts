@@ -1,3 +1,4 @@
+import QRCode from "qrcode";
 import type { Store } from "../store/store.js";
 import type { FastifyInstance } from "fastify";
 import { requireGrownUp, sessionCookie, sessionCookieOptions } from "../people/authenticate.js";
@@ -34,6 +35,7 @@ export async function observatoryRoutes(
   store: Store,
   clock: Clock,
   rateLimits: RateLimits,
+  appUrl: string,
 ) {
   // Pairing an observatory's screen. The grown-up who signed in on it is then signed out,
   // so the children are never left in a grown-up's session.
@@ -55,7 +57,11 @@ export async function observatoryRoutes(
   app.post("/api/screen-setups", async (request, reply) => {
     if (rateLimits.refuse(reply, [["screenSetupsPerAddress", request.ip]])) return reply;
     rateLimits.count("screenSetupsPerAddress", request.ip);
-    return reply.code(201).send(await observatories.newScreenSetup());
+    const setup = await observatories.newScreenSetup();
+    // The QR is drawn here, as SVG, because the frame's old browser can't draw one (it has no working canvas).
+    const link = `${appUrl.replace(/\/$/, "")}/connect-screen.html#c=${setup.code}`;
+    const qr = await QRCode.toString(link, { type: "svg", errorCorrectionLevel: "M", margin: 4, color: { dark: "#000000", light: "#ffffff" } });
+    return reply.code(201).send({ ...setup, link, qr });
   });
 
   app.post<{ Body: { code: string } }>(
